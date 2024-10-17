@@ -381,7 +381,6 @@ class CromwellWorkflow:
                  id=None, status=None):
         self.json = param_json
         self.batch_root = batch_root
-        self.status_url = self.assemble_status_url(manager_url)
         self.token = manager_token
         self.batch_id = batch_id
 
@@ -392,6 +391,7 @@ class CromwellWorkflow:
                 raise ValueError('Must provide both ID and status when constructing CromwellWorkflow.')
             self.id = id
             self.status = status
+            self.status_url = self.assemble_status_url(manager_url)
         
         else:
             this_n_retries = n_retries
@@ -423,6 +423,7 @@ class CromwellWorkflow:
 
             self.id = sub_info['id']
             self.status = sub_info['status']
+            self.status_url = self.assemble_status_url(manager_url)
 
             with cloud_fs.open(sub_id_txt_uri, 'w') as out:
                 out.write(sub_info['id'] + '\n')
