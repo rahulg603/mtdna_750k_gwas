@@ -15,7 +15,7 @@ from copy import deepcopy
 import cromwell.initialize as ini
 import cromwell.preprocess_run as pre
 from cromwell.constants import *
-import cromwell_run_monitor as crm
+import cromwell.run_monitor as crm
 
 from datetime import datetime, timedelta
 import dateutil
