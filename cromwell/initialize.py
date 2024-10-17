@@ -4,6 +4,7 @@ import subprocess
 import json
 import requests
 from pathlib import Path
+from sys import exit
 
 
 def check_for_app(env):
