@@ -126,10 +126,10 @@ def find_app_status(env):
 
     if app_name is None:
         print(f'CROMWELL app does not exist. Please create cromwell server from workbench')
+        raise ValueError('ERROR: cromshell not found')
     else:
         print(f'app_name={app_name}; app_status={app_status}')
         print(f'Existing CROMWELL app found (app_name={app_name}; app_status={app_status}).')
-        exit(1)
 
 
 def get_cromwell_url():
