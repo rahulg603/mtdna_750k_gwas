@@ -163,7 +163,7 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
-                                            n_retries=submission_retries, batch_idx=this_batch)
+                                            n_retries=submission_retries, batch_id=this_batch)
 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -224,7 +224,7 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=this_batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
-                                            n_retries=submission_retries, batch_idx=this_batch)
+                                            n_retries=submission_retries, batch_id=this_batch)
                 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -258,7 +258,7 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=this_batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=None,
-                                            n_retries=None, batch_idx=this_batch, id=this_id, status='Running')
+                                            n_retries=None, batch_id=this_batch, id=this_id, status='Running')
                 
                 self.add_running_workflow(workflow)
             self.update_run_statistics()
