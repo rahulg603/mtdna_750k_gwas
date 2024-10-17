@@ -53,7 +53,7 @@ class CromwellManager:
         """
         # initialize cromwell
         ini.main()
-        self.app_name, self.app_status, self.app_url, self.env = get_cromwell_url()
+        self.app_name, self.app_status, self.app_url, self.env = ini.get_cromwell_url()
         self.cloud_fs = gcsfs.GCSFileSystem(project=PROJECT, requester_pays=True)
         
         # run parameters
@@ -363,7 +363,7 @@ class CromwellManager:
         with open(params_path, 'w') as out:
             json.dump(pipe_params, out)
         #save to cloud
-        params_uri = os.path.join(self.out, 'pipeline_submission_params.json')
+        params_uri = os.path.join(self.output, 'pipeline_submission_params.json')
         with self.cloud_fs.open(params_uri, 'w') as out:
             json.dump(pipe_params, out)
         print(f'To change parameter values for the running submission process, edit the file here:\n{params_uri}')

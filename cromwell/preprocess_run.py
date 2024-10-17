@@ -23,11 +23,11 @@ def verify_json_template(j, prefix_delimiter='.'):
 
 def initialize_with_status(df, restart):
     if restart or (np.sum(df.columns == 'cromwell_id') == 0):
-        df['cromwell_id'] = 'Submission pending'
+        df = df.assign(**{'cromwell_id': 'Submission pending'})
     if restart or (np.sum(df.columns == 'inputs_uri') == 0):
-        df['inputs_uri'] = 'Submission pending'
+        df = df.assign(**{'inputs_uri': 'Submission pending'})
     if restart or (np.sum(df.columns == 'run_status') == 0):
-        df['run_status'] = 'Submission pending'
+        df = df.assign(**{'run_status': 'Submission pending'})
     
     all_status = set(df['run_status'])
     if not all_status.issubset(ALLOWED_STATUS):
