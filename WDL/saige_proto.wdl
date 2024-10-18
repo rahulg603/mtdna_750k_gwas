@@ -103,26 +103,39 @@ workflow saige {
         Array[Array[Array[String]]] tests = read_json(tasks.test)
         Array[String] hail_merge = read_json(tasks.merge)
 
+        call export_phenotype_files {
+            # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
+            input:
+                phenotype_id = pheno[0],
+                pop = pop,
+                suffix = suffix,
+                additional_covariates = additional_covariates,
+                
+                gs_bucket = gs_bucket,
+                gs_phenotype_path = gs_phenotype_path,
+                SaigeImporters = SaigeImporters
+        }
+
         #Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
         # per_pheno_data.left.right
-        scatter (per_pheno_data in pheno) {
+        # scatter (per_pheno_data in pheno) {
 
-            if (per_pheno_data != '') {
-                call export_phenotype_files {
-                    # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
-                    input:
-                        phenotype_id = per_pheno_data,
-                        pop = pop,
-                        suffix = suffix,
-                        additional_covariates = additional_covariates,
+        #     if (per_pheno_data != '') {
+        #         call export_phenotype_files {
+        #             # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
+        #             input:
+        #                 phenotype_id = per_pheno_data,
+        #                 pop = pop,
+        #                 suffix = suffix,
+        #                 additional_covariates = additional_covariates,
                         
-                        gs_bucket = gs_bucket,
-                        gs_phenotype_path = gs_phenotype_path,
-                        SaigeImporters = SaigeImporters
-                }
-            }
-            #String pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
-        }
+        #                 gs_bucket = gs_bucket,
+        #                 gs_phenotype_path = gs_phenotype_path,
+        #                 SaigeImporters = SaigeImporters
+        #         }
+        #     }
+        #     #String pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
+        # }
 
     }
 
