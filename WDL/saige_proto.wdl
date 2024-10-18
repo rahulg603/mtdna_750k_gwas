@@ -96,7 +96,8 @@ workflow saige {
 
         scatter (per_pheno_data in zip(zip(zip(zip(tasks.merge, tasks.test), tasks.null), tasks.export_phe), tasks.phe)) {
 
-            if (per_pheno_data.left.right == '') {
+            String pheno_data_path = per_pheno_data.left.right
+            if (pheno_data_path == '') {
                 call export_phenotype_files {
                     # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                     input:
@@ -110,7 +111,7 @@ workflow saige {
                         SaigeImporters = SaigeImporters
                 }
             }
-            String pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
+            String pheno_file = select_first([export_phenotype_files.pheno_file, pheno_data_path])
         }
 
     }
