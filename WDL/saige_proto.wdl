@@ -105,10 +105,12 @@ workflow saige {
                         pop = pop,
                         suffix = suffix,
                         additional_covariates = additional_covariates,
-
+                        
                         gs_bucket = gs_bucket,
                         gs_phenotype_path = gs_phenotype_path,
-                        SaigeImporters = SaigeImporters
+                        SaigeImporters = SaigeImporters,
+
+                        wait_for_pheno_mt = process_phenotype_table.task_complete,
                 }
             }
             String pheno_file = select_first([export_phenotype_files.pheno_file, pheno_data_path])
@@ -153,7 +155,7 @@ task process_phenotype_table {
     command <<<
         set -e
 
-        python <<CODE
+        python3.8 <<CODE
     import hail as hl
     import importlib
     import os, sys
@@ -229,6 +231,7 @@ task process_phenotype_table {
 
     output {
         String covariate_list = read_string("this_covar.txt")
+        Boolean task_complete = true
     }
 }
 
@@ -267,7 +270,7 @@ task get_tasks_to_run {
     command <<<
         set -e
 
-        python <<CODE
+        python3.8 <<CODE
     import hail as hl
     import importlib
     import os, sys
@@ -433,7 +436,7 @@ task export_phenotype_files {
     command <<<
         set -e
 
-        python <<CODE
+        python3.8 <<CODE
     import importlib
     import os, sys
     import json
