@@ -316,6 +316,8 @@ task get_tasks_to_run {
 
     if not ('~{overwrite_p}' == 'overwrite') and hl.hadoop_exists(pheno_export_dir):
         phenos_already_exported = {x['path'] for x in hl.hadoop_ls(pheno_export_dir)}
+    else:
+        phenos_already_exported = {}
 
     phenotypes = []
     export_phenotype = []
@@ -410,7 +412,7 @@ task get_tasks_to_run {
     
     runtime {
         docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
-        memory: '10 GB'
+        memory: '4 GB'
     }
 
     output {
