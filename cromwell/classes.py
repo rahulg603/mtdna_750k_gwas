@@ -413,9 +413,10 @@ class CromwellWorkflow:
                 try:
                     print('Running: ' + ' '.join(cmd_arg_list))
                     sub_resp = subprocess.run(cmd_arg_list, check=True, capture_output=True)
-                except subprocess.CalledProcessError:
+                except subprocess.CalledProcessError as e:
                     if this_n_retries == 0:
-                        raise
+                        print(f'Error output (code {str(e.returncode)}): {e.output}')
+                        raise e
                     this_n_retries -= 1
                 else:
                     break
