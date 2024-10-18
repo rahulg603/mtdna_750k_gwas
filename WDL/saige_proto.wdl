@@ -154,6 +154,9 @@ task process_phenotype_table {
     command <<<
         set -e
 
+        mkdir tmp
+        export _JAVA_OPTIONS="$_JAVA_OPTIONS -Djava.io.tmpdir="pwd/tmp/
+
         python3.8 <<CODE
     import hail as hl
     import importlib
@@ -163,7 +166,6 @@ task process_phenotype_table {
     curdate = date.today().strftime("%y%m%d")
 
     this_temp_path = os.path.abspath('./tmp/')
-    os.environ['_JAVA_OPTIONS'] = f'-Djava.io.tmpdir={this_temp_path}'
     hl.init(log='log.log', tmp_dir=this_temp_path)
 
     # import relevant objects
@@ -274,6 +276,9 @@ task get_tasks_to_run {
     command <<<
         set -e
 
+        mkdir tmp
+        export _JAVA_OPTIONS="$_JAVA_OPTIONS -Djava.io.tmpdir="pwd/tmp/
+
         python3.8 <<CODE
     import hail as hl
     import importlib
@@ -281,7 +286,6 @@ task get_tasks_to_run {
     import json
 
     this_temp_path = os.path.abspath('./tmp/')
-    os.environ['_JAVA_OPTIONS'] = f'-Djava.io.tmpdir={this_temp_path}'
     hl.init(log='log.log', tmp_dir=this_temp_path)
 
     flpath = os.path.dirname('~{SaigeImporters}')
