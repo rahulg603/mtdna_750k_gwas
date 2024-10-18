@@ -431,6 +431,8 @@ task export_phenotype_files {
         File? additional_covariates
 
         File SaigeImporters
+
+        Boolean wait_for_pheno_mt
     }
 
     command <<<
