@@ -277,7 +277,10 @@ class CromwellManager:
             
             this_updated_status = workflow.update_status()
             if this_updated_status is not None:
+                if this_updated_status in COMPLETED_STATUS:
+                    del self.running_workflows[id]
                 self.update_status_by_col('cromwell_id', id, 'run_status', this_updated_status)
+            
             self.save_sample_file()
 
 

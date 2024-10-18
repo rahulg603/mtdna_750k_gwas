@@ -223,7 +223,8 @@ task process_phenotype_table {
     
     runtime {
         docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
-        memory: '2 GB'
+        memory: '12 GB'
+        cpu: '4'
     }
 
     output {
