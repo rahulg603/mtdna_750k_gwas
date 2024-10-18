@@ -17,23 +17,23 @@ PHENO_COLUMN_FIELDS = ('n_cases_both_sexes', 'n_cases_females', 'n_cases_males',
 
 ######### PATHING ##########
 def get_custom_ukb_pheno_mt_path(pheno_folder, suffix):
-    return os.path.join(pheno_folder, f'/mt/phenotype_{suffix}.mt')
+    return os.path.join(pheno_folder, f'mt/phenotype_{suffix}.mt')
 
 
 def get_custom_phenotype_summary_backup_path(pheno_folder, suffix, curdate):
-    return os.path.join(pheno_folder, f'/summary/all_pheno_summary_{suffix}_before_{curdate}.txt.bgz')
+    return os.path.join(pheno_folder, f'summary/all_pheno_summary_{suffix}_before_{curdate}.txt.bgz')
 
 
 def get_custom_phenotype_summary_path(pheno_folder, suffix, extension = 'ht'):
-    return os.path.join(pheno_folder, f'/summary/phenotype_{suffix}.{extension}')
+    return os.path.join(pheno_folder, f'summary/phenotype_{suffix}.{extension}')
 
 
 def get_custom_munged_pheno_path(pheno_folder, suffix):
-    return os.path.join(pheno_folder, f'/mt/munged/munged_raw_phenotype_{suffix}.mt')
+    return os.path.join(pheno_folder, f'mt/munged/munged_raw_phenotype_{suffix}.mt')
 
 
 def get_pheno_export_dir(pheno_folder, suffix, pop):
-    return os.path.join(pheno_folder, f'/exported/{suffix}/{pop}')
+    return os.path.join(pheno_folder, f'exported/{suffix}/{pop}')
 
 
 def format_pheno_dir(pheno):
@@ -59,11 +59,11 @@ def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.ts
 
 
 def get_base_covariates_path(cov_folder):
-    return os.path.join(cov_folder, f'/base/ht/baseline_covariates.ht')
+    return os.path.join(cov_folder, f'base/ht/baseline_covariates.ht')
 
 
 def get_null_model_path(gs_output_path, suffix, pop):
-    return os.path.join(gs_output_path, f'/null_glmm/{suffix}/{pop}')
+    return os.path.join(gs_output_path, f'null_glmm/{suffix}/{pop}')
 
 
 def get_null_model_file_paths(null_model_path, pheno_dict, analysis_type):
@@ -72,11 +72,11 @@ def get_null_model_file_paths(null_model_path, pheno_dict, analysis_type):
 
 
 def get_result_path(gs_output_path, suffix, pop):
-    return os.path.join(gs_output_path, f'/result/{suffix}/{pop}')
+    return os.path.join(gs_output_path, f'result/{suffix}/{pop}')
 
 
 def get_results_prefix(pheno_results_dir, pheno_key_dict, chromosome):
-    prefix = os.path.join(pheno_results_dir, f'/result_') + pheno_dict_to_str(pheno_key_dict, True)
+    prefix = os.path.join(pheno_results_dir, f'result_') + pheno_dict_to_str(pheno_key_dict, True)
     return f'{prefix}_chr{chromosome}'
 
 
