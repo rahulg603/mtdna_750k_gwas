@@ -163,7 +163,7 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
             ht = hl.import_table(data_path, impute=True, force=True)
         else:
             ht = hl.import_table(data_path, impute=True)
-        ht = ht.key_by(userId=ht[sample_col])
+        ht = ht.key_by(userId=hl.str(ht[sample_col]))
         if sample_col != 'userId':
             ht = ht.drop(sample_col)
         if trait_type == 'categorical':
