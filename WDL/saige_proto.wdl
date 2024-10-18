@@ -163,7 +163,7 @@ task process_phenotype_table {
 
     curdate = date.today().strftime("%y%m%d")
 
-    hl.init(log='log.log')
+    hl.init(log='log.log', tmp_dir=os.path.abspath('./tmp/'))
 
     # import relevant objects
     flpath = os.path.dirname('~{SaigeImporters}')
@@ -279,7 +279,7 @@ task get_tasks_to_run {
     import os, sys
     import json
 
-    hl.init(log='log.log')
+    hl.init(log='log.log', tmp_dir=os.path.abspath('./tmp/'))
 
     flpath = os.path.dirname('~{SaigeImporters}')
     scriptname = os.path.basename('~{SaigeImporters}')
@@ -307,7 +307,7 @@ task get_tasks_to_run {
             ht = ht_sex_specific
 
     out = set([tuple(x[field] for field in PHENO_KEY_FIELDS) for x in ht.select(*PHENO_KEY_FIELDS).collect()])
-    if len('~{specific_phenos_sel}' > 0):
+    if len('~{specific_phenos_sel}') > 0:
         specific_phenos = specific_phenos.split(',')
         out = [x for x in out if all(map(lambda y: y is not None, x)) and any([re.match(pcd, '-'.join(x)) for pcd in specific_phenos])]
 
