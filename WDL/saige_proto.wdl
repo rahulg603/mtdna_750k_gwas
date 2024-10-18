@@ -112,7 +112,7 @@ workflow saige {
                         SaigeImporters = SaigeImporters
                 }
             }
-            String pheno_file = select_first([export_phenotype_files.pheno_file, pheno_data_path])
+            String pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
         }
 
     }
