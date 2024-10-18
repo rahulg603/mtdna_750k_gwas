@@ -278,8 +278,8 @@ task get_tasks_to_run {
 
     hl.init(log='log.log')
 
-    flpath = os.path.dirname(~{SaigeImporters})
-    scriptname = os.path.basename(~{SaigeImporters})
+    flpath = os.path.dirname('~{SaigeImporters}')
+    scriptname = os.path.basename('~{SaigeImporters}')
     sys.path.append(flpath)
     load_module = importlib.import_module(os.path.splitext(scriptname)[0])
     globals().update(vars(load_module))
