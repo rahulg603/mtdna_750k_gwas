@@ -103,7 +103,8 @@ workflow saige {
         Array[Array[Array[String]]] tests = read_json(tasks.test)
         Array[String] hail_merge = read_json(tasks.merge)
 
-        call export_phenotype_files {
+        if (export_pheno[0] == "") {
+            call export_phenotype_files {
             # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
             input:
                 phenotype_id = pheno[0],
@@ -114,7 +115,9 @@ workflow saige {
                 gs_bucket = gs_bucket,
                 gs_phenotype_path = gs_phenotype_path,
                 SaigeImporters = SaigeImporters
+            }
         }
+        String pheno_file = select_first([export_phenotype_files.pheno_file, export_pheno[0]])
 
         #Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
         # per_pheno_data.left.right
@@ -484,6 +487,8 @@ task export_phenotype_files {
 
     with open('a.txt', 'w') as f:
         f.write(pheno_export_path)
+    
+    CODE
     >>>
 
     runtime {
