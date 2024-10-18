@@ -138,7 +138,7 @@ class CromwellManager:
                 to_submit_by_batch = to_submit_this_round.groupby('batch').agg(list).reset_index()
 
             for _, row in to_submit_by_batch.iterrows():
-                col_names = [x for x in row.index if x != 'batch']
+                col_names = [x for x in row.index if x not in STATUS_COLS]
                 this_batch = row.batch
 
                 if self.batch is None:

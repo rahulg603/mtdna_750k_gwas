@@ -11,3 +11,4 @@ MAX_FAIL_PCT = 15.0 # Halt the submission loop if more than this percentage of b
 
 ALLOWED_STATUS = ('Submission pending', 'Running', 'Succeeded', 'Failed', 'Manual review')
 COMPLETED_STATUS = ('Succeeded', 'Failed', 'Manual review')
+STATUS_COLS = ['cromwell_id', 'inputs_uri', 'run_status', 'batch']
