@@ -171,6 +171,7 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
 
     mt = pheno_ht_to_mt(ht, trait_type).annotate_cols(data_type=trait_type)
     mt = mt.key_cols_by(trait_type=trait_type, phenocode=mt.phesant_pheno, pheno_sex=sex, modifier=modifier).drop('phesant_pheno')
+    mt.describe()
 
     print(f'Now loading covariate table...')
     cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom)
