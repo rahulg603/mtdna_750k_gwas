@@ -103,15 +103,15 @@ workflow saige {
         Array[Array[Array[String]]] tests = read_json(tasks.test)
         Array[String] hail_merge = read_json(tasks.merge)
 
-        Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
+        #Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
+        # per_pheno_data.left.right
+        scatter (per_pheno_data in pheno) {
 
-        scatter (per_pheno_data in all_pheno_data) {
-
-            if (per_pheno_data.left.right == '') {
+            if (per_pheno_data != '') {
                 call export_phenotype_files {
                     # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                     input:
-                        phenotype_id = per_pheno_data.right,
+                        phenotype_id = per_pheno_data,
                         pop = pop,
                         suffix = suffix,
                         additional_covariates = additional_covariates,
@@ -121,13 +121,13 @@ workflow saige {
                         SaigeImporters = SaigeImporters
                 }
             }
-            String pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
+            #String pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
         }
 
     }
 
     output {
-        Array[Array[String]] pheno_files = pheno_file
+        #Array[Array[String]] pheno_files = pheno_file
     }
 
 }
@@ -163,9 +163,6 @@ task process_phenotype_table {
     command <<<
         set -e
 
-        mkdir tmp
-        export _JAVA_OPTIONS="-Djava.io.tmpdir=$(pwd)/tmp/"
-
         python3.8 <<CODE
     import hail as hl
     import importlib
@@ -174,7 +171,7 @@ task process_phenotype_table {
 
     curdate = date.today().strftime("%y%m%d")
 
-    this_temp_path = os.path.abspath('./tmp/')
+    this_temp_path = '/cromwell_root/tmp/'
     hl.init(log='log.log', tmp_dir=this_temp_path)
 
     # import relevant objects
@@ -285,16 +282,13 @@ task get_tasks_to_run {
     command <<<
         set -e
 
-        mkdir tmp
-        export _JAVA_OPTIONS="-Djava.io.tmpdir=$(pwd)/tmp/"
-
         python3.8 <<CODE
     import hail as hl
     import importlib
     import os, sys
     import json
 
-    this_temp_path = os.path.abspath('./tmp/')
+    this_temp_path = '/cromwell_root/tmp/'
     hl.init(log='log.log', tmp_dir=this_temp_path)
 
     flpath = os.path.dirname('~{SaigeImporters}')
