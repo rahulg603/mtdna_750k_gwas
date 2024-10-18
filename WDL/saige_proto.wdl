@@ -173,8 +173,8 @@ task process_phenotype_table {
     globals().update(vars(load_module))
 
     gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}')
-    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}')
+    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
+    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}'.lstrip('/'))
 
     addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
 
@@ -285,10 +285,10 @@ task get_tasks_to_run {
     globals().update(vars(load_module))
 
     gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}')
-    gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}')
+    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
+    gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
 
-    ht = hl.read_table(get_custom_phenotype_summary_path(gs_phenotype_path, suffix))
+    ht = hl.read_table(get_custom_phenotype_summary_path(gs_phenotype_path, '~{suffix}'))
     ht = ht.filter(ht.pop == '~{pop}')
 
     criteria = True
@@ -450,7 +450,7 @@ task export_phenotype_files {
     globals().update(vars(load_module))
 
     gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}')
+    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
 
     pheno_export_dir = get_pheno_export_dir(gs_phenotype_path, '~{suffix}', '~{pop}')
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
