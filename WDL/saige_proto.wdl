@@ -155,7 +155,7 @@ task process_phenotype_table {
         set -e
 
         mkdir tmp
-        export _JAVA_OPTIONS="$_JAVA_OPTIONS -Djava.io.tmpdir="pwd/tmp/
+        export _JAVA_OPTIONS="-Djava.io.tmpdir=$(pwd)/tmp/"
 
         python3.8 <<CODE
     import hail as hl
@@ -277,7 +277,7 @@ task get_tasks_to_run {
         set -e
 
         mkdir tmp
-        export _JAVA_OPTIONS="$_JAVA_OPTIONS -Djava.io.tmpdir="pwd/tmp/
+        export _JAVA_OPTIONS="-Djava.io.tmpdir=$(pwd)/tmp/"
 
         python3.8 <<CODE
     import hail as hl
