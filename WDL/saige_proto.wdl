@@ -96,7 +96,16 @@ workflow saige {
                 wait_for_pheno_mt = process_phenotype_table.task_complete
         }
 
-        scatter (per_pheno_data in zip(zip(zip(zip(tasks.merge, tasks.test), tasks.null), tasks.export_phe), tasks.phe)) {
+        
+        Array[String] pheno = read_json(tasks.phe)
+        Array[String] export_pheno = read_json(tasks.export_phe)
+        Array[Array[String]] null_model = read_json(tasks.null)
+        Array[Array[Array[String]]] tests = read_json(tasks.test)
+        Array[String] hail_merge = read_json(tasks.merge)
+
+        Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
+
+        scatter (per_pheno_data in all_pheno_data) {
 
             if (per_pheno_data.left.right == '') {
                 call export_phenotype_files {
@@ -423,11 +432,11 @@ task get_tasks_to_run {
     }
 
     output {
-        Array[String] phe = read_json("pheno.json")
-        Array[String] export_phe = read_json("pheno_export.json")
-        Array[Array[String]] null = read_json("null_mod.json")
-        Array[Array[Array[String]]] test = read_json("run_tests.json")
-        Array[String] merge = read_json("merge.json")
+        File phe = "pheno.json"
+        File export_phe = "pheno_export.json"
+        File null = "null_mod.json"
+        File test = "run_tests.json"
+        File merge = "merge.json"
     }
 }
 
