@@ -98,8 +98,7 @@ workflow saige {
 
         scatter (per_pheno_data in zip(zip(zip(zip(tasks.merge, tasks.test), tasks.null), tasks.export_phe), tasks.phe)) {
 
-            String pheno_data_path = per_pheno_data.left.right
-            if (pheno_data_path == '') {
+            if (per_pheno_data.left.right == '') {
                 call export_phenotype_files {
                     # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                     input:
@@ -163,7 +162,9 @@ task process_phenotype_table {
 
     curdate = date.today().strftime("%y%m%d")
 
-    hl.init(log='log.log', tmp_dir=os.path.abspath('./tmp/'))
+    this_temp_path = os.path.abspath('./tmp/')
+    os.environ['_JAVA_OPTIONS'] = f'-Djava.io.tmpdir={this_temp_path}'
+    hl.init(log='log.log', tmp_dir=this_temp_path)
 
     # import relevant objects
     flpath = os.path.dirname('~{SaigeImporters}')
@@ -279,7 +280,9 @@ task get_tasks_to_run {
     import os, sys
     import json
 
-    hl.init(log='log.log', tmp_dir=os.path.abspath('./tmp/'))
+    this_temp_path = os.path.abspath('./tmp/')
+    os.environ['_JAVA_OPTIONS'] = f'-Djava.io.tmpdir={this_temp_path}'
+    hl.init(log='log.log', tmp_dir=this_temp_path)
 
     flpath = os.path.dirname('~{SaigeImporters}')
     scriptname = os.path.basename('~{SaigeImporters}')
@@ -417,9 +420,9 @@ task get_tasks_to_run {
 
     output {
         Array[String] phe = read_json("pheno.json")
-        Array[File] export_phe = read_json("pheno_export.json")
-        Array[Array[File]] null = read_json("null_mod.json")
-        Array[Array[Array[File]]] test = read_json("run_tests.json")
+        Array[String] export_phe = read_json("pheno_export.json")
+        Array[Array[String]] null = read_json("null_mod.json")
+        Array[Array[Array[String]]] test = read_json("run_tests.json")
         Array[String] merge = read_json("merge.json")
     }
 }
