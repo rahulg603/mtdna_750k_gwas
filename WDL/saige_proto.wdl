@@ -202,11 +202,12 @@ task process_phenotype_table {
     append_tf = '~{append}' == 'append'
 
     if not hl.hadoop_exists(f'{mt_path}/_SUCCESS') or (overwrite_tf or append_tf):
-        mt.group_rows_by('pop').aggregate(
+        mt_this = mt.group_rows_by('pop').aggregate(
             n_cases=hl.agg.count_where(mt.both_sexes == 1.0),
             n_controls=hl.agg.count_where(mt.both_sexes == 0.0),
             n_defined=hl.agg.count_where(hl.is_defined(mt.both_sexes))
-        ).entries().drop(*[x for x in PHENO_COLUMN_FIELDS if x != 'description']).show(100, width=180)
+        ).entries()
+        mt_this.drop(*[x for x in PHENO_COLUMN_FIELDS if x != 'description' and x in mt_this.row]).show(100, width=180)
         
         # save table
         if append_tf and hl.hadoop_exists(f'{mt_path}/_SUCCESS'):
