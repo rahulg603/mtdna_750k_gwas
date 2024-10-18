@@ -91,7 +91,9 @@ workflow saige {
                 overwrite_tests = overwrite_tests,
                 overwrite_hail_results = overwrite_hail_results,
 
-                SaigeImporters = SaigeImporters
+                SaigeImporters = SaigeImporters,
+
+                wait_for_pheno_mt = process_phenotype_table.task_complete
         }
 
         scatter (per_pheno_data in zip(zip(zip(zip(tasks.merge, tasks.test), tasks.null), tasks.export_phe), tasks.phe)) {
@@ -108,9 +110,7 @@ workflow saige {
                         
                         gs_bucket = gs_bucket,
                         gs_phenotype_path = gs_phenotype_path,
-                        SaigeImporters = SaigeImporters,
-
-                        wait_for_pheno_mt = process_phenotype_table.task_complete,
+                        SaigeImporters = SaigeImporters
                 }
             }
             String pheno_file = select_first([export_phenotype_files.pheno_file, pheno_data_path])
@@ -258,6 +258,8 @@ task get_tasks_to_run {
         Boolean rvas_mode
 
         File SaigeImporters
+
+        Boolean wait_for_pheno_mt
     }
 
     String overwrite_p = if overwrite_pheno_export then 'overwrite' else 'no_overwrite'
@@ -431,8 +433,6 @@ task export_phenotype_files {
         File? additional_covariates
 
         File SaigeImporters
-
-        Boolean wait_for_pheno_mt
     }
 
     command <<<
