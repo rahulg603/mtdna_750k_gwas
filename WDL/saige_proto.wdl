@@ -159,7 +159,7 @@ task process_phenotype_table {
     import hail as hl
     import importlib
     import os, sys
-    import date
+    from datetime import date
 
     curdate = date.today().strftime("%y%m%d")
 
@@ -407,7 +407,7 @@ task get_tasks_to_run {
     
     runtime {
         docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
-        memory: '2 GB'
+        memory: '10 GB'
     }
 
     output {
