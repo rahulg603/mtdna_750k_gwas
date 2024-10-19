@@ -12,6 +12,9 @@ workflow saige_multi {
         Array[Array[Array[String]]] tests
         Array[String] hail_merge
 
+        String covariates
+        File? additional_covariates
+
         # path to gs folders
         String gs_bucket
         String gs_phenotype_path

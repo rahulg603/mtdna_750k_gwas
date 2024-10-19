@@ -115,7 +115,7 @@ workflow saige_manager {
         call saige_runner.saige_multi as saige {
             
             input:
-                phenotype_id = pheno,
+                pheno = pheno,
                 suffix = suffix,
                 pop = pop,
 
