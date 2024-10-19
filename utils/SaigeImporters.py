@@ -199,8 +199,8 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
 
 def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all'):
     mt = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(pheno_folder, suffix))
-    mt = mt.annotate_rows(**get_covariates_with_custom(cov_folder=cov_folder, 
-                                                       custom=custom_covariates)[mt.row_key])
+    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates)
+    mt = mt.annotate_rows(**covars[mt.row_key])
     if pop != 'all':
         mt = mt.filter_rows(mt.pop == pop)
     

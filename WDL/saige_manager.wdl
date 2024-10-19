@@ -1,6 +1,8 @@
 version 1.0
 
-workflow saige {
+import "saige_runner.wdl" as saige_runner
+
+workflow saige_manager {
 
     input {
 
@@ -23,6 +25,10 @@ workflow saige {
 
         # helper functions
         File SaigeImporters
+
+        # docker images
+        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         # options
         Boolean rvas_mode
@@ -60,7 +66,8 @@ workflow saige {
             append_pheno = append_pheno,
             overwrite_pheno = overwrite_pheno,
 
-            SaigeImporters = SaigeImporters
+            SaigeImporters = SaigeImporters,
+            HailDocker = HailDocker
     }
 
     scatter (pop in pops) {
@@ -92,6 +99,7 @@ workflow saige {
                 overwrite_hail_results = overwrite_hail_results,
 
                 SaigeImporters = SaigeImporters,
+                HailDocker = HailDocker
 
                 wait_for_pheno_mt = process_phenotype_table.task_complete
         }
@@ -104,24 +112,29 @@ workflow saige {
         Array[String] hail_merge = read_json(tasks.merge)
 
 
-        if (export_pheno[0] == "") {
+        call saige_runner.saige_multi as saige {
+            
+            input:
+                phenotype_id = pheno,
+                suffix = suffix,
+                pop = pop,
 
-            call export_phenotype_files {
-                # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
-                input:
-                    phenotype_id = pheno[0],
-                    pop = pop,
-                    suffix = suffix,
-                    additional_covariates = additional_covariates,
-                    
-                    gs_bucket = gs_bucket,
-                    gs_phenotype_path = gs_phenotype_path,
-                    gs_covariate_path = gs_covariate_path,
+                covariates = process_phenotype_table.covariate_list,
+                additional_covariates = additional_covariates,
+                
+                gs_bucket = gs_bucket,
+                gs_phenotype_path = gs_phenotype_path,
+                gs_covariate_path = gs_covariate_path,
+                gs_output_path = gs_output_path,
+                
+                rvas_mode = rvas_mode,
 
-                    SaigeImporters = SaigeImporters
-            }
-
+                SaigeImporters = SaigeImporters,
+                HailDocker = HailDocker,
+                SaigeDocker = SaigeDocker
+ 
         }
+
 
         #Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
         # per_pheno_data.left.right
@@ -173,6 +186,7 @@ task process_phenotype_table {
         Boolean overwrite_pheno
 
         File SaigeImporters
+        String HailDocker
     }
 
     String addl_cov_file = select_first([additional_covariates, ''])
@@ -254,7 +268,7 @@ task process_phenotype_table {
     >>>
     
     runtime {
-        docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        docker: HailDocker
         memory: '12 GB'
         cpu: '4'
     }
@@ -288,6 +302,7 @@ task get_tasks_to_run {
         Boolean rvas_mode
 
         File SaigeImporters
+        String HailDocker
 
         Boolean wait_for_pheno_mt
     }
@@ -395,15 +410,15 @@ task get_tasks_to_run {
             if '~{analysis_type}' == 'variant':
                 res_found = results_files[0] in results_already_created
                 if overwrite_test_tf or not res_found:
-                    this_pheno_result_holder.append(['', ''])
+                    this_pheno_result_holder.append([chr, '', ''])
                 else:
-                    this_pheno_result_holder.append([results_files[0], ''])
+                    this_pheno_result_holder.append([chr, results_files[0], ''])
             else:
                 res_found = (results_files[0] in results_already_created) and (results_files[1] in results_already_created)
                 if overwrite_test_tf or not res_found:
-                    this_pheno_result_holder.append(['', ''])
+                    this_pheno_result_holder.append([chr, '', ''])
                 else:
-                    this_pheno_result_holder.append([results_files[0], results_files[1]])
+                    this_pheno_result_holder.append([chr, results_files[0], results_files[1]])
         run_tests.append(this_pheno_result_holder)
         
         # merged hail table
@@ -441,7 +456,7 @@ task get_tasks_to_run {
     >>>
     
     runtime {
-        docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        docker: HailDocker
         memory: '4 GB'
     }
 
@@ -454,80 +469,3 @@ task get_tasks_to_run {
     }
 }
 
-task export_phenotype_files {
-    input {
-        
-        String phenotype_id
-        String pop
-        String suffix
-
-        String gs_bucket
-        String gs_phenotype_path
-        String gs_covariate_path
-        File? additional_covariates
-
-        File SaigeImporters
-    }
-
-    String addl_cov_file = select_first([additional_covariates, ''])
-
-    command <<<
-        set -e
-
-        python3.8 <<CODE
-    import importlib
-    import os, sys
-    import json
-    import hail as hl
-
-    this_temp_path = '/cromwell_root/tmp/'
-    hl.init(log='log.log', tmp_dir=this_temp_path, default_reference='GRCh38')
-
-    flpath = os.path.dirname('~{SaigeImporters}')
-    scriptname = os.path.basename('~{SaigeImporters}')
-    sys.path.append(flpath)
-    load_module = importlib.import_module(os.path.splitext(scriptname)[0])
-    globals().update(vars(load_module))
-
-    gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
-    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}'.lstrip('/'))
-
-    pheno_export_dir = get_pheno_export_dir(gs_phenotype_path, '~{suffix}', '~{pop}')
-    pheno_dct = pheno_str_to_dict('~{phenotype_id}')
-    pheno_export_path = get_pheno_output_path(pheno_export_dir, pheno_dct)
-    
-    with open('a.txt', 'w') as f:
-        f.write(pheno_export_path)
-
-    addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
-
-    binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
-
-    suffix = '~{suffix}'
-    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}")
-    mt = mt.filter_cols(hl.all(lambda x: x, [mt[k] == pheno_dct[k] for k in PHENO_KEY_FIELDS if k != 'pheno_sex']))
-    pheno_sex_mt = mt.filter_cols(mt.pheno_sex == pheno_dct['pheno_sex'])
-    if pheno_sex_mt.count_cols() == 1:
-        mt = pheno_sex_mt
-    else:
-        mt = mt.filter_cols(mt.pheno_sex == 'both_sexes')
-    mt = mt.select_entries(value=mt[pheno_dct['pheno_sex']])
-    if binary_trait:
-        mt = mt.select_entries(value=hl.int(mt.value))
-    
-    ht = mt.key_cols_by().select_cols().entries()
-    ht.export(pheno_export_path)
-    
-    CODE
-    >>>
-
-    runtime {
-        docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
-        memory: '4 GB'
-    }
-
-    output {
-        String pheno_file = read_string('a.txt')
-    }
-}
