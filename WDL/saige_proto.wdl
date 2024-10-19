@@ -84,7 +84,7 @@ workflow saige {
 
                 gs_bucket = gs_bucket,
                 gs_phenotype_path = gs_phenotype_path,
-                gs_covariate_path = gs_covariate_path,
+                gs_output_path = gs_output_path,
 
                 overwrite_pheno_export = overwrite_pheno_export,
                 overwrite_null = overwrite_null,
@@ -116,6 +116,8 @@ workflow saige {
                     
                     gs_bucket = gs_bucket,
                     gs_phenotype_path = gs_phenotype_path,
+                    gs_covariate_path = gs_covariate_path,
+                    
                     SaigeImporters = SaigeImporters
             }
 
