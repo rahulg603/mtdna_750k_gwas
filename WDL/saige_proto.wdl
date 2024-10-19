@@ -84,7 +84,7 @@ workflow saige {
 
                 gs_bucket = gs_bucket,
                 gs_phenotype_path = gs_phenotype_path,
-                gs_output_path = gs_output_path,
+                gs_covariate_path = gs_covariate_path,
 
                 overwrite_pheno_export = overwrite_pheno_export,
                 overwrite_null = overwrite_null,
@@ -461,6 +461,7 @@ task export_phenotype_files {
 
         String gs_bucket
         String gs_phenotype_path
+        String gs_covariate_path
         File? additional_covariates
 
         File SaigeImporters
