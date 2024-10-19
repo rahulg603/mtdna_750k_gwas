@@ -1,6 +1,6 @@
 version 1.0
 
-import "saige_runner.wdl" as saige_runner
+import "https://personal.broadinstitute.org/rahul/saige/saige_runner.wdl" as saige_runner
 
 workflow saige_manager {
 
