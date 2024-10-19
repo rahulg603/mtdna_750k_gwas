@@ -104,12 +104,12 @@ workflow saige {
         Array[String] hail_merge = read_json(tasks.merge)
 
 
-        scatter (per_pheno_data in zip(pheno, export_pheno)){
-            if (per_pheno_data.right == "") {
-                call export_phenotype_files {
+        if (export_pheno[0] == "") {
+
+            call export_phenotype_files {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                 input:
-                    phenotype_id = per_pheno_data.left,
+                    phenotype_id = pheno[0],
                     pop = pop,
                     suffix = suffix,
                     additional_covariates = additional_covariates,
@@ -117,9 +117,8 @@ workflow saige {
                     gs_bucket = gs_bucket,
                     gs_phenotype_path = gs_phenotype_path,
                     SaigeImporters = SaigeImporters
-                }
             }
-            String pheno_file = select_first([export_phenotype_files.pheno_file, export_pheno[0]])
+
         }
 
         #Array[Pair[Pair[Pair[Pair[String, Array[Array[String]]], Array[String]], String], String]] all_pheno_data = zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)
@@ -467,6 +466,8 @@ task export_phenotype_files {
         File SaigeImporters
     }
 
+    String addl_cov_file = select_first([additional_covariates, ''])
+
     command <<<
         set -e
 
@@ -474,6 +475,10 @@ task export_phenotype_files {
     import importlib
     import os, sys
     import json
+    import hail as hl
+
+    this_temp_path = '/cromwell_root/tmp/'
+    hl.init(log='log.log', tmp_dir=this_temp_path, default_reference='GRCh38')
 
     flpath = os.path.dirname('~{SaigeImporters}')
     scriptname = os.path.basename('~{SaigeImporters}')
@@ -483,20 +488,40 @@ task export_phenotype_files {
 
     gs_prefix = parse_bucket('~{gs_bucket}')
     gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
+    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}'.lstrip('/'))
 
     pheno_export_dir = get_pheno_export_dir(gs_phenotype_path, '~{suffix}', '~{pop}')
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     pheno_export_path = get_pheno_output_path(pheno_export_dir, pheno_dct)
-
+    
     with open('a.txt', 'w') as f:
         f.write(pheno_export_path)
+
+    addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
+
+    binary_trait = SAIGE_PHENO_TYPES[pheno_keys['trait_type']] != 'quantitative'
+
+    suffix = '~{suffix}'
+    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}")
+    mt = mt.filter_cols(hl.all(lambda x: x, [mt[k] == pheno_dct[k] for k in PHENO_KEY_FIELDS if k != 'pheno_sex']))
+    pheno_sex_mt = mt.filter_cols(mt.pheno_sex == pheno_dct['pheno_sex'])
+    if pheno_sex_mt.count_cols() == 1:
+        mt = pheno_sex_mt
+    else:
+        mt = mt.filter_cols(mt.pheno_sex == 'both_sexes')
+    mt = mt.select_entries(value=mt[pheno_dct['pheno_sex']])
+    if binary_trait:
+        mt = mt.select_entries(value=hl.int(mt.value))
+    
+    ht = mt.key_cols_by().select_cols().entries()
+    ht.export(pheno_export_path)
     
     CODE
     >>>
 
     runtime {
         docker: 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
-        memory: '2 GB'
+        memory: '4 GB'
     }
 
     output {

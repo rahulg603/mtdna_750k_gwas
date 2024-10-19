@@ -14,6 +14,16 @@ BASE_NONPC_COVARS = ['sex','age','age2','age_sex','age2_sex','site_bcm','site_uw
 PHENO_DESCRIPTION_FIELDS = ('description', 'description_more', 'coding_description', 'category')
 PHENO_COLUMN_FIELDS = ('n_cases_both_sexes', 'n_cases_females', 'n_cases_males', *PHENO_DESCRIPTION_FIELDS)
 
+SAIGE_PHENO_TYPES = {
+    'continuous': 'quantitative',
+    'biomarkers': 'quantitative',
+    'categorical': 'binary',
+    'icd': 'binary',
+    'icd_first_occurrence': 'binary',
+    'icd_all': 'binary',
+    'phecode': 'binary',
+    'prescriptions': 'binary'
+}
 
 ######### PATHING ##########
 def get_custom_ukb_pheno_mt_path(pheno_folder, suffix):
@@ -185,6 +195,16 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     full_mt = mt_this.unfilter_entries()
     
     return full_mt, cust_covar_list
+
+
+def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all'):
+    mt = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(pheno_folder, suffix))
+    mt = mt.annotate_rows(**get_covariates_with_custom(cov_folder=cov_folder, 
+                                                       custom=custom_covariates)[mt.row_key])
+    if pop != 'all':
+        mt = mt.filter_rows(mt.pop == pop)
+    
+    return mt
 
 
 def summarize_data(pheno_folder, suffix, overwrite):
