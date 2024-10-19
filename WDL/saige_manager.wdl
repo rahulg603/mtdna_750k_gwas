@@ -99,7 +99,7 @@ workflow saige_manager {
                 overwrite_hail_results = overwrite_hail_results,
 
                 SaigeImporters = SaigeImporters,
-                HailDocker = HailDocker
+                HailDocker = HailDocker,
 
                 wait_for_pheno_mt = process_phenotype_table.task_complete
         }
