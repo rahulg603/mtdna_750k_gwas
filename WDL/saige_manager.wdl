@@ -121,6 +121,11 @@ workflow saige_manager {
 
                 covariates = process_phenotype_table.covariate_list,
                 additional_covariates = additional_covariates,
+
+                export_pheno = export_pheno,
+                null_model = null_model,
+                tests = tests,
+                hail_merge = hail_merge,
                 
                 gs_bucket = gs_bucket,
                 gs_phenotype_path = gs_phenotype_path,

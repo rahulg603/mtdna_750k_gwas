@@ -21,15 +21,15 @@ workflow saige_multi {
         String gs_covariate_path
         String gs_output_path
 
+        # options
+        Boolean rvas_mode
+
         # helper functions
         File SaigeImporters
 
         # docker images
         String HailDocker
         String SaigeDocker
-
-        # options
-        Boolean rvas_mode
     }
 
     scatter (per_pheno_data in zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)) {
