@@ -117,7 +117,7 @@ workflow saige {
                     gs_bucket = gs_bucket,
                     gs_phenotype_path = gs_phenotype_path,
                     gs_covariate_path = gs_covariate_path,
-                    
+
                     SaigeImporters = SaigeImporters
             }
 
@@ -502,7 +502,7 @@ task export_phenotype_files {
 
     addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
 
-    binary_trait = SAIGE_PHENO_TYPES[pheno_keys['trait_type']] != 'quantitative'
+    binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
 
     suffix = '~{suffix}'
     mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}")
