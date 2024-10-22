@@ -99,7 +99,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
         mt = mt.drop('variant_qc')
     else:
         reparitioned_mt = os.path.join(TEMP_PATH, 'array_v7_repartitioned.mt')
-        if hl.hadoop_exists(os.path.join(reparitioned_mt, '_SUCCESS')):
+        if not hl.hadoop_exists(os.path.join(reparitioned_mt, '_SUCCESS')):
             mt = hl.read_matrix_table(mt_path)
             mt = mt.repartition(9000).checkpoint(reparitioned_mt)
         else:
