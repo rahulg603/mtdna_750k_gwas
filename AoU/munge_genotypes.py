@@ -97,6 +97,8 @@ def get_filtered_genotype_mt(analysis_type, pop,
     if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
+    else:
+        mt = mt.repartition(9000)
     
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
@@ -114,8 +116,6 @@ def get_filtered_genotype_mt(analysis_type, pop,
         if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
             mt = annotate_adj(mt)
             mt = mt.filter_entries(mt.adj)
-        else:
-            mt = mt.repartition(9000)
         
         mt = mt.filter_rows(hl.agg.any(mt.GT.n_alt_alleles() > 0))
     
