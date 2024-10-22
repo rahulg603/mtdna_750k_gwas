@@ -65,6 +65,20 @@ def get_call_stats_ht_path(geno_folder, pop, sample_qc, analysis_type, use_drc_a
     return os.path.join(geno_folder, f'call_stats/call_stats{source_str}_{pop}{prune_str}{drc_string}.ht')
 
 
+def get_sites_for_grm_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
+                           n_common, n_maf, n_mac, extension,
+                           use_drc_ancestry_data=False, use_array_for_variant=False):
+    if analysis_type == 'variant':
+        source_str = '_array' if use_array_for_variant else '_wgs'
+    else:
+        source_str = '_exome'
+    prune_str = '_ldpruned' if ld_pruned else ''
+    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    qc = '_sample_qc' if sample_qc else ''
+    varct = f'_N{str(n_common)}_{str(n_maf)}_{str(n_mac)}'
+    return os.path.join(geno_folder, f'subsampled/sites_for_grm{source_str}{prune_str}_{pop}{qc}{drc_string}{varct}.{extension}')
+
+
 # Phenotypes
 def get_custom_ukb_pheno_mt_path(pheno_folder, suffix):
     return os.path.join(pheno_folder, f'mt/phenotype_{suffix}.mt')

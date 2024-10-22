@@ -114,6 +114,8 @@ def get_filtered_genotype_mt(analysis_type, pop,
         if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
             mt = annotate_adj(mt)
             mt = mt.filter_entries(mt.adj)
+        else:
+            mt = mt.repartition(9000)
         
         mt = mt.filter_rows(hl.agg.any(mt.GT.n_alt_alleles() > 0))
     
@@ -182,74 +184,140 @@ def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_co
 
 
 def filter_variants_for_grm(pop, analysis_type, use_array_for_variant, sample_qc, 
-                            use_drc_ancestry_data=False,
+                            use_drc_ancestry_data=False, overwrite=False,
                             n_common_variants_to_keep=50000, # 100000 for per pop
                             min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
                             variants_per_mac_category=2000, variants_per_maf_category=10000):
     
-    print(f'Number of common variants to sample: {n_common_variants_to_keep}')
-    n_samples = get_n_samples_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                  use_drc_ancestry_data=use_drc_ancestry_data)
-    ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
-                           use_drc_ancestry_data=use_drc_ancestry_data, 
-                           use_array_for_variant=use_array_for_variant)
-    ht = ht.filter(
-        (ht.locus.in_autosome())
-        & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
-        & (ht.call_stats.AC[1] > 0)
-    )
-
-    ht = ht.annotate(
-        mac_category=mac_category_case_builder(ht.call_stats.AC[1], ht.call_stats.AF[1], min_maf_common_variants)
-    )
-
-    # From: https://hail.zulipchat.com/#narrow/stream/123010-Hail-Query-0.2E2-support/topic/.E2.9C.94.20randomly.20sample.20table/near/388162012
-    bins = ht.aggregate(hl.agg.collect_as_set(ht.mac_category))
-    ac_bins = [bin for bin in bins if (bin >= 1) and (bin<=5)]
-    af_bins = [bin for bin in bins if (bin < 0.99) or (bin > 5)]
-
-    sampled_common_variants = ht.aggregate(
-        hl.agg.filter(
-                ht.call_stats.AF[1] > min_maf_common_variants,
-                hl.agg._reservoir_sample(ht.key, n_common_variants_to_keep),
-            ),
-    )
-    print('Finished sampling common variants...')
-    common_variants = [variant for variant in sampled_common_variants]
-
-    binned_variants_af = ht.aggregate(
-        hl.agg.array_agg(
-            lambda x: hl.agg.filter(
-                ht.mac_category == x,
-                hl.agg._reservoir_sample(ht.key, variants_per_maf_category),
-            ),
-            hl.literal(af_bins),
-        ),
-    )
-    print('Finished sampling rare variants...')
-
-    binned_variants_ac = ht.aggregate(
-        hl.agg.array_agg(
-            lambda x: hl.agg.filter(
-                ht.mac_category == x,
-                hl.agg._reservoir_sample(ht.key, variants_per_mac_category),
-            ),
-            hl.literal(ac_bins),
+    ht_sites_path = get_sites_for_grm_path(GENO_PATH, extension='ht',
+                                           pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                           use_drc_ancestry_data=use_drc_ancestry_data,
+                                           use_array_for_variant=use_array_for_variant,
+                                           ld_pruned=False,
+                                           n_common=n_common_variants_to_keep, 
+                                           n_maf=variants_per_maf_category,
+                                           n_mac=variants_per_mac_category)
+    
+    if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
+        print(f'Number of common variants to sample: {n_common_variants_to_keep}')
+        n_samples = get_n_samples_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
+                                    use_drc_ancestry_data=use_drc_ancestry_data)
+        ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
+                               use_drc_ancestry_data=use_drc_ancestry_data, 
+                               use_array_for_variant=use_array_for_variant)
+        ht = ht.filter(
+            (ht.locus.in_autosome())
+            & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
+            & (ht.call_stats.AC[1] > 0)
         )
-    )
-    print('Finished sampling ultra-rare variants...')
 
-    binned_rare_variants = binned_variants_ac + binned_variants_af
-    rare_variants = [variant for bin in binned_rare_variants for variant in bin]
+        ht = ht.annotate(
+            mac_category=mac_category_case_builder(ht.call_stats.AC[1], ht.call_stats.AF[1], min_maf_common_variants)
+        )
 
-    print(f"N rare variants sampled: {len(rare_variants)}")
-    print(f"N common variants sampled: {len(common_variants)}")
-    rare_ht = hl.Table.parallelize(rare_variants).key_by(*ht.key.keys())
-    common_ht = hl.Table.parallelize(common_variants).key_by(*ht.key.keys())
-    ht = rare_ht.union(common_ht)
+        # From: https://hail.zulipchat.com/#narrow/stream/123010-Hail-Query-0.2E2-support/topic/.E2.9C.94.20randomly.20sample.20table/near/388162012
+        bins = ht.aggregate(hl.agg.collect_as_set(ht.mac_category))
+        ac_bins = [bin for bin in bins if (bin >= 1) and (bin<=5)]
+        af_bins = [bin for bin in bins if (bin < 0.99) or (bin > 5)]
+
+        sampled_common_variants = ht.aggregate(
+            hl.agg.filter(
+                    ht.call_stats.AF[1] > min_maf_common_variants,
+                    hl.agg._reservoir_sample(ht.key, n_common_variants_to_keep),
+                ),
+        )
+        print('Finished sampling common variants...')
+        common_variants = [variant for variant in sampled_common_variants]
+
+        binned_variants_af = ht.aggregate(
+            hl.agg.array_agg(
+                lambda x: hl.agg.filter(
+                    ht.mac_category == x,
+                    hl.agg._reservoir_sample(ht.key, variants_per_maf_category),
+                ),
+                hl.literal(af_bins),
+            ),
+        )
+        print('Finished sampling rare variants...')
+
+        binned_variants_ac = ht.aggregate(
+            hl.agg.array_agg(
+                lambda x: hl.agg.filter(
+                    ht.mac_category == x,
+                    hl.agg._reservoir_sample(ht.key, variants_per_mac_category),
+                ),
+                hl.literal(ac_bins),
+            )
+        )
+        print('Finished sampling ultra-rare variants...')
+
+        binned_rare_variants = binned_variants_ac + binned_variants_af
+        rare_variants = [variant for bin in binned_rare_variants for variant in bin]
+
+        print(f"N rare variants sampled: {len(rare_variants)}")
+        print(f"N common variants sampled: {len(common_variants)}")
+        rare_ht = hl.Table.parallelize(rare_variants).key_by(*ht.key.keys())
+        common_ht = hl.Table.parallelize(common_variants).key_by(*ht.key.keys())
+        ht = rare_ht.union(common_ht)
+        ht = ht.checkpoint(ht_sites_path)
+    else:
+        ht = hl.read_table(ht_sites_path)
+    
     ht.describe()
 
     return ht
+
+
+def filter_mt_for_grm(pop, analysis_type, use_array_for_variant, sample_qc, 
+                      use_drc_ancestry_data=False, overwrite=False,
+                      n_common_variants_to_keep=50000, # 100000 for per pop
+                      min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
+                      variants_per_mac_category=2000, variants_per_maf_category=10000):
+    
+    mt_sites_path = get_sites_for_grm_path(GENO_PATH, extension='mt',
+                                           pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                           use_drc_ancestry_data=use_drc_ancestry_data,
+                                           use_array_for_variant=use_array_for_variant,
+                                           ld_pruned=False,
+                                           n_common=n_common_variants_to_keep, 
+                                           n_maf=variants_per_maf_category,
+                                           n_mac=variants_per_mac_category)
+    
+    if overwrite or not hl.hadoop_exists(os.path.join(mt_sites_path, '_SUCCESS')):
+        mt = get_filtered_genotype_mt(analysis_type=analysis_type, pop=pop, filter_samples=sample_qc, filter_variants=True,
+                                      use_array_for_variant=use_array_for_variant, use_drc_ancestry_data=use_drc_ancestry_data)
+        filtered_ht = filter_variants_for_grm(pop=pop, analysis_type=analysis_type,
+                                              use_array_for_variant=use_array_for_variant,
+                                              use_drc_ancestry_data=use_drc_ancestry_data,
+                                              overwrite=overwrite, 
+                                              n_common_variants_to_keep=n_common_variants_to_keep,
+                                              min_call_rate=min_call_rate, 
+                                              min_maf_common_variants=min_maf_common_variants,
+                                              variants_per_mac_category=variants_per_mac_category,
+                                              variants_per_maf_category=variants_per_maf_category)
+        
+        print(f'Number of variants sampled for {pop.upper()}: {filtered_ht.count()}')
+        mt = mt.filter_rows(hl.is_defined(filtered_ht[mt.row_key]))
+
+        print("Removing HLA and inversion...")
+        # Common inversion taken from Table S4 of https://www.ncbi.nlm.nih.gov/pubmed/27472961
+        # (converted to GRCh38 by: https://liftover.broadinstitute.org/#input=chr8%3A8055789-11980649&hg=hg19-to-hg38 )
+        # Also removing HLA, from https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38
+        mt = mt.filter_rows(
+            ~hl.parse_locus_interval(
+                "chr8:8198267-12123140", reference_genome="GRCh38"
+            ).contains(mt.locus)
+            & ~hl.parse_locus_interval(
+                "chr6:28510120-33480577", reference_genome="GRCh38"
+            ).contains(mt.locus)
+        )
+
+        mt = mt.naive_coalesce(1000).checkpoint(mt_sites_path)
+    else:
+        mt = hl.read_matrix_table(mt_sites_path)
+
+    print(mt.count())
+    return mt
 
 
 def main():
