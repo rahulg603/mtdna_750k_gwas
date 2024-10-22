@@ -93,12 +93,17 @@ def get_filtered_genotype_mt(analysis_type, pop,
     else:
         raise ValueError('ERROR: analysis_type can only be gene or variant.')
     
-    mt = hl.read_matrix_table(mt_path)
     if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
+        mt = hl.read_matrix_table(mt_path)
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
     else:
-        mt = mt.repartition(9000)
+        reparitioned_mt = os.path.join(TEMP_PATH, 'array_v7_repartitioned.mt')
+        if hl.hadoop_exists(os.path.join(reparitioned_mt, '_SUCCESS')):
+            mt = hl.read_matrix_table(mt_path)
+            mt = mt.repartition(9000).checkpoint(reparitioned_mt)
+        else:
+            mt = hl.read_matrix_table(reparitioned_mt)
     
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
