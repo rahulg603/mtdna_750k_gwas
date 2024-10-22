@@ -95,8 +95,11 @@ def get_filtered_genotype_mt(analysis_type, pop,
     
     mt = hl.read_matrix_table(mt_path)
     mt.describe()
+
+    if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
+        mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
+        mt = mt.drop('variant_qc')
     
-    mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
     mt = mt.annotate_cols(pop = mt.ancestry.pop)
