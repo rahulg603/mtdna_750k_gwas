@@ -61,7 +61,8 @@ def get_call_stats_ht_path(geno_folder, pop, sample_qc, analysis_type, use_drc_a
     else:
         source_str = '_exome'
     prune_str = '_sample_qc' if sample_qc else ''
-    return os.path.join(geno_folder, f'call_stats/call_stats{source_str}_{pop}{prune_str}_.ht')
+    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    return os.path.join(geno_folder, f'call_stats/call_stats{source_str}_{pop}{prune_str}{drc_string}.ht')
 
 
 # Phenotypes

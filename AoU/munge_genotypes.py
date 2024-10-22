@@ -136,7 +136,7 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite,
                                           use_array_for_variant=use_array_for_variant,
                                           use_drc_ancestry_data=use_drc_ancestry_data)
             call_stats_ht = mt.annotate_rows(call_stats=hl.agg.call_stats(mt.GT, mt.alleles)).rows()
-            call_stats_ht = call_stats_ht.naive_coalesce(1000).checkpoint(path)
+            call_stats_ht = call_stats_ht.naive_coalesce(1000).checkpoint(path, overwrite=overwrite)
     
     # if with_vep:
     #     full_path = get_call_stats_ht_path(GENO_PATH, pop='full', sample_qc=sample_qc, analysis_type=analysis_type)
