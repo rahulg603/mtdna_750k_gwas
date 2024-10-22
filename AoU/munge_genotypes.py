@@ -110,8 +110,11 @@ def get_filtered_genotype_mt(analysis_type, pop,
     
     if filter_variants:
         mt = mt.filter_rows(mt.info.AC[0] > 0)
-        mt = annotate_adj(mt)
-        mt = mt.filter_entries(mt.adj)
+
+        if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
+            mt = annotate_adj(mt)
+            mt = mt.filter_entries(mt.adj)
+        
         mt = mt.filter_rows(hl.agg.any(mt.GT.n_alt_alleles() > 0))
     
     return mt
