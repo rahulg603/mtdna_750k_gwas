@@ -94,8 +94,6 @@ def get_filtered_genotype_mt(analysis_type, pop,
         raise ValueError('ERROR: analysis_type can only be gene or variant.')
     
     mt = hl.read_matrix_table(mt_path)
-    mt.describe()
-
     if (analysis_type == 'gene') or (analysis_type == 'variant' and not use_array_for_variant):
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
