@@ -6,10 +6,12 @@ import os, re
 ######### CONSTANTS ##########
 PHENO_KEY_FIELDS = ('trait_type', 'phenocode', 'pheno_sex', 'modifier')
 MIN_CASES = 50
-CHROMOSOMES = list(map(str, range(1, 23))) + ['X', 'XY']
+CHROMOSOMES = list(map(str, range(1, 23))) + ['X', 'Y']
 SEXES = ('both_sexes', 'females', 'males')
-POPS = ['AFR', 'AMR', 'CSA', 'EAS', 'EUR', 'MID']
+POPS = ['eur', 'afr', 'amr', 'eas', 'mid', 'sas']
 BASE_NONPC_COVARS = ['sex','age','age2','age_sex','age2_sex','site_bcm','site_uw']
+
+PHENO_SAMPLE_ID = 'userId'
 
 PHENO_DESCRIPTION_FIELDS = ('description', 'description_more', 'coding_description', 'category')
 PHENO_COLUMN_FIELDS = ('n_cases_both_sexes', 'n_cases_females', 'n_cases_males', *PHENO_DESCRIPTION_FIELDS)
@@ -25,7 +27,44 @@ SAIGE_PHENO_TYPES = {
     'prescriptions': 'binary'
 }
 
-######### PATHING ##########
+######### PATHING AND MUNGING ##########
+def get_aou_util_path(util):
+    raise NotImplementedError('get_aou_util_path not implemented.')
+
+
+# Genotypes
+def get_plink_for_grm_path(geno_folder, pop, analysis_type, n_markers=None, use_array_for_variant=False):
+    if n_markers is None:
+        n_markers_string = ''
+    else:
+        n_markers_string = f'_~{str(n_markers)}markers'
+    if analysis_type == 'variant':
+        source_str = '_array' if use_array_for_variant else '_wgs'
+        prefix = os.path.join(geno_folder, f'ld_pruned/GWAS/aou_ld_pruned_maf0.01{source_str}_forgrm{n_markers_string}_{pop}')
+    else:
+        prefix = os.path.join(geno_folder, f'ld_pruned/RVAS/aou_ld_pruned_enrichedrare_wes_forgrm{n_markers_string}_{pop}')
+    return f'{prefix}.bed', f'{prefix}.bim', f'{prefix}.fam'
+
+
+def get_sparse_grm_path(geno_folder, pop, analysis_type, n_markers, use_array_for_variant=False):
+    if analysis_type == 'variant':
+        source_str = '_array' if use_array_for_variant else '_wgs'
+        prefix = os.path.join(geno_folder, f'sparse_grm/GWAS/aou_ld_pruned_maf0.01{source_str}_{str(n_markers)}markers_{pop}')
+    else:
+        prefix = os.path.join(geno_folder, f'sparse_grm/RVAS/aou_ld_pruned_enrichedrare_wes_{str(n_markers)}markers_forgrm_{pop}')
+    return f'{prefix}.mtx', f'{prefix}.mtx.sampleIDs.txt'
+
+
+def get_call_stats_ht_path(geno_folder, pop, sample_qc, analysis_type, use_drc_ancestry_data=False, use_array_for_variant=False):
+    if analysis_type == 'variant':
+        source_str = '_array' if use_array_for_variant else '_wgs'
+    else:
+        source_str = '_exome'
+    prune_str = '_sample_qc' if sample_qc else ''
+    return os.path.join(geno_folder, f'call_stats/call_stats{source_str}_{pop}{prune_str}_.ht')
+
+
+# Phenotypes
 def get_custom_ukb_pheno_mt_path(pheno_folder, suffix):
     return os.path.join(pheno_folder, f'mt/phenotype_{suffix}.mt')
 
@@ -68,10 +107,18 @@ def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.ts
     return os.path.join(pheno_export_dir, f'{pheno_coding_trait["trait_type"]}-{format_pheno_dir(pheno_coding_trait["phenocode"])}-{extended_suffix}{extension}')
 
 
-def get_base_covariates_path(cov_folder):
-    return os.path.join(cov_folder, f'base/ht/baseline_covariates.ht')
+# Covariates
+def get_base_covariates_path(cov_folder, drc):
+    drc_string = '_drc' if drc else '_axaou'
+    return os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}.ht')
 
 
+def get_demographics_path(cov_folder, drc):
+    drc_string = '_drc' if drc else '_axaou'
+    return os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}.ht')
+
+
+# Null model
 def get_null_model_path(gs_output_path, suffix, pop):
     return os.path.join(gs_output_path, f'null_glmm/{suffix}/{pop}')
 
@@ -81,6 +128,7 @@ def get_null_model_file_paths(null_model_path, pheno_dict, analysis_type):
     return f'{root}.rda', f'{root}.{analysis_type}.varianceRatio.txt'
 
 
+# GWAS results
 def get_result_path(gs_output_path, suffix, pop):
     return os.path.join(gs_output_path, f'result/{suffix}/{pop}')
 
@@ -109,8 +157,8 @@ def parse_bucket(gs_bucket):
         return f'gs://{gs_bucket}'
 
 
-def get_covariates_with_custom(cov_folder, custom = None):
-    new_covariates = hl.read_table(get_base_covariates_path(cov_folder))
+def get_covariates_with_custom(cov_folder, custom=None, drc=False):
+    new_covariates = hl.read_table(get_base_covariates_path(cov_folder, drc=drc))
     if custom is None:
         return new_covariates, []
     else:
@@ -162,7 +210,7 @@ def format_entries(field, sex_field):
 
 
 def load_custom_pheno_with_covariates(data_path, trait_type, modifier, 
-                                      cov_folder, custom = None,
+                                      cov_folder, custom=None, drc=False,
                                       sex: str = 'both_sexes', sample_col='s'):
     print(f'Loading {data_path}...')
     extension = os.path.splitext(data_path)[1]
@@ -173,8 +221,8 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
             ht = hl.import_table(data_path, impute=True, force=True)
         else:
             ht = hl.import_table(data_path, impute=True)
-        ht = ht.key_by(userId=hl.str(ht[sample_col]))
-        if sample_col != 'userId':
+        ht = ht.key_by(**{PHENO_SAMPLE_ID: hl.str(ht[sample_col])})
+        if sample_col != PHENO_SAMPLE_ID:
             ht = ht.drop(sample_col)
         if trait_type == 'categorical':
             ht = ht.annotate(**{x: hl.bool(ht[x]) for x in list(ht.row_value)})
@@ -184,7 +232,7 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     mt.describe()
 
     print(f'Now loading covariate table...')
-    cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom)
+    cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom, drc=drc)
     cov_ht = cov_ht.persist()
     
     mt_this = mt.select_rows(**cov_ht[mt.row_key])
@@ -197,9 +245,9 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     return full_mt, cust_covar_list
 
 
-def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all'):
+def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all', drc = False):
     mt = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(pheno_folder, suffix))
-    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates)
+    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates, drc=drc)
     mt = mt.annotate_rows(**covars[mt.row_key])
     if pop != 'all':
         mt = mt.filter_rows(mt.pop == pop)
