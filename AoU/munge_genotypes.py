@@ -94,6 +94,8 @@ def get_filtered_genotype_mt(analysis_type, pop,
         raise ValueError('ERROR: analysis_type can only be gene or variant.')
     
     mt = hl.read_matrix_table(mt_path)
+    mt.describe()
+    
     mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
@@ -156,7 +158,11 @@ def get_call_stats_ht(pop, sample_qc, analysis_type, use_drc_ancestry_data, use_
                                   use_drc_ancestry_data=use_drc_ancestry_data, 
                                   use_array_for_variant=use_array_for_variant)
     if not hl.hadoop_exists(os.path.join(path, '_SUCCESS')) or overwrite:
-        generate_call_stats_ht(sample_qc=True)
+        _ = generate_call_stats_ht(sample_qc=sample_qc, analysis_type=analysis_type, 
+                                   use_drc_ancestry_data=use_drc_ancestry_data,
+                                   use_array_for_variant=use_array_for_variant)
+    ht = hl.read_table(path)
+    return ht
 
 
 def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_common_variants: float = 0.01):
@@ -180,9 +186,9 @@ def filter_variants_for_grm(pop, analysis_type, use_array_for_variant, sample_qc
     print(f'Number of common variants to sample: {n_common_variants_to_keep}')
     n_samples = get_n_samples_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
                                   use_drc_ancestry_data=use_drc_ancestry_data)
-    ht = get_filtered_genotype_mt(analysis_type, pop=pop, filter_samples=sample_qc, filter_variants=True, 
-                                  use_array_for_variant=use_array_for_variant,
-                                  use_drc_ancestry_data=use_drc_ancestry_data)
+    ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
+                           use_drc_ancestry_data=use_drc_ancestry_data, 
+                           use_array_for_variant=use_array_for_variant)
     ht = ht.filter(
         (ht.locus.in_autosome())
         & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
