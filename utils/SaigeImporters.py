@@ -36,25 +36,19 @@ def get_aou_util_path(util):
 
 
 # Genotypes
-def get_plink_for_grm_path(geno_folder, pop, analysis_type, n_markers=None, use_array_for_variant=False):
-    if n_markers is None:
-        n_markers_string = ''
-    else:
-        n_markers_string = f'_~{str(n_markers)}markers'
-    if analysis_type == 'variant':
-        source_str = '_array' if use_array_for_variant else '_wgs'
-        prefix = os.path.join(geno_folder, f'ld_pruned/GWAS/aou_ld_pruned_maf0.01{source_str}_forgrm{n_markers_string}_{pop}')
-    else:
-        prefix = os.path.join(geno_folder, f'ld_pruned/RVAS/aou_ld_pruned_enrichedrare_wes_forgrm{n_markers_string}_{pop}')
+def get_plink_for_null_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
+    # recall, we always produce this with array data
+    source_str = '_array' if use_array_for_variant else '_wgs'
+    prefix = os.path.join(geno_folder, f'ld_prune/aou_ld_pruned_maf0.01{source_str}_forgrm{str(10)}_{pop}')
     return f'{prefix}.bed', f'{prefix}.bim', f'{prefix}.fam'
 
 
-def get_sparse_grm_path(geno_folder, pop, analysis_type, n_markers, use_array_for_variant=False):
-    if analysis_type == 'variant':
-        source_str = '_array' if use_array_for_variant else '_wgs'
-        prefix = os.path.join(geno_folder, f'sparse_grm/GWAS/aou_ld_pruned_maf0.01{source_str}_{str(n_markers)}markers_{pop}')
-    else:
-        prefix = os.path.join(geno_folder, f'sparse_grm/RVAS/aou_ld_pruned_enrichedrare_wes_{str(n_markers)}markers_forgrm_{pop}')
+def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
+    af = f'_maf{str(af_cutoff)}'
+    related = f'_rel{str(relatedness)}'
+    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    qc = '_sample_qc' if sample_qc else ''
+    prefix = os.path.join(geno_folder, f'sparse_grm/aou_ld_pruned_{pop}{af}_{str(n_markers)}markers{related}{drc_string}{qc}')
     return f'{prefix}.mtx', f'{prefix}.mtx.sampleIDs.txt'
 
 
@@ -82,11 +76,11 @@ def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_prune
     return os.path.join(geno_folder, f'subsampled/sites_for_grm{source_str}{prune_str}_{pop}{qc}{drc_string}{varct}.{extension}')
 
 
-def get_ld_pruned_array_ht_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
+def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     af = f'_af{str(af_cutoff)}'
-    return os.path.join(geno_folder, f'ld_prune/ld_pruned_sites_array_{pop}{qc}{drc_string}{af}.ht')
+    return os.path.join(geno_folder, f'ld_prune/ld_pruned_sites_array_{pop}{qc}{drc_string}{af}.{extension}')
 
 
 # Samples
@@ -98,6 +92,12 @@ def get_n_samples_per_pop_path(geno_folder, sample_qc, analysis_type, use_drc_an
     prune_str = '_sample_qc' if sample_qc else ''
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     return os.path.join(geno_folder, f'sample_counts/counts_by_pop{source_str}{prune_str}{drc_string}.tsv') 
+
+
+def get_aou_samples_file_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False):
+    qc = '_sample_qc' if sample_qc else ''
+    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    return os.path.join(geno_folder, f'sample_counts/sample_list_{pop}{qc}{drc_string}.tsv') 
 
 
 # Phenotypes
