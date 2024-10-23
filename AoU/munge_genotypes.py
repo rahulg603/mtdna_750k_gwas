@@ -192,20 +192,20 @@ def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_co
     )
 
 
-def filter_variants_for_grm(pop, analysis_type, use_array_for_variant, sample_qc, 
+def filter_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
                             use_drc_ancestry_data=False, overwrite=False,
                             n_common_variants_to_keep=50000, # 100000 for per pop
                             min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
                             variants_per_mac_category=2000, variants_per_maf_category=10000):
     
-    ht_sites_path = get_sites_for_grm_path(GENO_PATH, extension='ht',
-                                           pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
-                                           use_drc_ancestry_data=use_drc_ancestry_data,
-                                           use_array_for_variant=use_array_for_variant,
-                                           ld_pruned=False,
-                                           n_common=n_common_variants_to_keep, 
-                                           n_maf=variants_per_maf_category,
-                                           n_mac=variants_per_mac_category)
+    ht_sites_path = get_sites_for_null_path(GENO_PATH, extension='ht',
+                                            pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_array_for_variant=use_array_for_variant,
+                                            ld_pruned=False,
+                                            n_common=n_common_variants_to_keep, 
+                                            n_maf=variants_per_maf_category,
+                                            n_mac=variants_per_mac_category)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
         print(f'Number of common variants to sample: {n_common_variants_to_keep}')
@@ -277,33 +277,34 @@ def filter_variants_for_grm(pop, analysis_type, use_array_for_variant, sample_qc
     return ht
 
 
-def filter_mt_for_grm(pop, analysis_type, use_array_for_variant, sample_qc, 
+def filter_mt_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
                       use_drc_ancestry_data=False, overwrite=False,
                       n_common_variants_to_keep=50000, # 100000 for per pop
                       min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
                       variants_per_mac_category=2000, variants_per_maf_category=10000):
     
-    mt_sites_path = get_sites_for_grm_path(GENO_PATH, extension='mt',
-                                           pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
-                                           use_drc_ancestry_data=use_drc_ancestry_data,
-                                           use_array_for_variant=use_array_for_variant,
-                                           ld_pruned=False,
-                                           n_common=n_common_variants_to_keep, 
-                                           n_maf=variants_per_maf_category,
-                                           n_mac=variants_per_mac_category)
+    mt_sites_path = get_sites_for_null_path(GENO_PATH, extension='mt',
+                                            pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_array_for_variant=use_array_for_variant,
+                                            ld_pruned=False,
+                                            n_common=n_common_variants_to_keep, 
+                                            n_maf=variants_per_maf_category,
+                                            n_mac=variants_per_mac_category)
     
     if overwrite or not hl.hadoop_exists(os.path.join(mt_sites_path, '_SUCCESS')):
         mt = get_filtered_genotype_mt(analysis_type=analysis_type, pop=pop, filter_samples=sample_qc, filter_variants=True,
                                       use_array_for_variant=use_array_for_variant, use_drc_ancestry_data=use_drc_ancestry_data)
-        filtered_ht = filter_variants_for_grm(pop=pop, analysis_type=analysis_type,
-                                              use_array_for_variant=use_array_for_variant,
-                                              use_drc_ancestry_data=use_drc_ancestry_data,
-                                              overwrite=overwrite, 
-                                              n_common_variants_to_keep=n_common_variants_to_keep,
-                                              min_call_rate=min_call_rate, 
-                                              min_maf_common_variants=min_maf_common_variants,
-                                              variants_per_mac_category=variants_per_mac_category,
-                                              variants_per_maf_category=variants_per_maf_category)
+        filtered_ht = filter_variants_for_null(pop=pop, analysis_type=analysis_type,
+                                               sample_qc=sample_qc,
+                                               use_array_for_variant=use_array_for_variant,
+                                               use_drc_ancestry_data=use_drc_ancestry_data,
+                                               overwrite=overwrite, 
+                                               n_common_variants_to_keep=n_common_variants_to_keep,
+                                               min_call_rate=min_call_rate, 
+                                               min_maf_common_variants=min_maf_common_variants,
+                                               variants_per_mac_category=variants_per_mac_category,
+                                               variants_per_maf_category=variants_per_maf_category)
         
         print(f'Number of variants sampled for {pop.upper()}: {filtered_ht.count()}')
         mt = mt.filter_rows(hl.is_defined(filtered_ht[mt.row_key]))
@@ -312,14 +313,8 @@ def filter_mt_for_grm(pop, analysis_type, use_array_for_variant, sample_qc,
         # Common inversion taken from Table S4 of https://www.ncbi.nlm.nih.gov/pubmed/27472961
         # (converted to GRCh38 by: https://liftover.broadinstitute.org/#input=chr8%3A8055789-11980649&hg=hg19-to-hg38 )
         # Also removing HLA, from https://www.ncbi.nlm.nih.gov/grc/human/regions/MHC?asm=GRCh38
-        mt = mt.filter_rows(
-            ~hl.parse_locus_interval(
-                "chr8:8198267-12123140", reference_genome="GRCh38"
-            ).contains(mt.locus)
-            & ~hl.parse_locus_interval(
-                "chr6:28510120-33480577", reference_genome="GRCh38"
-            ).contains(mt.locus)
-        )
+        mt = mt.filter_rows(~hl.parse_locus_interval(INVERSION_LOCUS, reference_genome="GRCh38").contains(mt.locus) & \
+                            ~hl.parse_locus_interval(HLA_LOCUS, reference_genome="GRCh38").contains(mt.locus))
 
         mt = mt.naive_coalesce(1000).checkpoint(mt_sites_path)
     else:
@@ -327,6 +322,67 @@ def filter_mt_for_grm(pop, analysis_type, use_array_for_variant, sample_qc,
 
     print(mt.count())
     return mt
+
+
+def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
+                                  min_call_rate=CALLRATE_CUTOFF, 
+                                  use_drc_ancestry_data=False, 
+                                  overwrite=False):
+    ld_pruned_ht_path = get_ld_pruned_array_ht_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
+                                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                                    af_cutoff=min_af)
+    
+    if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
+        n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=sample_qc, 
+                                            use_array_for_variant=True,
+                                            use_drc_ancestry_data=use_drc_ancestry_data)
+        ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc,
+                               use_drc_ancestry_data=use_drc_ancestry_data, 
+                               use_array_for_variant=True,
+                               overwrite=overwrite)
+        
+        # prior to LD pruning, ensure that autosomes only are found
+        ht = ht.filter(
+            (ht.locus.in_autosome())
+            & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
+            & (ht.call_stats.AC[1] > 0)
+            & (ht.call_stats.AC[0] > 0)
+        )
+
+        ht = ht.filter_rows(~hl.parse_locus_interval(INVERSION_LOCUS, reference_genome="GRCh38").contains(ht.locus) & \
+                            ~hl.parse_locus_interval(HLA_LOCUS, reference_genome="GRCh38").contains(ht.locus))
+
+        # now filtering based on MAF
+        ht = ht.annotate(maf = hl.min(ht.call_stats.AF))
+        ht = ht.filter(ht.maf >= min_af)
+        ht = ht.checkpoint(f'{TEMP_PATH}/tmp_ht_call_stats_for_pruning_{pop}.ht', overwrite=True)
+
+        geno_mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
+                                           use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+        geno_mt = geno_mt.semi_join_rows(ht)
+        geno_mt = geno_mt.unfilter_entries()
+
+        ht_prune = hl.ld_prune(geno_mt.GT,
+                               r2=0.1,
+                               bp_window_size=int(1e7),
+                               block_size=1024)
+        ht_prune = ht_prune.checkpoint(ld_pruned_ht_path, overwrite=True)
+    else:
+        ht_prune = hl.read_table(ld_pruned_ht_path)
+    
+    mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
+                                  use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+    mt = mt.semi_join_rows(ht_prune)
+    return mt
+
+
+
+def generate_plink_files_for_grm():
+    # grab mt
+    # filter to MAF > 0.05
+    # do LD pruning
+    # save pruned MT
+    return None
 
 
 def main():

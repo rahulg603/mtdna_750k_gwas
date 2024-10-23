@@ -27,6 +27,9 @@ SAIGE_PHENO_TYPES = {
     'prescriptions': 'binary'
 }
 
+HLA_LOCUS = "chr6:28510120-33480577"
+INVERSION_LOCUS = "chr8:8198267-12123140"
+
 ######### PATHING AND MUNGING ##########
 def get_aou_util_path(util):
     raise NotImplementedError('get_aou_util_path not implemented.')
@@ -65,9 +68,9 @@ def get_call_stats_ht_path(geno_folder, pop, sample_qc, analysis_type, use_drc_a
     return os.path.join(geno_folder, f'call_stats/call_stats{source_str}_{pop}{prune_str}{drc_string}.ht')
 
 
-def get_sites_for_grm_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
-                           n_common, n_maf, n_mac, extension,
-                           use_drc_ancestry_data=False, use_array_for_variant=False):
+def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
+                            n_common, n_maf, n_mac, extension,
+                            use_drc_ancestry_data=False, use_array_for_variant=False):
     if analysis_type == 'variant':
         source_str = '_array' if use_array_for_variant else '_wgs'
     else:
@@ -77,6 +80,13 @@ def get_sites_for_grm_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned
     qc = '_sample_qc' if sample_qc else ''
     varct = f'_N{str(n_common)}_{str(n_maf)}_{str(n_mac)}'
     return os.path.join(geno_folder, f'subsampled/sites_for_grm{source_str}{prune_str}_{pop}{qc}{drc_string}{varct}.{extension}')
+
+
+def get_ld_pruned_array_ht_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
+    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    qc = '_sample_qc' if sample_qc else ''
+    af = f'_af{str(af_cutoff)}'
+    return os.path.join(geno_folder, f'ld_prune/ld_pruned_sites_array_{pop}{qc}{drc_string}{af}.ht')
 
 
 # Samples
