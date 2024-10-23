@@ -74,13 +74,13 @@ def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, u
     vec_path = get_n_samples_per_pop_path(GENO_PATH, analysis_type=analysis_type, sample_qc=sample_qc, 
                                           use_array_for_variant=use_array_for_variant,
                                           use_drc_ancestry_data=use_drc_ancestry_data)
-    if hl.hadoop_exists(vec_path):
+    if not hl.hadoop_exists(vec_path):
         mt = get_filtered_genotype_mt(analysis_type=analysis_type,
-                                    pop='all',
-                                    filter_samples=sample_qc,
-                                    filter_variants=False,
-                                    use_array_for_variant=use_array_for_variant,
-                                    use_drc_ancestry_data=use_drc_ancestry_data)
+                                      pop='all',
+                                      filter_samples=sample_qc,
+                                      filter_variants=False,
+                                      use_array_for_variant=use_array_for_variant,
+                                      use_drc_ancestry_data=use_drc_ancestry_data)
         ht = mt.cols()
         ht_ct = ht.group_by(ht.pop).aggregate(hl.agg.count())
         df_ct = ht_ct.to_pandas()
