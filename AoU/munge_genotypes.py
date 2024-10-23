@@ -98,12 +98,12 @@ def get_filtered_genotype_mt(analysis_type, pop,
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
     else:
-        reparitioned_mt = os.path.join(TEMP_PATH, 'array_v7_repartitioned.mt')
-        if not hl.hadoop_exists(os.path.join(reparitioned_mt, '_SUCCESS')):
-            mt = hl.read_matrix_table(mt_path)
-            mt = mt.repartition(9000).checkpoint(reparitioned_mt)
-        else:
-            mt = hl.read_matrix_table(reparitioned_mt)
+        #reparitioned_mt = os.path.join(TEMP_PATH, 'array_v7_repartitioned.mt')
+        #if not hl.hadoop_exists(os.path.join(reparitioned_mt, '_SUCCESS')):
+        mt = hl.read_matrix_table(mt_path, _n_partitions=9000)
+        #    mt = mt.repartition(9000).checkpoint(reparitioned_mt)
+        #else:
+        #    mt = hl.read_matrix_table(reparitioned_mt)
     
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
