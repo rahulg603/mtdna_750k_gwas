@@ -70,16 +70,25 @@ def annotate_adj(
     )
 
 
-def get_n_samples_vec(analysis_type, sample_qc, use_array_for_variant, use_drc_ancestry_data=False):
-    mt = get_filtered_genotype_mt(analysis_type=analysis_type,
-                                  pop='all',
-                                  filter_samples=sample_qc,
-                                  filter_variants=False,
-                                  use_array_for_variant=use_array_for_variant,
-                                  use_drc_ancestry_data=use_drc_ancestry_data)
-    ht = mt.cols()
-    ht_ct = ht.group_by(ht.pop).aggregate(hl.agg.count())
-    df_ct = ht_ct.to_pandas()
+def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, use_drc_ancestry_data=False):
+    vec_path = get_n_samples_per_pop_path(GENO_PATH, analysis_type=analysis_type, sample_qc=sample_qc, 
+                                          use_array_for_variant=use_array_for_variant,
+                                          use_drc_ancestry_data=use_drc_ancestry_data)
+    if hl.hadoop_exists(vec_path):
+        mt = get_filtered_genotype_mt(analysis_type=analysis_type,
+                                    pop='all',
+                                    filter_samples=sample_qc,
+                                    filter_variants=False,
+                                    use_array_for_variant=use_array_for_variant,
+                                    use_drc_ancestry_data=use_drc_ancestry_data)
+        ht = mt.cols()
+        ht_ct = ht.group_by(ht.pop).aggregate(hl.agg.count())
+        df_ct = ht_ct.to_pandas()
+        df_ct.to_csv(vec_path, sep='\t', index=False)
+    else:
+        df_ct = pd.read_csv(vec_path, sep='\t')
+    
+    return {x['pop']: x.N for _, x in df_ct.iterrows()}
 
 
 def get_filtered_genotype_mt(analysis_type, pop,
@@ -200,8 +209,8 @@ def filter_variants_for_grm(pop, analysis_type, use_array_for_variant, sample_qc
     
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
         print(f'Number of common variants to sample: {n_common_variants_to_keep}')
-        n_samples = get_n_samples_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                    use_drc_ancestry_data=use_drc_ancestry_data)
+        n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
+                                              use_drc_ancestry_data=use_drc_ancestry_data)
         ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
                                use_drc_ancestry_data=use_drc_ancestry_data, 
                                use_array_for_variant=use_array_for_variant)
