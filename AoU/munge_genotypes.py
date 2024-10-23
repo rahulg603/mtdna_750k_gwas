@@ -82,7 +82,7 @@ def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, u
                                       use_array_for_variant=use_array_for_variant,
                                       use_drc_ancestry_data=use_drc_ancestry_data)
         ht = mt.cols()
-        ht_ct = ht.group_by(ht.pop).aggregate(hl.agg.count())
+        ht_ct = ht.group_by(ht.pop).aggregate(N = hl.agg.count())
         df_ct = ht_ct.to_pandas()
         df_ct.to_csv(vec_path, sep='\t', index=False)
     else:
@@ -213,7 +213,7 @@ def filter_variants_for_grm(pop, analysis_type, use_array_for_variant, sample_qc
                                               use_drc_ancestry_data=use_drc_ancestry_data)
         ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
                                use_drc_ancestry_data=use_drc_ancestry_data, 
-                               use_array_for_variant=use_array_for_variant)
+                               use_array_for_variant=use_array_for_variant, overwrite=overwrite)
         ht = ht.filter(
             (ht.locus.in_autosome())
             & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
