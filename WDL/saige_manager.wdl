@@ -496,8 +496,8 @@ task get_tasks_to_run {
         json.dump(run_hail_merge, f)
 
     #### NOW generate paths for null model construction
-    bed, bim, fam = get_plink_for_null_path(gs_genotype_path, '~{pop}', sample_qc, drc_tf, ~{min_maf})
-    mtx, ix = get_sparse_grm_path(gs_genotype_path, '~{pop}', ~{sparse_n_markers}, ~{relatedness}, sample_qc, drc_tf, ~{min_maf})
+    bed, bim, fam = get_plink_for_null_path(gs_genotype_path, '~{pop}', sample_qc_tf, drc_tf, ~{min_maf})
+    mtx, ix = get_sparse_grm_path(gs_genotype_path, '~{pop}', ~{sparse_n_markers}, ~{relatedness}, sample_qc_tf, drc_tf, ~{min_maf})
 
     with open('bed.txt', 'w') as f:
         f.write(bed)

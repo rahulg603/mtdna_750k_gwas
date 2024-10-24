@@ -5,6 +5,7 @@
 
 # Need to determine sample QC and variant QC.
 import argparse
+import json
 import hail as hl
 import pandas as pd
 
@@ -401,9 +402,12 @@ def generate_plink_files_for_grm(pop, sample_qc, min_af=0.05,
 
 
 def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
+                                    saige_importers_path,
+                                    wdl_path,
                                     n_markers=2000,
                                     relatedness=0.125,
                                     no_wait=False,
+                                    n_cpu_sparse=64,
                                     use_drc_ancestry_data=False,
                                     overwrite=False):
     """
@@ -421,7 +425,36 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
         if overwrite or not hl.hadoop_exists(mtx):
             pops_to_queue.append(pop)
     
-    # TODO: finish this
+    # make json
+    def remove_bucket(path):
+        return re.sub('^'+BUCKET, '', path)
+
+    this_run = {'pop': pops_to_queue}
+    df = pd.DataFrame(this_run)
+    df.to_csv(os.path.abspath('./this_run.tsv'), index=False, sep='\t') # ADD THIS
+
+    baseline = {'saige_sparse_grm.relatednessCutoff': relatedness,
+                'saige_sparse_grm.min_af': af_cutoff,
+                'saige_sparse_grm.num_markers': n_markers,
+                'saige_sparse_grm.gs_bucket': BUCKET,
+                'saige_sparse_grm.gs_genotype_path': remove_bucket(GENO_PATH),
+                'saige_sparse_grm.SaigeImporters': saige_importers_path,
+                'saige_sparse_grm.use_drc_ancestry_data': use_drc_ancestry_data,
+                'saige_sparse_grm.sample_qc': sample_qc,
+                'saige_sparse_grm.n_cpu': n_cpu_sparse}
+    with open(os.path.abspath('./saige_template.json'), 'w') as j:
+        json.dump(baseline, j)
+
+    # run sparse GRM analysis
+    manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
+                              inputs_file=df,
+                              json_template_path=os.path.abspath('./saige_template.json'),
+                              wdl_path=wdl_path,
+                              batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
+                              add_requester_pays_parameter=False,
+                              restart=False, batches_precomputed=False, 
+                              submission_sleep=0, check_freq=120)
+    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
 
 
 def main():
@@ -433,6 +466,9 @@ def main():
 
     n_markers = 2000
     relatedness = 0.125
+
+    saige_importers_path = ''
+    wdl_path = ''
     
     for pop in POPS:
         # export GRM sample list
@@ -462,6 +498,8 @@ def main():
                                     n_markers=n_markers,
                                     relatedness=relatedness,
                                     no_wait=no_wait,
+                                    saige_importers_path=saige_importers_path,
+                                    wdl_path=wdl_path,
                                     use_drc_ancestry_data=use_drc_ancestry_data,
                                     overwrite=overwrite)
 

@@ -88,6 +88,7 @@ workflow saige_sparse_grm {
 
 }
 
+
 task get_sparse_grm_paths {
 
     input {
@@ -213,6 +214,7 @@ task create_sparse_grm {
         String SaigeDocker
 
         Int? n_cpu
+        
     }
 
     Int this_cpu = select_first([n_cpu, 8])
