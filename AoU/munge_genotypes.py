@@ -282,10 +282,10 @@ def filter_variants_for_null(pop, analysis_type, use_array_for_variant, sample_q
 
 
 def filter_mt_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
-                      use_drc_ancestry_data=False, overwrite=False,
-                      n_common_variants_to_keep=50000, # 100000 for per pop
-                      min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
-                      variants_per_mac_category=2000, variants_per_maf_category=10000):
+                       use_drc_ancestry_data=False, overwrite=False,
+                       n_common_variants_to_keep=50000, # 100000 for per pop
+                       min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
+                       variants_per_mac_category=2000, variants_per_maf_category=10000):
     
     mt_sites_path = get_sites_for_null_path(GENO_PATH, extension='mt',
                                             pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,

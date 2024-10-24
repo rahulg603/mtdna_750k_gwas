@@ -511,8 +511,8 @@ task get_tasks_to_run {
     with open('mtx.txt', 'w') as f:
         f.write(mtx)
 
-    with open('idx.txt', 'w') as f:
-        f.write(idx)
+    with open('ix.txt', 'w') as f:
+        f.write(ix)
 
     CODE
 
