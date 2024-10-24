@@ -101,7 +101,7 @@ class CromwellManager:
         self.sample_file = inputs_file
 
         # create placeholder for workflow status file
-        self.initialize_workflow_status_file(save_specific_outputs, restart)
+        # self.initialize_workflow_status_file(save_specific_outputs, restart)
 
         # create parameters file
         run_params = self.get_initial_parameters_json()
@@ -456,7 +456,25 @@ class CromwellManager:
 
 
     def initialize_workflow_status_file(self, save_specific_outputs, restart):
-        this_wdl = WDL.load(self.wdl_path)
+
+        def custom_import_resolver(uri, path, importer):
+            if uri.startswith("https://"):
+                # Download the file from the remote URL
+                path_this = os.path.abspath("./wdl_imports")
+                if not os.path.isdir(path_this):
+                    os.mkdir(path_this)
+                
+                local_path = os.path.join(path_this, os.path.basename(uri))
+                print(local_path)
+                response = requests.get(uri)
+                with open(local_path, 'wb') as f:
+                    f.write(response.content)
+                return WDL.read_source_default(local_path, path, importer)
+            else:
+                # Use the default importer for non-https URIs
+                return WDL.read_source_default(uri, path, importer)
+
+        this_wdl = WDL.load(self.wdl_path, read_source=custom_import_resolver)
         status = {'cromwell_id':[],
                   'status':[],
                   'start_time':[],

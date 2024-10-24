@@ -56,13 +56,13 @@ workflow saige_manager {
 
     }
 
-    String suffix = suffix + if use_drc_ancestry_data then '_drccovar' else ''
+    String suffix_this = suffix + if use_drc_ancestry_data then '_drccovar' else ''
 
     call process_phenotype_table {
         # this function will read in a single phenotype flat file, munge it into a correct format, and output the phenotypes to process
         input:
             phenotype_flat_file = phenotype_flat_file,
-            suffix = suffix,
+            suffix = suffix_this,
             trait_type = trait_type,
             modifier = modifier,
             sample_col = sample_col,
@@ -93,7 +93,7 @@ workflow saige_manager {
             # test: [[[File, File],...,[File, File]], [[File, File],...,[File, File]],...]
             # merge: [String, String, String, String]
             input:
-                suffix = suffix,
+                suffix = suffix_this,
                 pop = pop,
 
                 specific_phenos = specific_phenos,
@@ -149,7 +149,7 @@ workflow saige_manager {
             
             input:
                 pheno = pheno,
-                suffix = suffix,
+                suffix = suffix_this,
                 pop = pop,
 
                 covariates = process_phenotype_table.covariate_list,
