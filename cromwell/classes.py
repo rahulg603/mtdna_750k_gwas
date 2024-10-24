@@ -101,7 +101,7 @@ class CromwellManager:
         self.sample_file = inputs_file
 
         # create placeholder for workflow status file
-        # self.initialize_workflow_status_file(save_specific_outputs, restart)
+        self.initialize_workflow_status_file(save_specific_outputs, restart)
 
         # create parameters file
         run_params = self.get_initial_parameters_json()
