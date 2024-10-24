@@ -204,7 +204,7 @@ class CromwellManager:
                 final_check = n_non_terminal == 0
                 
                 # Get completed workflow IDs
-                completed_workflow_ids = list(self.get_samples_with_status('Succeeded').unique())
+                completed_workflow_ids = list(self.get_samples_with_status('Succeeded').cromwell_id.unique())
                 # If there was an existing run_metrics file, filter for just the workflow_ids that haven't been 
                 # recorded there yet.
                 completed_workflow_ids = [elt for elt in completed_workflow_ids if elt not in self.workflow_status['cromwell_id'].values]
@@ -558,7 +558,7 @@ class CromwellManager:
 
     def update_parameters_from_disk(self):
         # Supports updating the number of concurrent workflows, submission wait, check frequency while the pipeline runs.
-        params_uri = os.path.join(self.out, 'pipeline_submission_params.json')
+        params_uri = os.path.join(self.output, 'pipeline_submission_params.json')
         with self.cloud_fs.read(params_uri, 'r') as j:
             data = json.load(j)
 
