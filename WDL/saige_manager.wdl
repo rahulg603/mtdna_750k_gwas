@@ -18,6 +18,8 @@ workflow saige_manager {
         Array[String] pops = ['eur']
 
         Int sparse_n_markers
+        Float sparse_min_af
+        Float sparse_relatedness_cutoff
 
         # path to gs folders
         String gs_bucket
@@ -41,8 +43,10 @@ workflow saige_manager {
         Boolean force_inverse_normalize # force inverse normalization. Intended for continuous traits only
         Boolean disable_loco # disables leave-one-chromosome-out
 
-        Boolean include_base_covariates
         Boolean use_drc_ancestry_data = true
+        Boolean sample_qc = true
+
+        Boolean include_base_covariates
         String sex_stratified = '' # '' = none, 'all' = all, 'only' = only individual sexes
         String? specific_phenos
 
@@ -103,7 +107,10 @@ workflow saige_manager {
                 sex_stratified = sex_stratified,
                 rvas_mode = rvas_mode,
                 use_drc_ancestry_data = use_drc_ancestry_data,
+                sample_qc = sample_qc,
                 sparse_n_markers = sparse_n_markers,
+                min_maf = sparse_min_af,
+                relatedness = sparse_relatedness_cutoff,
 
                 gs_bucket = gs_bucket,
                 gs_phenotype_path = gs_phenotype_path,
@@ -274,7 +281,7 @@ task process_phenotype_table {
         f.write(str(covariates))
 
     suffix = '~{suffix}'
-    mt_path = get_custom_ukb_pheno_mt_path(gs_phenotype_path, suffix, drc_tf)
+    mt_path = get_custom_ukb_pheno_mt_path(gs_phenotype_path, suffix)
     overwrite_tf = '~{overwrite}' == 'overwrite'
     append_tf = '~{append}' == 'append'
 
@@ -337,6 +344,10 @@ task get_tasks_to_run {
 
         Boolean rvas_mode
         Int sparse_n_markers
+        Float min_maf
+        Float relatedness
+        Boolean use_drc_ancestry_data
+        Boolean sample_qc
 
         File SaigeImporters
         String HailDocker
@@ -350,6 +361,8 @@ task get_tasks_to_run {
     String overwrite_h = if overwrite_hail_results then 'overwrite' else 'no_overwrite'
     String specific_phenos_sel = select_first([specific_phenos, ''])
     String analysis_type = if rvas_mode then 'gene' else 'variant'
+    String drc = if use_drc_ancestry_data then 'drc' else 'custom'
+    String qc = if sample_qc then 'qc' else 'no_qc'
 
     command <<<
         set -e
@@ -379,6 +392,8 @@ task get_tasks_to_run {
 
     criteria = True
     criteria &= (ht.n_cases_by_pop >= ~{min_cases})
+    drc_tf = '~{drc}' == 'drc'
+    sample_qc_tf = '~{qc}' == 'qc'
 
     ht = ht.filter(criteria).key_by()
 
@@ -490,9 +505,8 @@ task get_tasks_to_run {
         json.dump(run_hail_merge, f)
 
     #### NOW generate paths for null model construction
-    bed, bim, fam = get_plink_for_grm_path(gs_genotype_path, '~{pop}', '~{analysis_type}')
-    bed_subset, bim_subset, fam_subset = get_plink_for_grm_path(gs_genotype_path, '~{pop}', '~{analysis_type}', ~{sparse_n_markers})
-    mtx, ix = get_sparse_grm_path(gs_genotype_path, '~{pop}', '~{analysis_type}', ~{sparse_n_markers})
+    bed, bim, fam = get_plink_for_null_path(gs_genotype_path, '~{pop}', sample_qc, drc_tf, ~{min_maf})
+    mtx, ix = get_sparse_grm_path(gs_genotype_path, '~{pop}', ~{sparse_n_markers}, ~{relatedness}, sample_qc, drc_tf, ~{min_maf})
 
     with open('bed.txt', 'w') as f:
         f.write(bed)
@@ -502,15 +516,6 @@ task get_tasks_to_run {
 
     with open('fam.txt', 'w') as f:
         f.write(fam)
-
-    with open('bed_subset.txt', 'w') as f:
-        f.write(bed_subset)
-
-    with open('bim_subset.txt', 'w') as f:
-        f.write(bim_subset)
-
-    with open('fam_subset.txt', 'w') as f:
-        f.write(fam_subset)
 
     with open('mtx.txt', 'w') as f:
         f.write(mtx)
@@ -537,10 +542,6 @@ task get_tasks_to_run {
         String bed = read_string('bed.txt')
         String bim = read_string('bim.txt')
         String fam = read_string('fam.txt')
-
-        String bed_subset = read_string('bed_subset.txt')
-        String bim_subset = read_string('bim_subset.txt')
-        String fam_subset = read_string('fam_subset.txt')
 
         String mtx = read_string('mtx.txt')
         String ix = read_string('ix.txt')

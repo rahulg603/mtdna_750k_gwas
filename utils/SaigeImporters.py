@@ -38,8 +38,7 @@ def get_aou_util_path(util):
 # Genotypes
 def get_plink_for_null_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
     # recall, we always produce this with array data
-    source_str = '_array' if use_array_for_variant else '_wgs'
-    prefix = os.path.join(geno_folder, f'ld_prune/aou_ld_pruned_maf0.01{source_str}_forgrm{str(10)}_{pop}')
+    prefix = os.path.join(geno_folder, f'ld_prune/aou_ld_pruned_maf0.01_forgrm{str(10)}_{pop}')
     return f'{prefix}.bed', f'{prefix}.bim', f'{prefix}.fam'
 
 
