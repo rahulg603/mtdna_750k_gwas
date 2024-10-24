@@ -122,13 +122,22 @@ class CromwellManager:
         self.update_run_statistics()
         self.lock = threading.Lock()
 
+        exit_signal = threading.Event()
+
         thread_queue = threading.Thread(target=self.queue_all_jobs, args=(submission_retries, cromwell_timeout))
         thread_monitor = threading.Thread(target=self.monitor_for_job_metrics)
 
         thread_queue.start()
         thread_monitor.start()
+        print('Pipeline started.')
 
         if not skip_waiting:
+            try:
+                while not exit_signal.is_set():
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                exit_signal.set()
+            
             thread_queue.join()
             thread_monitor.join()
             print('Pipeline complete.')
@@ -559,7 +568,7 @@ class CromwellManager:
     def update_parameters_from_disk(self):
         # Supports updating the number of concurrent workflows, submission wait, check frequency while the pipeline runs.
         params_uri = os.path.join(self.output, 'pipeline_submission_params.json')
-        with self.cloud_fs.read(params_uri, 'r') as j:
+        with self.cloud_fs.open(params_uri, 'r') as j:
             data = json.load(j)
 
         self.n_parallel_workflows = data['NUM_CONCURRENT']
