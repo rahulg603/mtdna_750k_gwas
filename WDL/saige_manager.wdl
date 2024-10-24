@@ -137,22 +137,12 @@ workflow saige_manager {
 
 
         if (always_use_sparse_grm) {
-            File bed_subset = tasks.bed_subset
-            File bim_subset = tasks.bim_subset
-            File fam_subset = tasks.fam_subset
             File sparse_grm = tasks.mtx
             File sparse_grm_ids = tasks.ix
         }
-        if (!always_use_sparse_grm) {
-            File bed_all = tasks.bed
-            File bim_all = tasks.bim
-            File fam_all = tasks.fam
-        }
-
-        File bedfile_vr_markers = select_first([bed_subset, bed_all])
-        File bimfile_vr_markers = select_first([bim_subset, bim_all])
-        File famfile_vr_markers = select_first([fam_subset, fam_all])
-
+        File bedfile_vr_markers = tasks.bed
+        File bimfile_vr_markers = tasks.bim
+        File famfile_vr_markers = tasks.fam
 
         call saige_runner.saige_multi as saige {
             
