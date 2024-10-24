@@ -174,17 +174,19 @@ class CromwellManager:
                     self.update_all_status()
 
                     # check whether we are having excessive failures (reload status_counts to get updated numbers)
-                    pct_failed = (self.n_fail/(self.n_fail+self.n_success))*100
+                    if (self.n_fail + self.n_success) > 0:
+                        pct_failed = (self.n_fail/(self.n_fail+self.n_success))*100
 
-                    # if so, stop the loop
-                    if (self.n_fail > MIN_FAIL_NUM) and (pct_failed > MAX_FAIL_PCT):
-                        msg = (f'{pct_failed:0.1f}% of terminated jobs have ended in failure, which is greater\n'
-                            f'than the threshold setting of {MAX_FAIL_PCT}%. Halting the submission loop.\n'
-                            'Please check to see if something is wrong.')
-                        with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
-                            out.write(msg + '\n')
-                        print(msg)
-                        break
+                        # if so, stop the loop
+                        if (self.n_fail > MIN_FAIL_NUM) and (pct_failed > MAX_FAIL_PCT):
+                            msg = (f'{pct_failed:0.1f}% of terminated jobs have ended in failure, which is greater\n'
+                                f'than the threshold setting of {MAX_FAIL_PCT}%. Halting the submission loop.\n'
+                                'Please check to see if something is wrong.')
+                            with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
+                                out.write(msg + '\n')
+                            print(msg)
+                            break
+            
             else:
                 print('All samples submitted. Submission loop ending.')
 
@@ -343,7 +345,7 @@ class CromwellManager:
                 # wait between batch submissions, if requested
                 time.sleep(addl_sub_interval_sec)
             
-            print('Submission complete.')
+            print('Submission round complete.')
             return self.samples_df_output_path
     
 
@@ -474,7 +476,7 @@ class CromwellManager:
                     os.mkdir(path_this)
                 
                 local_path = os.path.join(path_this, os.path.basename(uri))
-                print(local_path)
+                print(f'Moving {os.path.basename(local_path)} to local fs from networked location for parsing...')
                 response = requests.get(uri)
                 with open(local_path, 'wb') as f:
                     f.write(response.content)
