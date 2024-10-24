@@ -1,5 +1,7 @@
 version 1.0
 
+import "https://personal.broadinstitute.org/rahul/saige/saige_sparse_grm.wdl" as saige_tools
+
 workflow saige_multi {
 
     input {
@@ -92,6 +94,13 @@ workflow saige_multi {
 
                     SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker
+            }
+
+            call saige_tools.upload {
+                input:
+                    paths = [null.null_rda_path, null.null_var_path],
+                    files = [null.null_rda, null.null_var_ratio],
+                    HailDocker = HailDocker
             }
 
         }
@@ -310,5 +319,7 @@ task null {
     output {
         File null_rda = read_string('rda.txt')
         File null_var_ratio = read_string('null_var_ratio.txt')
+        String null_rda_path = read_string('rda_path.txt')
+        String null_var_path = read_string('null_var_ratio_path.txt')
     }
 }
