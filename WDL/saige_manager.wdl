@@ -17,6 +17,8 @@ workflow saige_manager {
 
         Array[String] pops = ['eur']
 
+        Int sparse_n_markers
+
         # path to gs folders
         String gs_bucket
         String gs_genotype_path
@@ -128,16 +130,16 @@ workflow saige_manager {
 
 
         if (always_use_sparse_grm) {
-            File bed_subset = get_tasks_to_run.bed_subset
-            File bim_subset = get_tasks_to_run.bim_subset
-            File fam_subset = get_tasks_to_run.fam_subset
-            File sparse_grm = get_tasks_to_run.sparse_grm
-            File sparse_grm_ids = get_tasks_to_run.sparse_grm_ids
+            File bed_subset = tasks.bed_subset
+            File bim_subset = tasks.bim_subset
+            File fam_subset = tasks.fam_subset
+            File sparse_grm = tasks.sparse_grm
+            File sparse_grm_ids = tasks.sparse_grm_ids
         }
         if (!always_use_sparse_grm) {
-            File bed_all = get_tasks_to_run.bed
-            File bim_all = get_tasks_to_run.bim
-            File fam_all = get_tasks_to_run.fam
+            File bed_all = tasks.bed
+            File bim_all = tasks.bim
+            File fam_all = tasks.fam
         }
 
         File bedfile_vr_markers = select_first([bed_subset, bed_all])
