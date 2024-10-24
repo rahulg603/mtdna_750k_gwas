@@ -276,7 +276,7 @@ class CromwellManager:
         """
         self.update_run_statistics()
         if self.n_pending == 0:
-            print('No samples with a a status of "Submission pending". Nothing new to submit.')
+            print('No samples with a status of "Submission pending". Nothing new to submit.')
         else:
             #group the samples ready for submission into batches of size batch_size, record the inputs, and do the submission
             submission_records_root = os.path.join(self.output, 'cromwell_submissions')

@@ -18,6 +18,7 @@ from cromwell.classes import CromwellManager
 from copy import deepcopy
 from typing import Union
 
+hl.init(tmp_dir = TEMP_PATH, log='log.log')
 
 def get_adj_expr(
     gt_expr: hl.expr.CallExpression,
@@ -111,7 +112,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
     else:
-        mt = hl.read_matrix_table(mt_path, _n_partitions=12000)
+        mt = hl.read_matrix_table(mt_path, _n_partitions=25000)
     
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
