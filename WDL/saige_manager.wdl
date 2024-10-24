@@ -176,6 +176,7 @@ workflow saige_manager {
                 use_drc_ancestry_data = use_drc_ancestry_data,
                 force_inverse_normalize = force_inverse_normalize,
                 disable_loco = disable_loco,
+                always_use_sparse_grm = always_use_sparse_grm,
 
                 SaigeImporters = SaigeImporters,
                 HailDocker = HailDocker,

@@ -74,23 +74,24 @@ workflow saige_multi {
         if (per_pheno_data.left.left.right[0] == '') {
 
             call null {
-                # runs the null model
-                phenotype_id = per_pheno_data.right,
-                pheno_file = pheno_file,
-                covariates = process_phenotype_table.covariates,
+                input:
+                    # runs the null model
+                    phenotype_id = per_pheno_data.right,
+                    phenotype_file = pheno_file,
+                    covariates = covariates,
 
-                bedfile_vr_markers = bedfile_vr_markers,
-                bimfile_vr_markers = bimfile_vr_markers,
-                famfile_vr_markers = famfile_vr_markers,
-                sparse_grm = sparse_grm,
-                sparse_grm_ids = sparse_grm_ids,
+                    bedfile_vr_markers = bedfile_vr_markers,
+                    bimfile_vr_markers = bimfile_vr_markers,
+                    famfile_vr_markers = famfile_vr_markers,
+                    sparse_grm = sparse_grm,
+                    sparse_grm_ids = sparse_grm_ids,
 
-                analysis_type = analysis_type,
-                force_inverse_normalize = force_inverse_normalize,
-                disable_loco = disable_loco,
+                    analysis_type = analysis_type,
+                    force_inverse_normalize = force_inverse_normalize,
+                    disable_loco = disable_loco,
 
-                SaigeImporters = SaigeImporters,
-                SaigeDocker = SaigeDocker
+                    SaigeImporters = SaigeImporters,
+                    SaigeDocker = SaigeDocker
             }
 
         }
@@ -215,8 +216,8 @@ task null {
         File phenotype_file
 
         String covariates
-        ?qCovarColList # NOTE NEED TO FIGURE THIS OUT
-        isCovariateOffset # NOTE NEED TO FIGURE THIS OUT
+        #?qCovarColList # NOTE NEED TO FIGURE THIS OUT
+        #isCovariateOffset # NOTE NEED TO FIGURE THIS OUT
 
         File bedfile_vr_markers
         File bimfile_vr_markers
@@ -252,12 +253,7 @@ task null {
     load_module = importlib.import_module(os.path.splitext(scriptname)[0])
     globals().update(vars(load_module))
 
-    gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
-    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}'.lstrip('/'))
-
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
-    rda, var_ratio = get_null_model_file_paths(null_model_dir, pheno_dct, '~{analysis_type}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
 
     saige_step_1 = ['Rscript', '/usr/local/bin/step1_fitNULLGLMM.R',
@@ -312,6 +308,7 @@ task null {
     }
 
     output {
-        String pheno_file = read_string('export_path.txt')
+        File null_rda = read_string('rda.txt')
+        File null_var_ratio = read_string('null_var_ratio.txt')
     }
 }
