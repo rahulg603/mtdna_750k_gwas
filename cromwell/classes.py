@@ -63,8 +63,8 @@ class CromwellManager:
         # run parameters
         self.run_name = run_name
         self.output = os.path.join(BUCKET, run_name)
-        self.samples_df_output_path = os.path.join(self.output, '.samples_df.csv')
-        self.pipeline_status_output_path = os.path.join(self.output, '.pipeline_status.tsv')
+        self.samples_df_output_path = os.path.join(self.output, 'samples_df.csv')
+        self.pipeline_status_output_path = os.path.join(self.output, 'pipeline_status.tsv')
         self.wdl_path = wdl_path
         self.batch = batch
         self.n_parallel_workflows = n_parallel_workflows
