@@ -133,8 +133,8 @@ workflow saige_manager {
             File bed_subset = tasks.bed_subset
             File bim_subset = tasks.bim_subset
             File fam_subset = tasks.fam_subset
-            File sparse_grm = tasks.sparse_grm
-            File sparse_grm_ids = tasks.sparse_grm_ids
+            File sparse_grm = tasks.mtx
+            File sparse_grm_ids = tasks.ix
         }
         if (!always_use_sparse_grm) {
             File bed_all = tasks.bed
