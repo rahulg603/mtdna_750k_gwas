@@ -18,8 +18,6 @@ from cromwell.classes import CromwellManager
 from copy import deepcopy
 from typing import Union
 
-hl.init(tmp_dir = TEMP_PATH, log='log.log')
-
 def get_adj_expr(
     gt_expr: hl.expr.CallExpression,
     gq_expr: Union[hl.expr.Int32Expression, hl.expr.Int64Expression],
