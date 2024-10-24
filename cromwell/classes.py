@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 import os
 import subprocess
+import threading
+import WDL
 import json
+import re
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -17,7 +20,7 @@ import cromwell.preprocess_run as pre
 from cromwell.constants import *
 import cromwell.run_monitor as crm
 
-from datetime import datetime, timedelta
+from datetime import datetime
 import dateutil
 import time
 import traceback
@@ -25,7 +28,7 @@ from zoneinfo import ZoneInfo
 
 
 class CromwellManager:
-    def __init__(self, run_name, inputs_file, json_template_path, wdl_path,
+    def __init__(self, run_name, inputs_file, json_template_path, wdl_path, save_specific_outputs=[],
                  batch=None, limit=None, n_parallel_workflows=N_PARALLEL_WORKFLOWS,
                  add_requester_pays_parameter=True, restart=False, batches_precomputed=False,
                  submission_sleep=30, check_freq=120):
@@ -37,8 +40,9 @@ class CromwellManager:
         run_name: name of run
         inputs_file: pandas flat file with column names to be added to the JSON for submission.
             Each row will be a job unless "batch" is set in which case rows will be grouped.
-        json_template_path: local path to json template file. Will be augmneted based on inputs_file
+        json_template_path: local path to json template file. Will be augmneted based on inputs_file.
         wdl_path: local path to WDL to submit
+        save_specific_outputs: list. Can be empty. If it contains items, will track only those specific outputs.
         batch: How many rows to add to each batch. If None, no batching is done.
         n_limit: number to submit
         n_parallel_workflows: number of workflows to allow at once
@@ -59,7 +63,8 @@ class CromwellManager:
         # run parameters
         self.run_name = run_name
         self.output = os.path.join(BUCKET, run_name)
-        self.samples_df_output_path = os.path.join(self.output, 'samples_df.csv')
+        self.samples_df_output_path = os.path.join(self.output, '.samples_df.csv')
+        self.pipeline_status_output_path = os.path.join(self.output, '.pipeline_status.tsv')
         self.wdl_path = wdl_path
         self.batch = batch
         self.n_parallel_workflows = n_parallel_workflows
@@ -68,6 +73,7 @@ class CromwellManager:
 
         # preliminary run statistics
         self.n_pending = 0
+        self.n_submitted = 0
         self.n_running = 0
         self.n_success = 0
         self.n_fail = 0
@@ -94,6 +100,9 @@ class CromwellManager:
             inputs_file = pre.compute_batches(inputs_file, batch)
         self.sample_file = inputs_file
 
+        # create placeholder for workflow status file
+        self.initialize_workflow_status_file(save_specific_outputs, restart)
+
         # create parameters file
         run_params = self.get_initial_parameters_json()
         self.write_parameters_json(run_params)
@@ -104,7 +113,153 @@ class CromwellManager:
         self.update_all_status() # then check to see if these have updated status
 
 
-    def submit(self, addl_sub_interval_sec, submission_retries, cromwell_timeout):
+    def run_pipeline(self, submission_retries, cromwell_timeout, skip_waiting=False):
+        # Primary function to submit and monitor all jobs from this pipeline.
+        # This spawns two processes. The first will submit all jobs.
+        # The second will update a df containing run information per workflow.
+
+        # submit the initial set of jobs and then periodically check to submit more as they complete, up to 40k samples
+        self.update_run_statistics()
+        self.lock = threading.Lock()
+
+        thread_queue = threading.Thread(target=self.queue_all_jobs, args=(submission_retries, cromwell_timeout))
+        thread_monitor = threading.Thread(target=self.monitor_for_job_metrics)
+
+        thread_queue.start()
+        thread_monitor.start()
+
+        if not skip_waiting:
+            thread_queue.join()
+            thread_monitor.join()
+            print('Pipeline complete.')
+        else:
+            print('ALERT: pipeline threads have been initialized and may be running in the background.')
+
+
+    def queue_all_jobs(self, submission_retries, cromwell_timeout):
+        # This function handles submission of all jobs.
+        try:
+            with self.lock:
+                this_pending = self.n_pending
+            
+            while this_pending > 0:
+                #reload submission parameters each iteration to allow them to be tuned over the course of the run
+                with self.lock:
+                    self.update_parameters_from_disk()
+                
+                time_now = datetime.now(tz=ZoneInfo('America/New_York')).isoformat()
+                print(f'{time_now}: Checking to submit jobs...')
+
+                #Now, do the submission
+                with self.lock:
+                    _ = self.submit_jobs(addl_sub_interval_sec=self.submission_sleep,
+                                        submission_retries=submission_retries,
+                                        cromwell_timeout=cromwell_timeout)
+                    check_frequency = self.check_frequency
+
+                # wait before updating the job status and attempting to submit more jobs
+                time.sleep(check_frequency)
+
+                with self.lock:
+                    # update the status results
+                    self.update_all_status()
+
+                    # check whether we are having excessive failures (reload status_counts to get updated numbers)
+                    pct_failed = (self.n_fail/(self.n_fail+self.n_success))*100
+
+                    # if so, stop the loop
+                    if (self.n_fail > MIN_FAIL_NUM) and (pct_failed > MAX_FAIL_PCT):
+                        msg = (f'{pct_failed:0.1f}% of terminated jobs have ended in failure, which is greater\n'
+                            f'than the threshold setting of {MAX_FAIL_PCT}%. Halting the submission loop.\n'
+                            'Please check to see if something is wrong.')
+                        with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
+                            out.write(msg + '\n')
+                        print(msg)
+                        break
+            else:
+                print('All samples submitted. Submission loop ending.')
+
+        except Exception:
+            excpt_str = traceback.format_exc()
+            print(excpt_str)
+            with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
+                out.write(excpt_str + '\n')
+            raise
+        
+
+    def monitor_for_job_metrics(self):
+
+        print('Starting monitoring. Monitoring thread will run until there are no more jobs in a non-terminal state.')
+        
+        with self.lock:
+            run_metrics_holder = {k: [] for k in self.workflow_status.columns}
+            this_workflow_name = self.workflow_name
+
+        while True:
+
+            with self.lock:
+                self.update_all_status()
+                self.print_status()
+                n_non_terminal = self.n_running + self.n_pending + self.n_submitted
+                final_check = n_non_terminal == 0
+                
+                # Get completed workflow IDs
+                completed_workflow_ids = list(self.get_samples_with_status('Succeeded').unique())
+                # If there was an existing run_metrics file, filter for just the workflow_ids that haven't been 
+                # recorded there yet.
+                completed_workflow_ids = [elt for elt in completed_workflow_ids if elt not in self.workflow_status['cromwell_id'].values]
+            
+            # now get the results for all of the newly-succeeded workflows
+            for idx, workflow_id in enumerate(completed_workflow_ids):
+                if idx and not idx%5:
+                    print(f'Processed {idx} workflows')
+                attempts = 4
+                to_raise = None
+                while attempts >= 0:
+                    try:
+                        run_meta_resp = subprocess.run(['cromshell', '-t', '60', '--no_turtle', '--machine_processable', 'metadata', 
+                                                        '--dont-expand-subworkflows', workflow_id], 
+                                                        check=True, capture_output=True)
+                    except Exception as err:
+                        print(f'Error retrieving info about workflow {workflow_id}. Retrying {attempts} more times.')
+                        to_raise = err
+                        attempts -= 1
+                        time.sleep(15)
+                    else:
+                        break
+                else:
+                    raise to_raise
+                
+                run_meta = json.loads(run_meta_resp.stdout.decode())
+                run_metrics = run_metrics_holder.copy()
+
+                # the usual stuff
+                run_metrics['cromwell_id'].append(workflow_id)
+                run_metrics['status'].append(run_meta['status'])
+                run_metrics['start_time'].append(run_meta['start'])
+                run_metrics['end_time'].append(run_meta['end'])
+                run_metrics['runtime'].append(str(dateutil.parser.isoparse(run_meta['end'])
+                                                - dateutil.parser.isoparse(run_meta['start'])))
+                
+                outputs_to_find = [k for k in run_metrics.keys() if re.search(f'^{this_workflow_name}.+')]
+                for output in outputs_to_find:
+                    run_metrics[output].append(run_meta['outputs'].get(output, 'Not found'))
+                
+                with self.lock:
+                    self.workflow_status = pd.concat([self.workflow_status, pd.DataFrame(run_metrics)]).reset_index(drop=True)
+
+            if len(completed_workflow_ids) > 0:
+                with self.lock:
+                    self.save_pipeline_status_file()
+            
+            if final_check:
+                print('All workflows have completed.')
+                break
+            else:
+                time.sleep(self.check_frequency)
+
+
+    def submit_jobs(self, addl_sub_interval_sec, submission_retries, cromwell_timeout):
         """
         Performs one round of submissions.
         """
@@ -282,6 +437,8 @@ class CromwellManager:
                 self.update_status_by_col('cromwell_id', id, 'run_status', this_updated_status)
             
             self.save_sample_file()
+        
+        self.update_run_statistics()
 
 
     def add_running_workflow(self, workflow):
@@ -298,16 +455,52 @@ class CromwellManager:
         return(json_temp)
 
 
+    def initialize_workflow_status_file(self, save_specific_outputs, restart):
+        this_wdl = WDL.load(self.wdl_path)
+        status = {'cromwell_id':[],
+                  'status':[],
+                  'start_time':[],
+                  'end_time':[],
+                  'runtime':[]}
+        if len(save_specific_outputs) > 0:
+            dict_outputs = {f'{self.workflow_name}.{item.name}': [] for item in this_wdl.workflow.outputs if item in save_specific_outputs}
+        else:
+            dict_outputs = {f'{self.workflow_name}.{item.name}': [] for item in this_wdl.workflow.outputs}
+        status.update(dict_outputs)
+        
+        if self.cloud_fs.exists(self.pipeline_status_output_path) and not restart:
+            this_df = pd.read_csv(self.pipeline_status_output_path, sep='\t',
+                                  storage_options={'project':PROJECT, 'requester_pays':True})
+            tf1 = all([k in this_df.columns for k in dict_outputs.keys()])
+            tf2 = all([col in dict_outputs.keys() for col in this_df.columns])
+            if tf1 and tf2:
+                self.workflow_status = this_df
+                
+            else:
+                raise ValueError(f'Found a file at {self.pipeline_status_output_path} which does not contain the exact expected schema. Either remove this file or specify restart=True.')
+        else:
+            self.workflow_status = pd.DataFrame(status)
+
+
     def update_run_statistics(self):
         # adds statistics about what items have each of a variety of statuses
         self.n_pending = self.get_samples_with_status('Submission pending').shape[0]
+        self.n_submitted = self.get_samples_with_status('Submitted').shape[0]
         self.n_running = self.get_samples_with_status('Running').shape[0]
         self.n_success = self.get_samples_with_status('Succeeded').shape[0]
         self.n_fail = self.get_samples_with_status('Failed').shape[0]
         self.n_review = self.get_samples_with_status('Manual review').shape[0]
 
-        if self.n_running != len(self.running_workflows):
+        if (self.n_running + self.n_submitted) != len(self.running_workflows):
             raise ValueError('ERROR: it does not make sense for running workflows in the sample table to be different than recorded running workflows.')
+
+
+    def print_status(self):
+        print(f'{str(self.n_submitted)} jobs are submitted but not yet running.')
+        print(f'{str(self.n_running)} jobs are running.')
+        print(f'{str(self.n_pending)} jobs are awaiting submission.')
+        print(f'{str(self.n_success)} jobs have succeeded.')
+        print(f'{str(self.n_fail)} jobs have failed.')
 
 
     def get_samples_with_status(self, status):
@@ -333,9 +526,6 @@ class CromwellManager:
 
     def get_initial_parameters_json(self):
         # set pipeline submission parameter values
-        pipeline_status_path = f'./{self.run_name}.pipeline_status.tsv'
-        pipeline_status_uri = os.path.join(self.output, f'{self.run_name}.pipeline_status.tsv')
-
         pipe_params = {'RUN_NAME': self.run_name,
                        'BATCH_SIZE': 1 if self.batch is None else self.batch,
                        'NUM_CONCURRENT': self.n_parallel_workflows,
@@ -343,8 +533,7 @@ class CromwellManager:
                        'MAX_FAIL_PCT': MAX_FAIL_PCT,
                        'SUBMISSION_WAIT': self.submission_sleep,
                        'SUB_CHECK_WAIT': self.check_frequency,
-                       'PIPELINE_STATUS_PATH': pipeline_status_path,
-                       'PIPELINE_STATUS_URI': pipeline_status_uri}
+                       'PIPELINE_STATUS_URI': self.pipeline_status_output_path}
 
         return pipe_params
 
@@ -375,6 +564,11 @@ class CromwellManager:
     def save_sample_file(self):
         self.sample_file.to_csv(self.samples_df_output_path, sep='\t', index=False,
                                 storage_options={'project':PROJECT, 'requester_pays':True})
+
+
+    def save_pipeline_status_file(self):
+        self.workflow_status.to_csv(self.pipeline_status_output_path, sep='\t', index=False,
+                                    storage_options={'project':PROJECT, 'requester_pays':True})
 
 
 class CromwellWorkflow:
@@ -527,159 +721,3 @@ def isolate_failed_shards(samples_df_uri, failed_workflows_list, cromwell_run_pr
     samples_df.to_csv(samples_df_uri, storage_options={'project':os.getenv('GOOGLE_PROJECT'), 'requester_pays':True})
     return samples_df
 
-
-def get_succeeded_job_metrics(samples_df_uri, run_name, force_reload=False):
-    run_metrics_uri = os.path.join(os.getenv("WORKSPACE_BUCKET"), f'{run_name}/run_metrics.csv')
-    run_metrics = {'cromwell_id':[],
-                   'status':[],
-                   'start_time':[],
-                   'end_time':[],
-                   'runtime':[],
-                   'merging_log':[],
-                   'merged_calls':[],
-                   'merged_coverage':[],
-                   'merged_statistics':[]}
-    #get samples_df
-    samples_df = pandas.read_csv(samples_df_uri, index_col=0,
-                                 storage_options={'project':os.getenv('GOOGLE_PROJECT'), 'requester_pays':True})
-    workflow_ids = samples_df.loc[samples_df['run_status'] == 'Succeeded', 'cromwell_id'].unique()
-    #get run_metrics (if it already exists), otherwise just make it an empty version of the one we are building
-    if not force_reload:
-        try:
-            existing_run_metrics = pandas.read_csv(run_metrics_uri, index_col=0, sep='\t',
-                                                   storage_options={'project':os.getenv('GOOGLE_PROJECT'), 
-                                                                    'requester_pays':True})
-        except:
-            existing_run_metrics = pandas.DataFrame(run_metrics)
-        else:
-            #if there is an existing run_metrics file, filter for just the workflow_ids that haven't been 
-            # recorded there yet.
-            workflow_ids = [elt for elt in workflow_ids if elt not in existing_run_metrics['cromwell_id'].values]
-    else:
-        existing_run_metrics = pandas.DataFrame(run_metrics)
-
-    # now get the results for all of the newly-succeeded workflows
-    for idx, workflow_id in enumerate(workflow_ids):
-        if idx and not idx%5:
-            print(f'Processed {idx} workflows')
-        attempts = 4
-        to_raise = None
-        while attempts >= 0:
-            try:
-                run_meta_resp = subprocess.run(['cromshell', '-t', '60', '--no_turtle', '--machine_processable', 'metadata', 
-                                                '--dont-expand-subworkflows', workflow_id], 
-                                                check=True, capture_output=True)
-            except Exception as err:
-                print(f'Error retrieving info about workflow {workflow_id}. Retrying {attempts} more times.')
-                to_raise = err
-                attempts -= 1
-                time.sleep(15)
-            else:
-                break
-        else:
-            raise to_raise
-        run_meta = json.loads(run_meta_resp.stdout.decode())
-        run_metrics['cromwell_id'].append(workflow_id)
-        run_metrics['status'].append(run_meta['status'])
-        run_metrics['start_time'].append(run_meta['start'])
-        run_metrics['end_time'].append(run_meta['end'])
-        run_metrics['runtime'].append(str(dateutil.parser.isoparse(run_meta['end'])
-                                          - dateutil.parser.isoparse(run_meta['start'])))
-        try:
-            run_metrics['merging_log'].append(run_meta['calls']['MitochondriaPipelineWrapper.MergeMitoMultiSampleOutputsInternal'][-1]['backendLogs']['log'])
-        except KeyError:
-            run_metrics['merging_log'].append('Not found')
-        run_metrics['merged_calls'].append(run_meta['outputs'].get('MitochondriaPipelineWrapper.merged_calls', 'Not found'))
-        run_metrics['merged_coverage'].append(run_meta['outputs'].get('MitochondriaPipelineWrapper.merged_coverage', 'Not found'))
-        run_metrics['merged_statistics'].append(run_meta['outputs'].get('MitochondriaPipelineWrapper.merged_statistics', 'Not found'))
-
-    run_metrics = pandas.concat([existing_run_metrics, pandas.DataFrame(run_metrics)]).reset_index(drop=True)
-    run_metrics.to_csv('./run_metrics.csv', sep='\t')
-    run_metrics.to_csv(run_metrics_uri, sep='\t',
-                       storage_options={'project':os.getenv('GOOGLE_PROJECT'), 'requester_pays':True})
-    print(run_metrics_uri)
-    return run_metrics
-
-
-def run_pipeline():
-    #Now, submit all workflows until 40k samples have terminated
-    pipeline_status = {'timestamp':[],
-                       'Submission pending':[],
-                       'Submitted':[],
-                       'Running':[],
-                       'Succeeded':[],
-                       'Failed':[]}
-
-    # submit the initial set of jobs and then periodically check to submit more as they complete, up to 40k samples
-    try:
-        while numpy.sum(test_run['run_status'] != 'Submission pending') < 1000:
-            #reload submission parameters each iteration to allow them to be tuned over the course of the run
-            with cloud_fs.open(params_uri, 'r') as params_in:
-                params_json = json.load(params_in)
-            run_name = params_json['RUN_NAME']
-            batch_size = params_json['BATCH_SIZE']
-            num_concurrent = params_json['NUM_CONCURRENT']
-            min_fail_num = params_json['MIN_FAIL_NUM']
-            max_fail_pct = params_json['MAX_FAIL_PCT']
-            submission_wait_sec = params_json['SUBMISSION_WAIT']
-            sub_check_wait_min = params_json['SUB_CHECK_WAIT']
-            pipeline_status_path = params_json['PIPELINE_STATUS_PATH']
-            pipeline_status_uri = params_json['PIPELINE_STATUS_URI']
-
-            #Now, do the submission
-            test_run_uri = pss.submit_cromwell_workflows(test_run, run_name=run_name, batch_size=batch_size, 
-                                                         mtSwirl_root='/home/jupyter/mtSwirl_fork/mtSwirl/',
-                                                         num_concurrent_crams=num_concurrent,
-                                                         addl_sub_interval_sec=submission_wait_sec)
-
-            time_now = datetime.now(tz=ZoneInfo('America/New_York')).isoformat()
-            print(time_now)
-
-            # update and record the summary of the pipeline status
-            status_counts = test_run['run_status'].value_counts()
-            status_counts_dict = status_counts.to_dict()
-            pipeline_status['timestamp'].append(time_now)
-            for k in sorted(set(pipeline_status.keys()) | set(status_counts_dict.keys())):
-                if k == 'timestamp':
-                    continue
-                try:
-                    pipeline_status[k].append(status_counts_dict.get(k, 0))
-                except KeyError:
-                    #any less-frequent pipeline status types will be added to the dataframe on the fly
-                    pipeline_status[k] = ([0]*(len(pipeline_status['timestamp'])-1)) + [status_counts_dict[k]]
-            pipeline_status_df = pandas.DataFrame(pipeline_status)
-            pipeline_status_df.to_csv(pipeline_status_path, sep='\t', index=False)
-            pipeline_status_df.to_csv(pipeline_status_uri, sep='\t', index=False,
-                                      storage_options={'project':os.getenv('GOOGLE_PROJECT'), 'requester_pays':True})
-
-            # wait before updating the job status and attempting to submit more jobs
-            time.sleep(60*sub_check_wait_min)
-
-            # update the status results
-            test_run = pss.update_cromwell_status(test_run_uri, verbose=False)
-            test_run['person_id'] = test_run['person_id'].astype(str)
-
-            # check whether we are having excessive failures (reload status_counts to get updated numbers)
-            status_counts = test_run['run_status'].value_counts()
-            status_counts_dict = status_counts.to_dict()
-            success_count = status_counts_dict.get('Succeeded', 0)
-            failure_count = status_counts_dict.get('Failed', 0)
-            pct_failed = (failure_count/(failure_count+success_count))*100
-
-            # if so, stop the loop
-            if (failure_count > min_fail_num) and (pct_failed > max_fail_pct):
-                msg = (f'{pct_failed:0.1f}% of terminated jobs have ended in failure, which is greater\n'
-                       f'than the threshold setting of {max_fail_pct}%. Halting the submission loop.\n'
-                       'Please check to see if something is wrong.')
-                with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
-                    out.write(msg + '\n')
-                print(msg)
-                break
-        else:
-            print('All samples submitted. Submission loop ending.')
-    except Exception:
-        excpt_str = traceback.format_exc()
-        print(excpt_str)
-        with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
-            out.write(excpt_str + '\n')
-        raise

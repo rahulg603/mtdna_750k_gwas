@@ -11,6 +11,9 @@ import pandas as pd
 from AoU.paths import *
 from utils.SaigeImporters import *
 from AoU.covariates import get_all_demographics
+
+from cromwell.classes import CromwellManager
+
 from copy import deepcopy
 from typing import Union
 
@@ -403,6 +406,9 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                     no_wait=False,
                                     use_drc_ancestry_data=False,
                                     overwrite=False):
+    """
+    Uses cromwell to distribute across pops.
+    """
     pops_to_queue = []
 
     for pop in pops:
