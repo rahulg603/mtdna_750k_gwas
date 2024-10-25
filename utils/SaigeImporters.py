@@ -8,7 +8,7 @@ PHENO_KEY_FIELDS = ('trait_type', 'phenocode', 'pheno_sex', 'modifier')
 MIN_CASES = 50
 CHROMOSOMES = list(map(str, range(1, 23))) + ['X', 'Y']
 SEXES = ('both_sexes', 'females', 'males')
-POPS = ['eur', 'afr', 'amr', 'eas', 'mid', 'sas']
+POPS = ['mid', 'eas', 'sas', 'eur', 'afr', 'amr']
 BASE_NONPC_COVARS = ['sex','age','age2','age_sex','age2_sex','site_bcm','site_uw']
 
 PHENO_SAMPLE_ID = 'userId'
