@@ -9,7 +9,8 @@ WGS_PATH = os.getenv('WGS_ACAF_THRESHOLD_SPLIT_HAIL_PATH')
 AUX_PATH = 'gs://fc-aou-datasets-controlled/v7/wgs/short_read/snpindel/aux'
 
 # Workspace paths
-BUCKET = os.getenv('WORKSPACE_BUCKET')
+#BUCKET = os.getenv('WORKSPACE_BUCKET')
+BUCKET = 'gs://fc-secure-34d99fb0-3748-4367-8197-b01069a4a7f9/'
 REFERENCE_PATH = os.path.join(BUCKET, 'reference_files')
 GWAS_PATH = os.path.join(BUCKET, 'saige_gwas')
 GENO_PATH = os.path.join(GWAS_PATH, 'genotypes')
