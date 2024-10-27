@@ -135,6 +135,8 @@ class CromwellManager:
         if not skip_waiting:
             try:
                 while not self.exit_signal.is_set():
+                    if not thread_queue.is_alive() and not thread_monitor.is_alive():
+                        break
                     time.sleep(1)
             except KeyboardInterrupt:
                 print('Quitting all threads...', flush=True)
@@ -255,7 +257,7 @@ class CromwellManager:
                 run_metrics['runtime'].append(str(dateutil.parser.isoparse(run_meta['end'])
                                                 - dateutil.parser.isoparse(run_meta['start'])))
                 
-                outputs_to_find = [k for k in run_metrics.keys() if re.search(f'^{this_workflow_name}.+')]
+                outputs_to_find = [k for k in run_metrics.keys() if re.search(f'^{this_workflow_name}.+', k)]
                 for output in outputs_to_find:
                     run_metrics[output].append(run_meta['outputs'].get(output, 'Not found'))
                 
