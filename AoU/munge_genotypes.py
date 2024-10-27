@@ -378,7 +378,9 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
     for pop in POPS:
         ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                           use_drc_ancestry_data=use_drc_ancestry_data,
-                                                          af_cutoff=min_af, extension='ht', use_plink=True)
+                                                          af_cutoff=min_af, extension='ht', 
+                                                          window='1e7',
+                                                          use_plink=True)
 
         if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
 
@@ -390,12 +392,12 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
             for chr in AUTOSOMES:
                 plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
                                                        use_drc_ancestry_data=use_drc_ancestry_data,
-                                                       af_cutoff=min_af, pruned=False, extension='bed')
+                                                       af_cutoff=min_af, pruned=None, extension='bed')
                 plink_root = os.path.splitext(plink_path)[0]
 
                 plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
                                                      use_drc_ancestry_data=use_drc_ancestry_data,
-                                                     af_cutoff=min_af, pruned=True, extension='txt')
+                                                     af_cutoff=min_af, pruned='1e7', extension='txt')
                 output_root = os.path.splitext(plink_out)[0]
                 
                 if overwrite or not hl.hadoop_exists(plink_out):
@@ -425,7 +427,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                                   inputs_file=df,
                                   json_template_path=os.path.abspath('./saige_template.json'),
                                   wdl_path=wdl_path,
-                                  batch=None, limit=3, n_parallel_workflows=99, 
+                                  batch=None, limit=199, n_parallel_workflows=199, 
                                   add_requester_pays_parameter=False,
                                   restart=False, batches_precomputed=False, 
                                   submission_sleep=0, check_freq=120)
@@ -437,7 +439,9 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
 
             ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                               use_drc_ancestry_data=use_drc_ancestry_data,
-                                                              af_cutoff=min_af, extension='ht', use_plink=True)
+                                                              af_cutoff=min_af, extension='ht', 
+                                                              window='1e7',
+                                                              use_plink=True)
 
             if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
 
@@ -447,7 +451,12 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                     plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
                                                         use_drc_ancestry_data=use_drc_ancestry_data,
                                                         af_cutoff=min_af, pruned=True, extension='txt')
-                    ht = hl.import_table(plink_out, impute=True)
+                    ht = hl.import_table(plink_out, impute=True, no_header=True)
+                    ht = ht.annotate(locus = hl.locus(contig = ht.f0.split(':')[0],
+                                                      pos = hl.int(ht.f0.split(':')[1]),
+                                                      reference_genome='GRCh38'),
+                                     alleles = ht.f0.split(':')[2:4])
+                    ht = ht.key_by('locus','alleles').select()
                     ht_list.append(ht)
                 
                 ht_prune = hl.Table.union(*ht_list).checkpoint(ld_pruned_ht_path)
@@ -471,7 +480,8 @@ def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
                                   overwrite=False):
     ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                       use_drc_ancestry_data=use_drc_ancestry_data,
-                                                      af_cutoff=min_af, extension='ht', use_plink=False)
+                                                      af_cutoff=min_af, window='1e7',
+                                                      extension='ht', use_plink=False)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
         geno_mt = get_filtered_array_mt_for_pruning(pop=pop, sample_qc=sample_qc, min_af=min_af,
@@ -500,7 +510,9 @@ def generate_plink_files_for_grm(pop, sample_qc, min_af=0.05,
                                  overwrite=False, use_plink=False):
     plink_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                use_drc_ancestry_data=use_drc_ancestry_data,
-                                               af_cutoff=min_af, extension='bed', use_plink=use_plink)
+                                               af_cutoff=min_af, extension='bed', 
+                                               window='1e7',
+                                               use_plink=use_plink)
     if overwrite or not hl.hadoop_exists(plink_path):
         mt = produce_ld_pruned_genotype_mt(pop=pop,
                                            sample_qc=sample_qc,
