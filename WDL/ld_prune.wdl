@@ -76,7 +76,6 @@ task plink_prune {
 
         String gs_output_path_root
 
-        File SaigeImporters
         String PlinkDocker
 
     }
