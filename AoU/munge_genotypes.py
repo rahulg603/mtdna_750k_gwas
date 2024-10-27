@@ -390,8 +390,8 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
             
             for chr in CHROMOSOMES:
                 plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                    use_drc_ancestry_data=use_drc_ancestry_data,
-                                                    af_cutoff=min_af, pruned=False, extension='bed')
+                                                       use_drc_ancestry_data=use_drc_ancestry_data,
+                                                       af_cutoff=min_af, pruned=False, extension='bed')
                 plink_root = os.path.splitext(plink_path)[0]
 
                 plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
@@ -403,9 +403,9 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                     plink_roots.append(plink_root)
                     output_roots.append(output_root)
 
-                    if overwrite or not hl.hadoop_exists(plink_path):
-                        this_chr_geno = geno_mt.filter(geno_mt.locus.contig == chr)
-                        this_chr_geno.export_plink(plink_root)
+                    #if overwrite or not hl.hadoop_exists(plink_path):
+                        #this_chr_geno = geno_mt.filter(geno_mt.locus.contig == chr)
+                        #this_chr_geno.export_plink(plink_root)
 
         this_run = {'bedfile': [x + '.bed' for x in plink_roots],
                     'bimfile': [x + '.bim' for x in plink_roots],
@@ -569,7 +569,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
 
 def main():
     sample_qc = True
-    min_af = 0.05
+    min_af = 0.025
     use_drc_ancestry_data=True
     overwrite=False
     no_wait=False
@@ -578,12 +578,13 @@ def main():
     relatedness = 0.125
 
     saige_importers_path = ''
-    wdl_path = ''
+    plink_wdl_path = ''
     use_plink = False
     
     if use_plink:
         mt_dict = plink_ld_pruned_mt(sample_qc=sample_qc,
                                      saige_importers_path=saige_importers_path,
+                                     wdl_path=plink_wdl_path,
                                      min_af=min_af,
                                      use_drc_ancestry_data=use_drc_ancestry_data,
                                      overwrite=overwrite)

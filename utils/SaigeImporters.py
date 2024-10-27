@@ -75,7 +75,7 @@ def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_prune
     return os.path.join(geno_folder, f'subsampled/sites_for_grm{source_str}{prune_str}_{pop}{qc}{drc_string}{varct}.{extension}')
 
 
-def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, pruned, use_drc_ancestry_data=False, af_cutoff=0.05):
+def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, use_plink, use_drc_ancestry_data=False, af_cutoff=0.05):
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     af = f'_af{str(af_cutoff)}'
@@ -83,11 +83,12 @@ def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, pruned
     return os.path.join(geno_folder, f'ld_prune/ld_pruned_sites_array_{pop}{qc}{drc_string}{af}{plink}.{extension}')
 
 
-def get_plink_inputs_ld_prune(geno_folder, pop, chr, extension, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05):
+def get_plink_inputs_ld_prune(geno_folder, pop, chr, extension, sample_qc, pruned, use_drc_ancestry_data=False, af_cutoff=0.05):
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     af = f'_af{str(af_cutoff)}'
-    return os.path.join(geno_folder, f'ld_prune/plink_chr/variants_for_ld_pruning_array_chr{str(chr)}_{pop}{qc}{drc_string}{af}.{extension}')
+    prun = '_pruned' if pruned else ''
+    return os.path.join(geno_folder, f'ld_prune/plink_chr/variants_for_ld_pruning_array_chr{str(chr)}_{pop}{qc}{drc_string}{af}{prun}.{extension}')
 
 
 # Samples
