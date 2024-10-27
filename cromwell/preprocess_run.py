@@ -6,7 +6,7 @@ import numpy as np
 from cromwell.constants import *
 
 
-def verify_json_template(j, prefix_delimiter='.'):
+def verify_json_template(j, prefix_delimiter='.', quiet=False):
     keys_split = [k.split(prefix_delimiter) for k, _ in j.items()]
     
     if len([x for x in keys_split if len(x) < 2]) > 0:
@@ -17,7 +17,8 @@ def verify_json_template(j, prefix_delimiter='.'):
     if len(workflow_names) != 1:
         raise ValueError('Elements of the template JSON must contain exactly one workflow name. More than one was found.')
     
-    print(f'Processing inputs under name {list(workflow_names)[0]}...')
+    if not quiet:
+        print(f'Processing inputs under name {list(workflow_names)[0]}...')
     return j, list(workflow_names)[0]
 
 

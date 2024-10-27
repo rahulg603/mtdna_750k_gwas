@@ -366,7 +366,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                        use_drc_ancestry_data=False, 
                        overwrite=False):
 
-    baseline = {'ld_prune.step_size': 50,
+    baseline = {'ld_prune.step_size': 1,
                 'ld_prune.window_size': 10000,
                 'ld_prune.r2': 0.1,
                 'ld_prune.SaigeImporters': saige_importers_path,
@@ -463,7 +463,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
             else:
                 ht_prune = hl.read_table(ld_pruned_ht_path)
             
-            print(f'After pruning, for {pop}, there are {str(ht_prune.count())} variants.')
+            print(f'After pruning using PLINK, for {pop}, there are {str(ht_prune.count())} variants.')
     
     
             mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,

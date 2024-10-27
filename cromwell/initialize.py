@@ -76,10 +76,10 @@ def get_app_details(env, app_name):
 
 
 # Checks that cromshell is installed. Otherwise raises an error.
-def validate_cromshell():
-    if validate_cromshell_alias():
+def validate_cromshell(quiet):
+    if validate_cromshell_alias() and not quiet:
         print("Found cromshell, please use cromshell")
-    elif validate_cromshell_alpha():
+    elif validate_cromshell_alpha() and not quiet:
         print("Found cromshell-alpha, please use cromshell-alpha")
     else:
         raise Exception("Cromshell is not installed.")
@@ -118,8 +118,9 @@ def configure_cromwell(env, proxy_url):
         filetowrite.write(json.dumps(configuration, indent=2))
 
 
-def find_app_status(env):
-    print(f'Checking status for CROMWELL app')
+def find_app_status(env, quiet):
+    if not quiet:
+        print(f'Checking status for CROMWELL app')
     app_name, app_status, proxy_url = check_for_app(env)
 
     configure_cromwell(env, proxy_url)
@@ -128,8 +129,9 @@ def find_app_status(env):
         print(f'CROMWELL app does not exist. Please create cromwell server from workbench')
         raise ValueError('ERROR: cromshell not found')
     else:
-        print(f'app_name={app_name}; app_status={app_status}')
-        print(f'Existing CROMWELL app found (app_name={app_name}; app_status={app_status}).')
+        if not quiet:
+            print(f'app_name={app_name}; app_status={app_status}')
+            print(f'Existing CROMWELL app found (app_name={app_name}; app_status={app_status}).')
 
 
 def get_cromwell_url():
@@ -142,11 +144,12 @@ def get_cromwell_url():
     return app_name, app_status, proxy_url, env
 
 
-def main():
+def main(quiet):
     env = get_env_vars()
     # Before going any further, check that cromshell2 is installed:
     validate_cromshell()
     find_app_status(env)
+    print('Cromwell installation validated.')
 
 
 if __name__ == '__main__':

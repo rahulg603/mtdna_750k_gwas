@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys
+import os
 import subprocess
 import threading
 import WDL
@@ -31,7 +31,7 @@ class CromwellManager:
     def __init__(self, run_name, inputs_file, json_template_path, wdl_path, save_specific_outputs=[],
                  batch=None, limit=None, n_parallel_workflows=N_PARALLEL_WORKFLOWS,
                  add_requester_pays_parameter=True, restart=False, batches_precomputed=False,
-                 submission_sleep=30, check_freq=120):
+                 submission_sleep=30, check_freq=120, quiet=False):
         """
         Initialize a Cromwell manager.
 
@@ -56,7 +56,7 @@ class CromwellManager:
         cromwell_timeout:
         """
         # initialize cromwell
-        ini.main()
+        ini.main(quiet)
         self.app_name, self.app_status, self.app_url, self.env = ini.get_cromwell_url()
         self.cloud_fs = gcsfs.GCSFileSystem(project=PROJECT, requester_pays=True)
         
@@ -70,6 +70,7 @@ class CromwellManager:
         self.n_parallel_workflows = n_parallel_workflows
         self.submission_sleep = submission_sleep
         self.check_frequency = check_freq
+        self.quiet = quiet
 
         # preliminary run statistics
         self.n_pending = 0
@@ -83,7 +84,7 @@ class CromwellManager:
         with open(json_template_path) as json_in:
             json_template = json.load(json_in)
 
-        json_template, json_prefix = pre.verify_json_template(json_template)
+        json_template, json_prefix = pre.verify_json_template(json_template, quiet=quiet)
         self.json_template = json_template
         self.workflow_name = json_prefix
 
@@ -95,7 +96,7 @@ class CromwellManager:
             inputs_file = inputs_file.head(limit)
         inputs_file = pre.initialize_with_status(inputs_file, restart)
         if batches_precomputed and (np.sum(inputs_file.columns == 'cromwell_id') == 1):
-            print('Batches precomputed, column located.')
+            print('Batches precomputed, column located.', flush=True)
         else:
             inputs_file = pre.compute_batches(inputs_file, batch)
         self.sample_file = inputs_file
@@ -129,8 +130,7 @@ class CromwellManager:
 
         thread_queue.start()
         thread_monitor.start()
-        print('Pipeline started.')
-        sys.stdout.flush()
+        print(f'Pipeline {self.run_name} launched.', flush=True)
 
         if not skip_waiting:
             try:
@@ -144,7 +144,7 @@ class CromwellManager:
             
             thread_queue.join()
             thread_monitor.join()
-            print('Pipeline complete.', flush=True)
+            print(f'Pipeline {self.run_name} completed.', flush=True)
         else:
             print('ALERT: pipeline threads have been initialized and may be running in the background.', flush=True)
 
@@ -161,7 +161,8 @@ class CromwellManager:
                     self.update_parameters_from_disk()
                 
                 time_now = datetime.now(tz=ZoneInfo('America/New_York')).isoformat()
-                print(f'{time_now}: Checking to submit jobs...', flush=True)
+                if not self.quiet:
+                    print(f'{time_now}: Checking to submit jobs...', flush=True)
 
                 #Now, do the submission
                 with self.lock:
@@ -189,15 +190,15 @@ class CromwellManager:
                                 'Please check to see if something is wrong.')
                             with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
                                 out.write(msg + '\n')
-                            print(msg)
+                            print(msg, flush=True)
                             break
             
             else:
-                print('All samples submitted. Submission loop ending.')
+                print('All samples submitted. Submission loop terminating.', flush=True)
 
         except Exception:
             excpt_str = traceback.format_exc()
-            print(excpt_str)
+            print(excpt_str, flush=True)
             with open('./PIPELINE_SUBMISSION_ERROR', 'w') as out:
                 out.write(excpt_str + '\n')
             raise
@@ -215,7 +216,8 @@ class CromwellManager:
 
             with self.lock:
                 self.update_all_status()
-                self.print_status(flush=True)
+                if not self.quiet:
+                    self.print_status(flush=True)
                 n_non_terminal = self.n_running + self.n_pending + self.n_submitted
                 final_check = n_non_terminal == 0
                 
@@ -227,8 +229,11 @@ class CromwellManager:
             
             # now get the results for all of the newly-succeeded workflows
             for idx, workflow_id in enumerate(completed_workflow_ids):
+                if not self.quiet:
+                    print('Collating information on newly completed workflows...', flush=True)
                 if idx and not idx%5:
-                    print(f'Processed {idx} workflows', flush=True)
+                    if not self.quiet:
+                        print(f'Processed {idx} newly completed workflows', flush=True)
                 attempts = 4
                 to_raise = None
                 while attempts >= 0:
@@ -317,18 +322,19 @@ class CromwellManager:
                     dct_update = {x: row[x] for x in col_names}
                 else:    
                     batch_root = os.path.join(submission_records_root, f'batch_{str(this_batch)}')
-                    print('Saving file lists for use with batched Cromwell imports.', flush=True)
-                    print('Note: this involves transforming input names:', flush=True)
+                    if not self.quiet:
+                        print('Saving file lists for use with batched Cromwell imports.', flush=True)
+                        print('Note: this involves transforming input names:', flush=True)
                     dct_update = {}
                     for col in col_names:
                         this_uri = os.path.join(batch_root, f'{col}_list.txt')
                         with self.cloud_fs.open(this_uri, 'w') as out:
                             out.write('\n'.join(row[col]) + '\n')
-                        print(f'{col} -> {col}_list')
+                        if not self.quiet:
+                            print(f'{col} -> {col}_list', flush=True)
                         dct_update.update({f'{col}_list': this_uri})
                 
                 run_specific_json = self.create_run_specific_parameters(dct_update)
-                print(batch_root)
 
                 # create workflow
                 workflow = CromwellWorkflow(run_specific_json, batch_root=batch_root, wdl=self.wdl_path,
@@ -350,7 +356,7 @@ class CromwellManager:
                 # wait between batch submissions, if requested
                 time.sleep(addl_sub_interval_sec)
             
-            print('Submission round complete.')
+            print('Submission round complete.', flush=True)
             return self.samples_df_output_path
     
 
@@ -429,7 +435,7 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=this_batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=None,
-                                            n_retries=None, batch_id=this_batch, id=this_id, status='Running')
+                                            n_retries=None, batch_id=this_batch, id=this_id, status='Running', quiet=self.quiet)
                 
                 self.add_running_workflow(workflow)
             self.update_run_statistics()
@@ -437,11 +443,12 @@ class CromwellManager:
 
     def update_all_status(self):
         self.update_run_statistics()
-        print(f'Updating status for {str(self.n_running)} workflow ids.', flush=True)
+        if not self.quiet:
+            print(f'Updating status for {str(self.n_running)} workflow ids.', flush=True)
         
         this_running_workflows = self.running_workflows.copy()
         for idx, (id, workflow) in enumerate(self.running_workflows.items()):
-            if (idx % 20) == 0:
+            if (idx % 20) == 0 and not self.quiet:
                 print(f'{idx} workflows checked.', flush=True)
 
             if workflow.get_id() != id:
@@ -483,7 +490,8 @@ class CromwellManager:
                     os.mkdir(path_this)
                 
                 local_path = os.path.join(path_this, os.path.basename(uri))
-                print(f'Moving {os.path.basename(local_path)} to local fs from networked location for parsing...')
+                if not self.quiet:
+                    print(f'Moving {os.path.basename(local_path)} to local fs from networked location for parsing...')
                 response = requests.get(uri)
                 with open(local_path, 'wb') as f:
                     f.write(response.content)
@@ -596,6 +604,7 @@ class CromwellManager:
         params_uri = os.path.join(self.output, 'pipeline_submission_params.json')
         with self.cloud_fs.open(params_uri, 'w') as out:
             json.dump(pipe_params, out)
+        
         print(f'To change parameter values for the running submission process, edit the file here:\n{params_uri}')
 
 
@@ -613,7 +622,7 @@ class CromwellWorkflow:
     def __init__(self, param_json, batch_root, wdl,
                  manager_url, manager_token, cloud_fs,
                  timeout, n_retries, batch_id,
-                 id=None, status=None):
+                 id=None, status=None, quiet=False):
         self.json = param_json
         self.batch_root = batch_root
         self.token = manager_token
@@ -666,7 +675,8 @@ class CromwellWorkflow:
             with cloud_fs.open(sub_id_txt_uri, 'w') as out:
                 out.write(sub_info['id'] + '\n')
 
-            print(f'Batch {str(self.batch_id)} submitted ({self.get_id()}).')
+            if not quiet:
+                print(f'Batch {str(int(self.batch_id))} submitted ({self.get_id()}).')
 
 
     def update_status(self):

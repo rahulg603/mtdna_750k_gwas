@@ -87,14 +87,13 @@ task plink_prune {
         --bed ~{bedfile} \
         --bim ~{bimfile} \
         --fam ~{famfile} \
-        --indep-pairwise \
-        ~{window_size} ~{step_size} ~{r2}
+        --indep-pairwise ~{window_size}kb ~{step_size} ~{r2}
 
     >>>
 
     runtime {
         docker: PlinkDocker
-        memory: '4 GB'
+        memory: '12 GB'
         cpu: n_cpu
     }
 
