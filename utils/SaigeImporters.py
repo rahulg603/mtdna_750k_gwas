@@ -6,7 +6,8 @@ import os, re
 ######### CONSTANTS ##########
 PHENO_KEY_FIELDS = ('trait_type', 'phenocode', 'pheno_sex', 'modifier')
 MIN_CASES = 50
-CHROMOSOMES = list(map(str, range(1, 23))) + ['X', 'Y']
+CHROMOSOMES = ['chr' + x for x in list(map(str, range(1, 23))) + ['X', 'Y']]
+AUTOSOMES = ['chr' + x for x in list(map(str, range(1, 23)))]
 SEXES = ('both_sexes', 'females', 'males')
 POPS = ['mid', 'eas', 'sas', 'amr', 'afr', 'eur']
 BASE_NONPC_COVARS = ['sex','age','age2','age_sex','age2_sex','site_bcm','site_uw']
@@ -179,7 +180,7 @@ def get_result_path(gs_output_path, suffix, pop):
 
 def get_results_prefix(pheno_results_dir, pheno_key_dict, chromosome):
     prefix = os.path.join(pheno_results_dir, f'result_') + pheno_dict_to_str(pheno_key_dict, True)
-    return f'{prefix}_chr{chromosome}'
+    return f'{prefix}_{chromosome}'
 
 
 def get_results_files(results_pre, analysis_type):

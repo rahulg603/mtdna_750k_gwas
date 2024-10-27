@@ -19,7 +19,7 @@ workflow ld_prune {
         File SaigeImporters
 
         # docker images
-        String PlinkDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.3.6'
+        String PlinkDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/plink:1.9'
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         Int n_cpu = 16
@@ -42,8 +42,8 @@ workflow ld_prune {
             n_cpu = n_cpu
     }
 
-    Array[String] paths_for_upload = [gs_output_path_root + '.txt']
-    Array[File] files_for_upload = [plink_prune.out]
+    Array[String] paths_for_upload = [gs_output_path_root + '.txt', gs_output_path_root + '.log']
+    Array[File] files_for_upload = [plink_prune.out, plink_prune.log]
 
     call saige_tools.upload {
         input:
@@ -84,7 +84,10 @@ task plink_prune {
     command <<<
         set -e
 
-        plink --bfile ~{bedfile} \
+        plink1.9 \
+        --bed ~{bedfile} \
+        --bim ~{bimfile} \
+        --fam ~{famfile} \
         --indep-pairwise \
         ~{window_size} ~{step_size} ~{r2}
 
@@ -98,6 +101,7 @@ task plink_prune {
 
     output {
         File out = 'plink.prune.in'
+        File log = 'plink.log'
     }
 }
 

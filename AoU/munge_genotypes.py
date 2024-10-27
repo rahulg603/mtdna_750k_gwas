@@ -110,7 +110,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
     else:
-        mt = hl.read_matrix_table(mt_path, _n_partitions=18500)
+        mt = hl.read_matrix_table(mt_path, _n_partitions=15000)
     
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
@@ -376,7 +376,6 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
     output_roots = []
 
     for pop in POPS:
-
         ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                           use_drc_ancestry_data=use_drc_ancestry_data,
                                                           af_cutoff=min_af, extension='ht', use_plink=True)
@@ -388,24 +387,28 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                                                         use_drc_ancestry_data=use_drc_ancestry_data, 
                                                         overwrite=overwrite)
             
-            for chr in CHROMOSOMES:
+            for chr in AUTOSOMES:
                 plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
                                                        use_drc_ancestry_data=use_drc_ancestry_data,
                                                        af_cutoff=min_af, pruned=False, extension='bed')
                 plink_root = os.path.splitext(plink_path)[0]
 
                 plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                    use_drc_ancestry_data=use_drc_ancestry_data,
-                                                    af_cutoff=min_af, pruned=True, extension='txt')
+                                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                                     af_cutoff=min_af, pruned=True, extension='txt')
                 output_root = os.path.splitext(plink_out)[0]
                 
                 if overwrite or not hl.hadoop_exists(plink_out):
+                    # output file from pruning not found, so add to pruning queue
                     plink_roots.append(plink_root)
                     output_roots.append(output_root)
 
-                    #if overwrite or not hl.hadoop_exists(plink_path):
-                        #this_chr_geno = geno_mt.filter(geno_mt.locus.contig == chr)
-                        #this_chr_geno.export_plink(plink_root)
+                    if overwrite or not hl.hadoop_exists(plink_path):
+                        print(f'Exporting plink files for pruning for {chr} in pop {pop}...')
+
+                        if overwrite or not hl.hadoop_exists(plink_path):
+                            this_chr_geno = geno_mt.filter_rows(geno_mt.locus.contig == chr)
+                            hl.export_plink(this_chr_geno, plink_root)
 
         this_run = {'bedfile': [x + '.bed' for x in plink_roots],
                     'bimfile': [x + '.bim' for x in plink_roots],
@@ -417,8 +420,8 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
         with open(os.path.abspath('./saige_template.json'), 'w') as j:
             json.dump(baseline, j)
 
-                    # run sparse GRM analysis
-        manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
+        # run LD pruning using Cromwell
+        manager = CromwellManager(run_name='ld_prune',
                                   inputs_file=df,
                                   json_template_path=os.path.abspath('./saige_template.json'),
                                   wdl_path=wdl_path,
@@ -440,7 +443,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
 
                 ht_list = []
 
-                for chr in CHROMOSOMES:
+                for chr in AUTOSOMES:
                     plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
                                                         use_drc_ancestry_data=use_drc_ancestry_data,
                                                         af_cutoff=min_af, pruned=True, extension='txt')
