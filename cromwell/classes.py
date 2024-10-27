@@ -282,7 +282,7 @@ class CromwellManager:
             print('No samples with a status of "Submission pending". Nothing new to submit.', flush=True)
         else:
             #group the samples ready for submission into batches of size batch_size, record the inputs, and do the submission
-            submission_records_root = os.path.join(self.output, 'cromwell_submissions', flush=True)
+            submission_records_root = os.path.join(self.output, 'cromwell_submissions')
             
             #to submit
             to_submit_df = self.get_samples_with_status('Submission pending')
@@ -443,7 +443,7 @@ class CromwellManager:
                 print(f'{idx} workflows checked.', flush=True)
 
             if workflow.get_id() != id:
-                raise ValueError('ERROR: ID mismatch when updating workflow status.', flush=True)
+                raise ValueError('ERROR: ID mismatch when updating workflow status.')
             
             this_updated_status = workflow.update_status()
             if this_updated_status is not None:
