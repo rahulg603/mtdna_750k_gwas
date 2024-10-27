@@ -75,7 +75,7 @@ def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_prune
     return os.path.join(geno_folder, f'subsampled/sites_for_grm{source_str}{prune_str}_{pop}{qc}{drc_string}{varct}.{extension}')
 
 
-def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.05, use_plink=True):
+def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, pruned, use_drc_ancestry_data=False, af_cutoff=0.05):
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     af = f'_af{str(af_cutoff)}'

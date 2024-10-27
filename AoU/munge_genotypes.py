@@ -110,7 +110,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
         mt = mt.filter_entries(hl.is_missing(mt.FT) | (mt.FT == 'PASS'))
         mt = mt.drop('variant_qc')
     else:
-        mt = hl.read_matrix_table(mt_path, _n_partitions=25000)
+        mt = hl.read_matrix_table(mt_path, _n_partitions=18500)
     
     meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
@@ -327,59 +327,160 @@ def filter_mt_for_null(pop, analysis_type, use_array_for_variant, sample_qc,
     return mt
 
 
+def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.05,
+                                      min_call_rate=CALLRATE_CUTOFF,
+                                      use_drc_ancestry_data=False, overwrite=False):
+    n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=sample_qc, 
+                                            use_array_for_variant=True,
+                                            use_drc_ancestry_data=use_drc_ancestry_data)
+    ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type='variant',
+                            use_drc_ancestry_data=use_drc_ancestry_data, 
+                            use_array_for_variant=True,
+                            overwrite=overwrite)
+    
+    # prior to LD pruning, ensure that autosomes only are found
+    ht = ht.filter(
+        (ht.locus.in_autosome())
+        & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
+        & (ht.call_stats.AC[1] > 0)
+        & (ht.call_stats.AC[0] > 0)
+    )
+
+    ht = ht.filter(~hl.parse_locus_interval(INVERSION_LOCUS, reference_genome="GRCh38").contains(ht.locus) & \
+                    ~hl.parse_locus_interval(HLA_LOCUS, reference_genome="GRCh38").contains(ht.locus))
+
+    # now filtering based on MAF
+    ht = ht.annotate(maf = hl.min(ht.call_stats.AF))
+    ht = ht.filter(ht.maf >= min_af)
+    ht = ht.checkpoint(f'{TEMP_PATH}/tmp_ht_call_stats_for_pruning_{pop}.ht', overwrite=True)
+
+    geno_mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
+                                        use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+    geno_mt = geno_mt.semi_join_rows(ht)
+    geno_mt = geno_mt.unfilter_entries()
+    return geno_mt
+
+
+def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
+                       min_call_rate=CALLRATE_CUTOFF, 
+                       use_drc_ancestry_data=False, 
+                       overwrite=False):
+
+    baseline = {'ld_prune.step_size': 50,
+                'ld_prune.window_size': 10000,
+                'ld_prune.r2': 0.1,
+                'ld_prune.SaigeImporters': saige_importers_path,
+                'ld_prune.n_cpu': 4}
+
+    plink_roots = []
+    output_roots = []
+
+    for pop in POPS:
+
+        ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
+                                                          use_drc_ancestry_data=use_drc_ancestry_data,
+                                                          af_cutoff=min_af, extension='ht', use_plink=True)
+
+        if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
+
+            geno_mt = get_filtered_array_mt_for_pruning(pop=pop, sample_qc=sample_qc, min_af=min_af,
+                                                        min_call_rate=min_call_rate, 
+                                                        use_drc_ancestry_data=use_drc_ancestry_data, 
+                                                        overwrite=overwrite)
+            
+            for chr in CHROMOSOMES:
+                plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
+                                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                                    af_cutoff=min_af, pruned=False, extension='bed')
+                plink_root = os.path.splitext(plink_path)[0]
+
+                plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
+                                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                                    af_cutoff=min_af, pruned=True, extension='txt')
+                output_root = os.path.splitext(plink_out)[0]
+                
+                if overwrite or not hl.hadoop_exists(plink_out):
+                    plink_roots.append(plink_root)
+                    output_roots.append(output_root)
+
+                    if overwrite or not hl.hadoop_exists(plink_path):
+                        this_chr_geno = geno_mt.filter(geno_mt.locus.contig == chr)
+                        this_chr_geno.export_plink(plink_root)
+
+        this_run = {'bedfile': [x + '.bed' for x in plink_roots],
+                    'bimfile': [x + '.bim' for x in plink_roots],
+                    'famfile': [x + '.fam' for x in plink_roots],
+                    'gs_output_path_root': output_roots}
+            
+        df = pd.DataFrame(this_run)
+
+        with open(os.path.abspath('./saige_template.json'), 'w') as j:
+            json.dump(baseline, j)
+
+                    # run sparse GRM analysis
+        manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
+                                  inputs_file=df,
+                                  json_template_path=os.path.abspath('./saige_template.json'),
+                                  wdl_path=wdl_path,
+                                  batch=None, limit=3, n_parallel_workflows=99, 
+                                  add_requester_pays_parameter=False,
+                                  restart=False, batches_precomputed=False, 
+                                  submission_sleep=0, check_freq=120)
+        manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
+
+        mt_dict = {}
+
+        for pop in POPS:
+
+            ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
+                                                              use_drc_ancestry_data=use_drc_ancestry_data,
+                                                              af_cutoff=min_af, extension='ht', use_plink=True)
+
+            if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
+
+                ht_list = []
+
+                for chr in CHROMOSOMES:
+                    plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
+                                                        use_drc_ancestry_data=use_drc_ancestry_data,
+                                                        af_cutoff=min_af, pruned=True, extension='txt')
+                    ht = hl.import_table(plink_out, impute=True)
+                    ht_list.append(ht)
+                
+                ht_prune = hl.Table.union(*ht_list).checkpoint(ld_pruned_ht_path)
+            else:
+                ht_prune = hl.read_table(ld_pruned_ht_path)
+            
+            print(f'After pruning, for {pop}, there are {str(ht_prune.count())} variants.')
+    
+    
+            mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
+                                        use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+            mt = mt.semi_join_rows(ht_prune)
+            mt_dict.update({pop: mt})
+    
+    return mt
+
+
 def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
                                   min_call_rate=CALLRATE_CUTOFF, 
                                   use_drc_ancestry_data=False, 
-                                  overwrite=False, use_plink=True):
+                                  overwrite=False):
     ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                       use_drc_ancestry_data=use_drc_ancestry_data,
-                                                      af_cutoff=min_af, extension='ht', use_plink=use_plink)
+                                                      af_cutoff=min_af, extension='ht', use_plink=False)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
-        n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=sample_qc, 
-                                              use_array_for_variant=True,
-                                              use_drc_ancestry_data=use_drc_ancestry_data)
-        ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type='variant',
-                               use_drc_ancestry_data=use_drc_ancestry_data, 
-                               use_array_for_variant=True,
-                               overwrite=overwrite)
-        
-        # prior to LD pruning, ensure that autosomes only are found
-        ht = ht.filter(
-            (ht.locus.in_autosome())
-            & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
-            & (ht.call_stats.AC[1] > 0)
-            & (ht.call_stats.AC[0] > 0)
-        )
+        geno_mt = get_filtered_array_mt_for_pruning(pop=pop, sample_qc=sample_qc, min_af=min_af,
+                                                    min_call_rate=min_call_rate, 
+                                                    use_drc_ancestry_data=use_drc_ancestry_data, 
+                                                    overwrite=overwrite)
 
-        ht = ht.filter(~hl.parse_locus_interval(INVERSION_LOCUS, reference_genome="GRCh38").contains(ht.locus) & \
-                       ~hl.parse_locus_interval(HLA_LOCUS, reference_genome="GRCh38").contains(ht.locus))
-
-        # now filtering based on MAF
-        ht = ht.annotate(maf = hl.min(ht.call_stats.AF))
-        ht = ht.filter(ht.maf >= min_af)
-        ht = ht.checkpoint(f'{TEMP_PATH}/tmp_ht_call_stats_for_pruning_{pop}.ht', overwrite=True)
-
-        geno_mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
-                                           use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
-        geno_mt = geno_mt.semi_join_rows(ht)
-        geno_mt = geno_mt.unfilter_entries()
-
-        if use_plink:
-            for chr in CHROMOSOMES:
-                plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                       use_drc_ancestry_data=use_drc_ancestry_data,
-                                                       af_cutoff=min_af, extension='bed')
-                if overwrite or not hl.hadoop_exists(plink_path):
-                    this_chr_geno = geno_mt.filter(geno_mt.locus.contig == chr)
-                    this_chr_geno.export_plink(os.path.splitext(plink_path)[0])
-
-        else:
-            ht_prune = hl.ld_prune(geno_mt.GT,
-                                   r2=0.1,
-                                   bp_window_size=int(1e7),
-                                   memory_per_core=2048)
-            ht_prune = ht_prune.checkpoint(ld_pruned_ht_path, overwrite=True)
+        ht_prune = hl.ld_prune(geno_mt.GT,
+                               r2=0.1,
+                               bp_window_size=int(1e7),
+                               memory_per_core=2048)
+        ht_prune = ht_prune.checkpoint(ld_pruned_ht_path, overwrite=True)
     else:
         ht_prune = hl.read_table(ld_pruned_ht_path)
     
@@ -393,10 +494,10 @@ def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
 def generate_plink_files_for_grm(pop, sample_qc, min_af=0.05,
                                  min_call_rate=CALLRATE_CUTOFF, 
                                  use_drc_ancestry_data=False, 
-                                 overwrite=False):
+                                 overwrite=False, use_plink=False):
     plink_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                use_drc_ancestry_data=use_drc_ancestry_data,
-                                               af_cutoff=min_af, extension='bed')
+                                               af_cutoff=min_af, extension='bed', use_plink=use_plink)
     if overwrite or not hl.hadoop_exists(plink_path):
         mt = produce_ld_pruned_genotype_mt(pop=pop,
                                            sample_qc=sample_qc,
@@ -478,28 +579,40 @@ def main():
 
     saige_importers_path = ''
     wdl_path = ''
+    use_plink = False
     
-    for pop in POPS:
-        # export GRM sample list
-        mt = produce_ld_pruned_genotype_mt(pop=pop,
-                                           sample_qc=sample_qc,
-                                           min_af=min_af,
-                                           use_drc_ancestry_data=use_drc_ancestry_data,
-                                           overwrite=overwrite,
-                                           use_plink=True)
-        
-        with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
-            f.write('\n'.join(mt.s.collect()) + '\n')
-
-        # export plink files for GRM construction
-        generate_plink_files_for_grm(pop=pop,
-                                     sample_qc=sample_qc,
+    if use_plink:
+        mt_dict = plink_ld_pruned_mt(sample_qc=sample_qc,
+                                     saige_importers_path=saige_importers_path,
                                      min_af=min_af,
                                      use_drc_ancestry_data=use_drc_ancestry_data,
                                      overwrite=overwrite)
+        
+        for pop in POPS:
+            with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
+                f.write('\n'.join(mt_dict[pop].s.collect()) + '\n')
 
-        # produce downsampled plink files
-        # TODO finish this
+    else:
+        for pop in POPS:
+            # export GRM sample list
+            mt = produce_ld_pruned_genotype_mt(pop=pop,
+                                               sample_qc=sample_qc,
+                                               min_af=min_af,
+                                               use_drc_ancestry_data=use_drc_ancestry_data,
+                                               overwrite=overwrite)
+            
+            with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
+                f.write('\n'.join(mt.s.collect()) + '\n')
+
+            # export plink files for GRM construction
+            generate_plink_files_for_grm(pop=pop,
+                                         sample_qc=sample_qc,
+                                         min_af=min_af,
+                                         use_drc_ancestry_data=use_drc_ancestry_data,
+                                         overwrite=overwrite)
+
+            # produce downsampled plink files
+            # TODO finish this
 
     
     # produce sparse GRMs
