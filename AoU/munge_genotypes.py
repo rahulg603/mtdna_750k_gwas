@@ -330,10 +330,10 @@ def filter_mt_for_null(pop, analysis_type, use_array_for_variant, sample_qc,
 def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
                                   min_call_rate=CALLRATE_CUTOFF, 
                                   use_drc_ancestry_data=False, 
-                                  overwrite=False):
+                                  overwrite=False, use_plink=True):
     ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
                                                       use_drc_ancestry_data=use_drc_ancestry_data,
-                                                      af_cutoff=min_af, extension='ht')
+                                                      af_cutoff=min_af, extension='ht', use_plink=use_plink)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
         n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=sample_qc, 
@@ -365,11 +365,21 @@ def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
         geno_mt = geno_mt.semi_join_rows(ht)
         geno_mt = geno_mt.unfilter_entries()
 
-        ht_prune = hl.ld_prune(geno_mt.GT,
-                               r2=0.1,
-                               bp_window_size=int(1e7),
-                               block_size=1024)
-        ht_prune = ht_prune.checkpoint(ld_pruned_ht_path, overwrite=True)
+        if use_plink:
+            for chr in CHROMOSOMES:
+                plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
+                                                       use_drc_ancestry_data=use_drc_ancestry_data,
+                                                       af_cutoff=min_af, extension='bed')
+                if overwrite or not hl.hadoop_exists(plink_path):
+                    this_chr_geno = geno_mt.filter(geno_mt.locus.contig == chr)
+                    this_chr_geno.export_plink(os.path.splitext(plink_path)[0])
+
+        else:
+            ht_prune = hl.ld_prune(geno_mt.GT,
+                                   r2=0.1,
+                                   bp_window_size=int(1e7),
+                                   memory_per_core=2048)
+            ht_prune = ht_prune.checkpoint(ld_pruned_ht_path, overwrite=True)
     else:
         ht_prune = hl.read_table(ld_pruned_ht_path)
     
@@ -475,7 +485,8 @@ def main():
                                            sample_qc=sample_qc,
                                            min_af=min_af,
                                            use_drc_ancestry_data=use_drc_ancestry_data,
-                                           overwrite=overwrite)
+                                           overwrite=overwrite,
+                                           use_plink=True)
         
         with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
             f.write('\n'.join(mt.s.collect()) + '\n')
