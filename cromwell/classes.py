@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os
+import os, sys
 import subprocess
 import threading
 import WDL
@@ -122,27 +122,29 @@ class CromwellManager:
         self.update_run_statistics()
         self.lock = threading.Lock()
 
-        exit_signal = threading.Event()
+        self.exit_signal = threading.Event()
 
-        thread_queue = threading.Thread(target=self.queue_all_jobs, args=(submission_retries, cromwell_timeout))
-        thread_monitor = threading.Thread(target=self.monitor_for_job_metrics)
+        thread_queue = threading.Thread(target=self.queue_all_jobs, args=(submission_retries, cromwell_timeout), daemon=True)
+        thread_monitor = threading.Thread(target=self.monitor_for_job_metrics, daemon=True)
 
         thread_queue.start()
         thread_monitor.start()
         print('Pipeline started.')
+        sys.stdout.flush()
 
         if not skip_waiting:
             try:
-                while not exit_signal.is_set():
+                while not self.exit_signal.is_set():
                     time.sleep(1)
             except KeyboardInterrupt:
-                exit_signal.set()
+                print('Quitting all threads...', flush=True)
+                self.exit_signal.set()
             
             thread_queue.join()
             thread_monitor.join()
-            print('Pipeline complete.')
+            print('Pipeline complete.', flush=True)
         else:
-            print('ALERT: pipeline threads have been initialized and may be running in the background.')
+            print('ALERT: pipeline threads have been initialized and may be running in the background.', flush=True)
 
 
     def queue_all_jobs(self, submission_retries, cromwell_timeout):
@@ -151,19 +153,19 @@ class CromwellManager:
             with self.lock:
                 this_pending = self.n_pending
             
-            while this_pending > 0:
+            while (this_pending > 0) and not self.exit_signal.is_set():
                 #reload submission parameters each iteration to allow them to be tuned over the course of the run
                 with self.lock:
                     self.update_parameters_from_disk()
                 
                 time_now = datetime.now(tz=ZoneInfo('America/New_York')).isoformat()
-                print(f'{time_now}: Checking to submit jobs...')
+                print(f'{time_now}: Checking to submit jobs...', flush=True)
 
                 #Now, do the submission
                 with self.lock:
                     _ = self.submit_jobs(addl_sub_interval_sec=self.submission_sleep,
-                                        submission_retries=submission_retries,
-                                        cromwell_timeout=cromwell_timeout)
+                                         submission_retries=submission_retries,
+                                         cromwell_timeout=cromwell_timeout)
                     check_frequency = self.check_frequency
 
                 # wait before updating the job status and attempting to submit more jobs
@@ -172,6 +174,7 @@ class CromwellManager:
                 with self.lock:
                     # update the status results
                     self.update_all_status()
+                    this_pending = self.n_pending
 
                     # check whether we are having excessive failures (reload status_counts to get updated numbers)
                     if (self.n_fail + self.n_success) > 0:
@@ -200,17 +203,17 @@ class CromwellManager:
 
     def monitor_for_job_metrics(self):
 
-        print('Starting monitoring. Monitoring thread will run until there are no more jobs in a non-terminal state.')
+        print('Starting monitoring. Monitoring thread will run until there are no more jobs in a non-terminal state.', flush=True)
         
         with self.lock:
             run_metrics_holder = {k: [] for k in self.workflow_status.columns}
             this_workflow_name = self.workflow_name
 
-        while True:
+        while not self.exit_signal.is_set():
 
             with self.lock:
                 self.update_all_status()
-                self.print_status()
+                self.print_status(flush=True)
                 n_non_terminal = self.n_running + self.n_pending + self.n_submitted
                 final_check = n_non_terminal == 0
                 
@@ -223,7 +226,7 @@ class CromwellManager:
             # now get the results for all of the newly-succeeded workflows
             for idx, workflow_id in enumerate(completed_workflow_ids):
                 if idx and not idx%5:
-                    print(f'Processed {idx} workflows')
+                    print(f'Processed {idx} workflows', flush=True)
                 attempts = 4
                 to_raise = None
                 while attempts >= 0:
@@ -232,7 +235,7 @@ class CromwellManager:
                                                         '--dont-expand-subworkflows', workflow_id], 
                                                         check=True, capture_output=True)
                     except Exception as err:
-                        print(f'Error retrieving info about workflow {workflow_id}. Retrying {attempts} more times.')
+                        print(f'Error retrieving info about workflow {workflow_id}. Retrying {attempts} more times.', flush=True)
                         to_raise = err
                         attempts -= 1
                         time.sleep(15)
@@ -264,7 +267,7 @@ class CromwellManager:
                     self.save_pipeline_status_file()
             
             if final_check:
-                print('All workflows have completed.')
+                print('All workflows have completed.', flush=True)
                 break
             else:
                 time.sleep(self.check_frequency)
@@ -276,21 +279,21 @@ class CromwellManager:
         """
         self.update_run_statistics()
         if self.n_pending == 0:
-            print('No samples with a status of "Submission pending". Nothing new to submit.')
+            print('No samples with a status of "Submission pending". Nothing new to submit.', flush=True)
         else:
             #group the samples ready for submission into batches of size batch_size, record the inputs, and do the submission
-            submission_records_root = os.path.join(self.output, 'cromwell_submissions')
+            submission_records_root = os.path.join(self.output, 'cromwell_submissions', flush=True)
             
             #to submit
             to_submit_df = self.get_samples_with_status('Submission pending')
             ct_to_submit = max(min(self.n_pending, self.n_parallel_workflows - self.n_running), 0)
             print(f'Found {str(self.n_pending)} samples awaiting submission, and {str(self.n_running)} '
                 'currently running samples. Given the provided submission and concurrency limits, '
-                f'will submit {str(ct_to_submit)} items.')
+                f'will submit {str(ct_to_submit)} items.', flush=True)
             if self.batch is not None:
                 n_batches = ct_to_submit // self.batch
                 first_batch = list(to_submit_df.head(1).batch)[0]
-                print(f'Since batch mode is enabled, will submit {str(n_batches)} of size {str(self.batch)}, starting from batch {str(first_batch)}.')
+                print(f'Since batch mode is enabled, will submit {str(n_batches)} of size {str(self.batch)}, starting from batch {str(first_batch)}.', flush=True)
                 ct_to_submit = n_batches * self.batch
             else:
                 n_batches = ct_to_submit
@@ -312,8 +315,8 @@ class CromwellManager:
                     dct_update = {x: row[x] for x in col_names}
                 else:    
                     batch_root = os.path.join(submission_records_root, f'batch_{str(this_batch)}')
-                    print('Saving file lists for use with batched Cromwell imports.')
-                    print('Note: this involves transforming input names:')
+                    print('Saving file lists for use with batched Cromwell imports.', flush=True)
+                    print('Note: this involves transforming input names:', flush=True)
                     dct_update = {}
                     for col in col_names:
                         this_uri = os.path.join(batch_root, f'{col}_list.txt')
@@ -432,23 +435,25 @@ class CromwellManager:
 
     def update_all_status(self):
         self.update_run_statistics()
-        print(f'Updating status for {str(self.n_running)} workflow ids.')
+        print(f'Updating status for {str(self.n_running)} workflow ids.', flush=True)
         
+        this_running_workflows = self.running_workflows.copy()
         for idx, (id, workflow) in enumerate(self.running_workflows.items()):
             if (idx % 20) == 0:
-                print(f'{idx} workflows checked.')
+                print(f'{idx} workflows checked.', flush=True)
 
             if workflow.get_id() != id:
-                raise ValueError('ERROR: ID mismatch when updating workflow status.')
+                raise ValueError('ERROR: ID mismatch when updating workflow status.', flush=True)
             
             this_updated_status = workflow.update_status()
             if this_updated_status is not None:
                 if this_updated_status in COMPLETED_STATUS:
-                    del self.running_workflows[id]
+                    del this_running_workflows[id]
                 self.update_status_by_col('cromwell_id', id, 'run_status', this_updated_status)
             
             self.save_sample_file()
         
+        self.running_workflows = this_running_workflows
         self.update_run_statistics()
 
 
@@ -524,12 +529,12 @@ class CromwellManager:
             raise ValueError('ERROR: it does not make sense for running workflows in the sample table to be different than recorded running workflows.')
 
 
-    def print_status(self):
-        print(f'{str(self.n_submitted)} jobs are submitted but not yet running.')
-        print(f'{str(self.n_running)} jobs are running.')
-        print(f'{str(self.n_pending)} jobs are awaiting submission.')
-        print(f'{str(self.n_success)} jobs have succeeded.')
-        print(f'{str(self.n_fail)} jobs have failed.')
+    def print_status(self, flush):
+        print(f'{str(self.n_submitted)} jobs are submitted but not yet running.', flush=flush)
+        print(f'{str(self.n_running)} jobs are running.', flush=flush)
+        print(f'{str(self.n_pending)} jobs are awaiting submission.', flush=flush)
+        print(f'{str(self.n_success)} jobs have succeeded.', flush=flush)
+        print(f'{str(self.n_fail)} jobs have failed.', flush=flush)
 
 
     def get_samples_with_status(self, status):
