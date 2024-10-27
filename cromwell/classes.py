@@ -515,12 +515,12 @@ class CromwellManager:
         if self.cloud_fs.exists(self.pipeline_status_output_path) and not restart:
             this_df = pd.read_csv(self.pipeline_status_output_path, sep='\t',
                                   storage_options={'project':PROJECT, 'requester_pays':True})
-            tf1 = all([k in this_df.columns for k in dict_outputs.keys()])
-            tf2 = all([col in dict_outputs.keys() for col in this_df.columns])
+            tf1 = all([k in this_df.columns for k in status.keys()])
+            tf2 = all([col in status.keys() for col in this_df.columns])
             if tf1 and tf2:
                 self.workflow_status = this_df  
             else:
-                print('Found workflow status file with columns:' + ', '.join([k for k in this_df.columns]))
+                print('Found workflow status file with columns: ' + ', '.join([k for k in this_df.columns]))
                 print('Expected workflow status file with columns:' + ', '.join([col for col in dict_outputs.keys()]))
                 raise ValueError(f'Found a file at {self.pipeline_status_output_path} which does not contain the exact expected schema. Either remove this file or specify restart=True.')
         else:
