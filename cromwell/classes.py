@@ -518,9 +518,10 @@ class CromwellManager:
             tf1 = all([k in this_df.columns for k in dict_outputs.keys()])
             tf2 = all([col in dict_outputs.keys() for col in this_df.columns])
             if tf1 and tf2:
-                self.workflow_status = this_df
-                
+                self.workflow_status = this_df  
             else:
+                print('Found workflow status file with columns:' + ', '.join([k for k in this_df.columns]))
+                print('Expected workflow status file with columns:' + ', '.join([col for col in dict_outputs.keys()]))
                 raise ValueError(f'Found a file at {self.pipeline_status_output_path} which does not contain the exact expected schema. Either remove this file or specify restart=True.')
         else:
             self.workflow_status = pd.DataFrame(status)
