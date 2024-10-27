@@ -412,64 +412,63 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                             this_chr_geno = geno_mt.filter_rows(geno_mt.locus.contig == chr)
                             hl.export_plink(this_chr_geno, plink_root)
 
-        this_run = {'bedfile': [x + '.bed' for x in plink_roots],
-                    'bimfile': [x + '.bim' for x in plink_roots],
-                    'famfile': [x + '.fam' for x in plink_roots],
-                    'gs_output_path_root': output_roots}
+    this_run = {'bedfile': [x + '.bed' for x in plink_roots],
+                'bimfile': [x + '.bim' for x in plink_roots],
+                'famfile': [x + '.fam' for x in plink_roots],
+                'gs_output_path_root': output_roots}
+        
+    df = pd.DataFrame(this_run)
+
+    with open(os.path.abspath('./saige_template.json'), 'w') as j:
+        json.dump(baseline, j)
+
+    # run LD pruning using Cromwell
+    manager = CromwellManager(run_name='ld_prune',
+                                inputs_file=df,
+                                json_template_path=os.path.abspath('./saige_template.json'),
+                                wdl_path=wdl_path,
+                                batch=None, limit=199, n_parallel_workflows=199, 
+                                add_requester_pays_parameter=False,
+                                restart=False, batches_precomputed=False, 
+                                submission_sleep=0, check_freq=60)
+    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
+
+    mt_dict = {}
+
+    for pop in POPS:
+
+        ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
+                                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                                            af_cutoff=min_af, extension='ht', 
+                                                            window='1e7',
+                                                            use_plink=True)
+
+        if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
+
+            ht_list = []
+
+            for chr in AUTOSOMES:
+                plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
+                                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                                    af_cutoff=min_af, pruned='1e7', extension='txt')
+                ht = hl.import_table(plink_out, no_header=True, types={'f0':'str'})
+                ht = ht.annotate(locus = hl.locus(contig = ht.f0.split(':')[0],
+                                                    pos = hl.int(ht.f0.split(':')[1]),
+                                                    reference_genome='GRCh38'),
+                                    alleles = ht.f0.split(':')[2:4])
+                ht = ht.key_by('locus','alleles').select()
+                ht_list.append(ht)
             
-        df = pd.DataFrame(this_run)
+            ht_prune = hl.Table.union(*ht_list).repartition(50).checkpoint(ld_pruned_ht_path)
+        else:
+            ht_prune = hl.read_table(ld_pruned_ht_path)
+        
+        print(f'After pruning using PLINK, for {pop}, there are {str(ht_prune.count())} variants.')
 
-        with open(os.path.abspath('./saige_template.json'), 'w') as j:
-            json.dump(baseline, j)
-
-        # run LD pruning using Cromwell
-        manager = CromwellManager(run_name='ld_prune',
-                                  inputs_file=df,
-                                  json_template_path=os.path.abspath('./saige_template.json'),
-                                  wdl_path=wdl_path,
-                                  batch=None, limit=199, n_parallel_workflows=199, 
-                                  add_requester_pays_parameter=False,
-                                  restart=False, batches_precomputed=False, 
-                                  submission_sleep=0, check_freq=60)
-        manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
-
-        mt_dict = {}
-
-        for pop in POPS:
-
-            ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
-                                                              use_drc_ancestry_data=use_drc_ancestry_data,
-                                                              af_cutoff=min_af, extension='ht', 
-                                                              window='1e7',
-                                                              use_plink=True)
-
-            if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
-
-                ht_list = []
-
-                for chr in AUTOSOMES:
-                    plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                        use_drc_ancestry_data=use_drc_ancestry_data,
-                                                        af_cutoff=min_af, pruned='1e7', extension='txt')
-                    ht = hl.import_table(plink_out, no_header=True, types={'f0':'str'})
-                    ht = ht.annotate(locus = hl.locus(contig = ht.f0.split(':')[0],
-                                                      pos = hl.int(ht.f0.split(':')[1]),
-                                                      reference_genome='GRCh38'),
-                                     alleles = ht.f0.split(':')[2:4])
-                    ht = ht.key_by('locus','alleles').select()
-                    ht_list.append(ht)
-                
-                ht_prune = hl.Table.union(*ht_list).checkpoint(ld_pruned_ht_path)
-            else:
-                ht_prune = hl.read_table(ld_pruned_ht_path)
-            
-            print(f'After pruning using PLINK, for {pop}, there are {str(ht_prune.count())} variants.')
-    
-    
-            mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
-                                        use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
-            mt = mt.semi_join_rows(ht_prune)
-            mt_dict.update({pop: mt})
+        mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
+                                    use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+        mt = mt.semi_join_rows(ht_prune)
+        mt_dict.update({pop: mt})
     
     return mt
 

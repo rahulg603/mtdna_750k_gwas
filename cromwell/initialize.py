@@ -147,8 +147,8 @@ def get_cromwell_url():
 def main(quiet):
     env = get_env_vars()
     # Before going any further, check that cromshell2 is installed:
-    validate_cromshell()
-    find_app_status(env)
+    validate_cromshell(quiet=quiet)
+    find_app_status(env, quiet=quiet)
     print('Cromwell installation validated.')
 
 
