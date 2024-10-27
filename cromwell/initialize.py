@@ -77,17 +77,20 @@ def get_app_details(env, app_name):
 
 # Checks that cromshell is installed. Otherwise raises an error.
 def validate_cromshell(quiet):
-    if validate_cromshell_alias() and not quiet:
-        print("Found cromshell, please use cromshell")
-    elif validate_cromshell_alpha() and not quiet:
-        print("Found cromshell-alpha, please use cromshell-alpha")
+    if validate_cromshell_alias(quiet):
+        if not quiet:
+            print("Found cromshell, please use cromshell")
+    elif validate_cromshell_alpha(quiet):
+        if not quiet:
+            print("Found cromshell-alpha, please use cromshell-alpha")
     else:
         raise Exception("Cromshell is not installed.")
 
 
 # Checks that cromshell is installed. Otherwise raises an error.
-def validate_cromshell_alpha():
-    print('Scanning for cromshell 2 alpha...')
+def validate_cromshell_alpha(quiet):
+    if not quiet:
+        print('Scanning for cromshell 2 alpha...')
     try:
         subprocess.run(['cromshell-alpha', 'version'], capture_output=True, check=True, encoding='utf-8')
     except FileNotFoundError:
@@ -96,8 +99,9 @@ def validate_cromshell_alpha():
 
 
 # Checks that cromshell is installed. Otherwise raises an error.
-def validate_cromshell_alias():
-    print('Scanning for cromshell 2')
+def validate_cromshell_alias(quiet):
+    if not quiet:
+        print('Scanning for cromshell 2')
     try:
         subprocess.run(['cromshell', 'version'], capture_output=True, check=True, encoding='utf-8')
     except FileNotFoundError:
