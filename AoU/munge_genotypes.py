@@ -430,7 +430,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                                   batch=None, limit=199, n_parallel_workflows=199, 
                                   add_requester_pays_parameter=False,
                                   restart=False, batches_precomputed=False, 
-                                  submission_sleep=0, check_freq=120)
+                                  submission_sleep=0, check_freq=60)
         manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
 
         mt_dict = {}
@@ -450,8 +450,8 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                 for chr in AUTOSOMES:
                     plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
                                                         use_drc_ancestry_data=use_drc_ancestry_data,
-                                                        af_cutoff=min_af, pruned=True, extension='txt')
-                    ht = hl.import_table(plink_out, impute=True, no_header=True)
+                                                        af_cutoff=min_af, pruned='1e7', extension='txt')
+                    ht = hl.import_table(plink_out, no_header=True, types={'f0':'str'})
                     ht = ht.annotate(locus = hl.locus(contig = ht.f0.split(':')[0],
                                                       pos = hl.int(ht.f0.split(':')[1]),
                                                       reference_genome='GRCh38'),

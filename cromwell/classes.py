@@ -532,11 +532,13 @@ class CromwellManager:
 
 
     def print_status(self, flush):
+        print('============== STATUS REPORT ===============', flush=flush)
         print(f'{str(self.n_submitted)} jobs are submitted but not yet running.', flush=flush)
         print(f'{str(self.n_running)} jobs are running.', flush=flush)
         print(f'{str(self.n_pending)} jobs are awaiting submission.', flush=flush)
         print(f'{str(self.n_success)} jobs have succeeded.', flush=flush)
         print(f'{str(self.n_fail)} jobs have failed.', flush=flush)
+        print('============================================', flush=flush)
 
 
     def get_samples_with_status(self, status):
