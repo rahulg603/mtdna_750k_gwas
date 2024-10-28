@@ -517,7 +517,7 @@ def generate_plink_files_for_grm(mt_dict, sample_qc, min_af=0.01,
         if overwrite or not hl.hadoop_exists(plink_path):
             mt_staging_path = f'{TEMP_PATH}/tmp_mt_genotypes_for_pruning_prior_to_plinkexport_{pop}.mt'
             mt.write(mt_staging_path, overwrite=True)
-            mt = hl.read_matrix_table(mt_staging_path, _n_partitions=7500)
+            mt = hl.read_matrix_table(mt_staging_path, _n_partitions=2000)
             hl.export_plink(mt, os.path.splitext(plink_path)[0])
             print(f'PLINK files generated for sparse GRM construction for {pop}.')
         else:
