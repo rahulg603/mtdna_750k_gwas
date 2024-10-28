@@ -465,7 +465,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
         print(f'After pruning using PLINK for {pop}, there are {str(ht_prune.count())} variants.')
 
         mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
-                                    use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+                                      use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
         mt = mt.semi_join_rows(ht_prune)
         mt_dict.update({pop: mt})
     
@@ -486,7 +486,9 @@ def hail_ld_pruned_mt(pop, sample_qc, min_af=0.01,
                                                     min_call_rate=min_call_rate, 
                                                     use_drc_ancestry_data=use_drc_ancestry_data, 
                                                     overwrite=overwrite)
-        geno_mt = geno_mt.checkpoint(f'{TEMP_PATH}/tmp_mt_genotypes_for_pruning_{pop}.mt', overwrite=True)
+        mt_staging_path = f'{TEMP_PATH}/tmp_mt_genotypes_for_pruning_{pop}.mt'
+        geno_mt.write(mt_staging_path, overwrite=True)
+        geno_mt = hl.read_matrix_table(mt_staging_path)
 
         ht_prune = hl.ld_prune(geno_mt.GT,
                                r2=0.1,
