@@ -22,7 +22,7 @@ workflow saige_sparse_grm {
         # options
         Boolean use_plink
         Boolean use_drc_ancestry_data = true
-        Float min_af = 0.05
+        Float min_af = 0.01
         Boolean sample_qc = true
         Int n_cpu = 64
 
@@ -65,6 +65,7 @@ workflow saige_sparse_grm {
 
                 n_markers = num_markers,
                 relatedness_cutoff = relatednessCutoff,
+                min_af = min_af,
 
                 SaigeImporters = SaigeImporters,
                 SaigeDocker = SaigeDocker,
@@ -218,6 +219,7 @@ task create_sparse_grm {
         
         Int n_markers
         Float relatedness_cutoff
+        Float min_af
 
         File SaigeImporters
         String SaigeDocker
@@ -232,13 +234,14 @@ task create_sparse_grm {
         set -e
 
         Rscript /usr/local/bin/createSparseGRM.R \
-        "--bedfile=~{bedfile}" \
-        "--famfile=~{famfile}" \
-        "--bimfile=~{bimfile}" \
+        "--bedFile=~{bedfile}" \
+        "--famFile=~{famfile}" \
+        "--bimFile=~{bimfile}" \
         "--nThreads=~{this_cpu}" \
         "--numRandomMarkerforSparseKin=~{n_markers}" \
         "--relatednessCutoff=~{relatedness_cutoff}" \
-        "--outputPrefix=~{pop}"
+        "--outputPrefix=~{pop}" \
+        "--minMAFforGRM=~{min_af}"
 
         echo ~{pop}.sparseGRM.mtx > mtx.txt
         echo ~{pop}.sampleIDs.txt > ix.txt
