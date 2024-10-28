@@ -416,10 +416,9 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
                 'bimfile': [x + '.bim' for x in plink_roots],
                 'famfile': [x + '.fam' for x in plink_roots],
                 'gs_output_path_root': output_roots}
+    df = pd.DataFrame(this_run)
     
     if df.shape[0] > 0:
-        df = pd.DataFrame(this_run)
-
         with open(os.path.abspath('./saige_template.json'), 'w') as j:
             json.dump(baseline, j)
 
@@ -473,7 +472,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
     return mt
 
 
-def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.01,
+def hail_ld_pruned_mt(pop, sample_qc, min_af=0.01,
                                   min_call_rate=CALLRATE_CUTOFF, 
                                   use_drc_ancestry_data=False, 
                                   overwrite=False):
@@ -487,6 +486,7 @@ def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.01,
                                                     min_call_rate=min_call_rate, 
                                                     use_drc_ancestry_data=use_drc_ancestry_data, 
                                                     overwrite=overwrite)
+        geno_mt = geno_mt.checkpoint(f'{TEMP_PATH}/tmp_mt_genotypes_for_pruning_{pop}.mt', overwrite=True)
 
         ht_prune = hl.ld_prune(geno_mt.GT,
                                r2=0.1,
@@ -602,11 +602,11 @@ def main():
         mt_dict = {}
         for pop in POPS:
             # export GRM sample list
-            mt = produce_ld_pruned_genotype_mt(pop=pop,
-                                               sample_qc=sample_qc,
-                                               min_af=min_af,
-                                               use_drc_ancestry_data=use_drc_ancestry_data,
-                                               overwrite=overwrite)
+            mt = hail_ld_pruned_mt(pop=pop,
+                                   sample_qc=sample_qc,
+                                   min_af=min_af,
+                                   use_drc_ancestry_data=use_drc_ancestry_data,
+                                   overwrite=overwrite)
             mt_dict.update({pop: mt})
 
     for pop in POPS:
