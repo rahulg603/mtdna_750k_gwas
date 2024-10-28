@@ -185,6 +185,8 @@ task get_sparse_grm_paths {
     with open('ix.json', 'w') as f:
         json.dump(ix, f)
 
+    CODE
+    
     >>>
 
     runtime {

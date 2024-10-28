@@ -529,12 +529,12 @@ class CromwellManager:
 
     def update_run_statistics(self):
         # adds statistics about what items have each of a variety of statuses
-        self.n_pending = self.get_samples_with_status('Submission pending').shape[0]
-        self.n_submitted = self.get_samples_with_status('Submitted').shape[0]
-        self.n_running = self.get_samples_with_status('Running').shape[0]
-        self.n_success = self.get_samples_with_status('Succeeded').shape[0]
-        self.n_fail = self.get_samples_with_status('Failed').shape[0]
-        self.n_review = self.get_samples_with_status('Manual review').shape[0]
+        self.n_pending = self.get_samples_with_status('Submission pending').cromwell_id.unique().shape[0]
+        self.n_submitted = self.get_samples_with_status('Submitted').cromwell_id.unique().shape[0]
+        self.n_running = self.get_samples_with_status('Running').cromwell_id.unique().shape[0]
+        self.n_success = self.get_samples_with_status('Succeeded').cromwell_id.unique().shape[0]
+        self.n_fail = self.get_samples_with_status('Failed').cromwell_id.unique().shape[0]
+        self.n_review = self.get_samples_with_status('Manual review').cromwell_id.unique().shape[0]
 
         if (self.n_running + self.n_submitted) != len(self.running_workflows):
             raise ValueError('ERROR: it does not make sense for running workflows in the sample table to be different than recorded running workflows.')
