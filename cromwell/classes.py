@@ -228,10 +228,10 @@ class CromwellManager:
                 completed_workflow_ids = [elt for elt in completed_workflow_ids if elt not in self.workflow_status['cromwell_id'].values]
             
             # now get the results for all of the newly-succeeded workflows
+            if not self.quiet and (len(completed_workflow_ids) > 0):
+                print('Collating information on newly completed workflows...', flush=True)
             for idx, workflow_id in enumerate(completed_workflow_ids):
-                if not self.quiet:
-                    print('Collating information on newly completed workflows...', flush=True)
-                if idx and not idx%5:
+                if idx and not idx%10:
                     if not self.quiet:
                         print(f'Processed {idx} newly completed workflows', flush=True)
                 attempts = 4
@@ -340,7 +340,7 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
-                                            n_retries=submission_retries, batch_id=this_batch)
+                                            n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet)
 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -401,7 +401,7 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=this_batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
-                                            n_retries=submission_retries, batch_id=this_batch)
+                                            n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet)
                 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -569,7 +569,7 @@ class CromwellManager:
 
     def get_token(self):
         return self.env['token']
-    
+     
 
     def get_initial_parameters_json(self):
         # set pipeline submission parameter values
@@ -623,7 +623,7 @@ class CromwellWorkflow:
     def __init__(self, param_json, batch_root, wdl,
                  manager_url, manager_token, cloud_fs,
                  timeout, n_retries, batch_id,
-                 id=None, status=None, quiet=False):
+                 id=None, status=None, quiet=False):                 
         self.json = param_json
         self.batch_root = batch_root
         self.token = manager_token

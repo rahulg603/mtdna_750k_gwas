@@ -327,7 +327,7 @@ def filter_mt_for_null(pop, analysis_type, use_array_for_variant, sample_qc,
     return mt
 
 
-def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.05,
+def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.01,
                                       min_call_rate=CALLRATE_CUTOFF,
                                       use_drc_ancestry_data=False, overwrite=False):
     n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=sample_qc, 
@@ -361,7 +361,7 @@ def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.05,
     return geno_mt
 
 
-def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
+def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
                        min_call_rate=CALLRATE_CUTOFF, 
                        use_drc_ancestry_data=False, 
                        overwrite=False):
@@ -370,7 +370,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                 'ld_prune.window_size': 10000,
                 'ld_prune.r2': 0.1,
                 'ld_prune.SaigeImporters': saige_importers_path,
-                'ld_prune.n_cpu': 4}
+                'ld_prune.n_cpu': 2}
 
     plink_roots = []
     output_roots = []
@@ -416,25 +416,25 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
                 'bimfile': [x + '.bim' for x in plink_roots],
                 'famfile': [x + '.fam' for x in plink_roots],
                 'gs_output_path_root': output_roots}
-        
-    df = pd.DataFrame(this_run)
+    
+    if df.shape[0] > 0:
+        df = pd.DataFrame(this_run)
 
-    with open(os.path.abspath('./saige_template.json'), 'w') as j:
-        json.dump(baseline, j)
+        with open(os.path.abspath('./saige_template.json'), 'w') as j:
+            json.dump(baseline, j)
 
-    # run LD pruning using Cromwell
-    manager = CromwellManager(run_name='ld_prune',
-                              inputs_file=df,
-                              json_template_path=os.path.abspath('./saige_template.json'),
-                              wdl_path=wdl_path,
-                              batch=None, limit=199, n_parallel_workflows=199, 
-                              add_requester_pays_parameter=False,
-                              restart=False, batches_precomputed=False, 
-                              submission_sleep=0, check_freq=60)
-    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
+        # run LD pruning using Cromwell
+        manager = CromwellManager(run_name='ld_prune',
+                                inputs_file=df,
+                                json_template_path=os.path.abspath('./saige_template.json'),
+                                wdl_path=wdl_path,
+                                batch=None, limit=199, n_parallel_workflows=199, 
+                                add_requester_pays_parameter=False,
+                                restart=False, batches_precomputed=False, 
+                                submission_sleep=0, check_freq=60, quiet=True)
+        manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
 
     mt_dict = {}
-
     for pop in POPS:
 
         ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
@@ -473,7 +473,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.05,
     return mt
 
 
-def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
+def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.01,
                                   min_call_rate=CALLRATE_CUTOFF, 
                                   use_drc_ancestry_data=False, 
                                   overwrite=False):
@@ -503,7 +503,7 @@ def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.05,
     return mt
 
 
-def generate_plink_files_for_grm(pop, sample_qc, min_af=0.05,
+def generate_plink_files_for_grm(pop, sample_qc, min_af=0.01,
                                  min_call_rate=CALLRATE_CUTOFF, 
                                  use_drc_ancestry_data=False, 
                                  overwrite=False, use_plink=False):
@@ -531,7 +531,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                     n_markers=2000,
                                     relatedness=0.125,
                                     no_wait=False,
-                                    n_cpu_sparse=64,
+                                    n_cpu_sparse=32,
                                     use_drc_ancestry_data=False,
                                     overwrite=False):
     """
@@ -577,13 +577,13 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                               batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
                               add_requester_pays_parameter=False,
                               restart=False, batches_precomputed=False, 
-                              submission_sleep=0, check_freq=120)
+                              submission_sleep=0, check_freq=120, quiet=False)
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
 
 
 def main():
     sample_qc = True
-    min_af = 0.025
+    min_af = 0.01
     use_drc_ancestry_data=True
     overwrite=False
     no_wait=False
@@ -591,9 +591,10 @@ def main():
     n_markers = 2000
     relatedness = 0.125
 
-    saige_importers_path = ''
+    saige_importers_path = os.path.join(BUCKET,'scripts/SaigeImporters.py')
     plink_wdl_path = ''
-    use_plink = False
+    sparse_wdl_path = ''
+    use_plink = True
     
     if use_plink:
         mt_dict = plink_ld_pruned_mt(sample_qc=sample_qc,
