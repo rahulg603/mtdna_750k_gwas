@@ -244,9 +244,6 @@ task create_sparse_grm {
         "--minMAFforGRM=~{min_af}"
 
         ls -lh
-        
-        echo ~{pop}_relatednessCutoff_~{relatedness_cutoff}_~{n_markers}_randomMarkersUsed.sparseGRM.mtx > mtx.txt
-        echo ~{pop}_relatednessCutoff_~{relatedness_cutoff}_~{n_markers}_randomMarkersUsed.sparseGRM.mtx.sampleIDs.txt > ix.txt
 
     >>>
     
@@ -256,8 +253,8 @@ task create_sparse_grm {
     }
 
     output {
-        File mtx = read_string("mtx.txt")
-        File ix = read_string("ix.txt")
+        File mtx = pop + "_relatednessCutoff_" + relatedness_cutoff + "_" + n_markers + "_randomMarkersUsed.sparseGRM.mtx"
+        File ix = pop + "_relatednessCutoff_" + relatedness_cutoff + "_" + n_markers + "_randomMarkersUsed.sparseGRM.mtx.sampleIDs.txt"
     }
 }
 
