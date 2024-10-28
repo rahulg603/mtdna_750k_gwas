@@ -151,7 +151,7 @@ task get_sparse_grm_paths {
     mtx = []
     ix = []
 
-    for pop in pops:
+    for pop in pops_to_iter:
         mtx_p, ix_p = get_sparse_grm_path(gs_genotype_path, pop=pop,
                                           n_markers=~{n_markers},
                                           relatedness=~{relatedness_cutoff},
@@ -186,7 +186,7 @@ task get_sparse_grm_paths {
         json.dump(ix, f)
 
     CODE
-    
+
     >>>
 
     runtime {

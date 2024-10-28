@@ -298,7 +298,7 @@ class CromwellManager:
                 'currently running samples. Given the provided submission and concurrency limits, '
                 f'will submit {str(ct_to_submit)} items.', flush=True)
             if self.batch is not None:
-                n_batches = (ct_to_submit // self.batch) + 1
+                n_batches = ((ct_to_submit - 1) // self.batch) + 1
                 first_batch = list(to_submit_df.head(1).batch)[0]
                 print(f'Since batch mode is enabled, will submit {str(n_batches)} of size {str(self.batch)}, starting from batch {str(first_batch)}.', flush=True)
             else:
@@ -447,7 +447,7 @@ class CromwellManager:
         
         this_running_workflows = self.running_workflows.copy()
         for idx, (id, workflow) in enumerate(self.running_workflows.items()):
-            if (idx % 20) == 0 and not self.quiet:
+            if (idx % 20) == 0 and idx > 0 and not self.quiet:
                 print(f'{idx} workflows checked.', flush=True)
 
             if workflow.get_id() != id:
