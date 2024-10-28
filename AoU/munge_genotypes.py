@@ -572,6 +572,8 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
         json.dump(baseline, j)
 
     # run sparse GRM analysis
+    print('NOW COMMENCING GENERATION OF SPARSE GRMs.')
+    print('This stage will use Cromwell.')
     manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
                               inputs_file=df,
                               json_template_path=os.path.abspath('./saige_template.json'),

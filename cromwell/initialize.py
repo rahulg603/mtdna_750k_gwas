@@ -149,6 +149,8 @@ def get_cromwell_url():
 
 
 def main(quiet):
+    if not quiet:
+        print('Initializing Cromwell and validating that all relevant applications are installed...')
     env = get_env_vars()
     # Before going any further, check that cromshell2 is installed:
     validate_cromshell(quiet=quiet)
