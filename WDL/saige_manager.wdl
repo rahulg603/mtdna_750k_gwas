@@ -111,6 +111,7 @@ workflow saige_manager {
                 sparse_n_markers = sparse_n_markers,
                 min_maf = sparse_min_af,
                 relatedness = sparse_relatedness_cutoff,
+                use_plink = use_plink,
 
                 gs_bucket = gs_bucket,
                 gs_phenotype_path = gs_phenotype_path,
@@ -339,6 +340,7 @@ task get_tasks_to_run {
         Float relatedness
         Boolean use_drc_ancestry_data
         Boolean sample_qc
+        Boolean use_plink
 
         File SaigeImporters
         String HailDocker
@@ -354,6 +356,7 @@ task get_tasks_to_run {
     String analysis_type = if rvas_mode then 'gene' else 'variant'
     String drc = if use_drc_ancestry_data then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
+    String plink = if use_plink then 'plink' else 'no_plink'
 
     command <<<
         set -e
@@ -385,6 +388,7 @@ task get_tasks_to_run {
     criteria &= (ht.n_cases_by_pop >= ~{min_cases})
     drc_tf = '~{drc}' == 'drc'
     sample_qc_tf = '~{qc}' == 'qc'
+    plink_tf = '~{plink}' == 'plink'
 
     ht = ht.filter(criteria).key_by()
 
@@ -496,8 +500,20 @@ task get_tasks_to_run {
         json.dump(run_hail_merge, f)
 
     #### NOW generate paths for null model construction
-    bed, bim, fam = get_plink_for_null_path(gs_genotype_path, '~{pop}', sample_qc_tf, drc_tf, ~{min_maf})
-    mtx, ix = get_sparse_grm_path(gs_genotype_path, '~{pop}', ~{sparse_n_markers}, ~{relatedness}, sample_qc_tf, drc_tf, ~{min_maf})
+    bed, bim, fam = get_plink_for_null_path(geno_folder=gs_genotype_path, 
+                                            pop='~{pop}', 
+                                            sample_qc=sample_qc_tf, 
+                                            use_plink=plink_tf,
+                                            use_drc_ancestry_data=drc_tf, 
+                                            af_cutoff=~{min_maf})
+    mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
+                                  pop='~{pop}', 
+                                  n_markers=~{sparse_n_markers}, 
+                                  relatedness=~{relatedness}, 
+                                  sample_qc=sample_qc_tf, 
+                                  use_plink=plink_tf,
+                                  use_drc_ancestry_data=drc_tf, 
+                                  af_cutoff=~{min_maf})
 
     with open('bed.txt', 'w') as f:
         f.write(bed)

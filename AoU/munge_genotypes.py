@@ -529,7 +529,8 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                     no_wait=False,
                                     n_cpu_sparse=32,
                                     use_drc_ancestry_data=False,
-                                    overwrite=False):
+                                    overwrite=False,
+                                    use_plink=True):
     """
     Uses cromwell to distribute across pops.
     """
@@ -541,7 +542,8 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                      relatedness=relatedness,
                                      sample_qc=sample_qc,
                                      af_cutoff=af_cutoff,
-                                     use_drc_ancestry_data=use_drc_ancestry_data)
+                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                     use_plink=use_plink)
         if overwrite or not hl.hadoop_exists(mtx):
             pops_to_queue.append(pop)
     
@@ -560,6 +562,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                 'saige_sparse_grm.gs_genotype_path': remove_bucket(GENO_PATH),
                 'saige_sparse_grm.SaigeImporters': saige_importers_path,
                 'saige_sparse_grm.use_drc_ancestry_data': use_drc_ancestry_data,
+                'saige_sparse_grm.use_plink': use_plink,
                 'saige_sparse_grm.sample_qc': sample_qc,
                 'saige_sparse_grm.n_cpu': n_cpu_sparse}
     with open(os.path.abspath('./saige_template.json'), 'w') as j:
@@ -636,7 +639,8 @@ def main():
                                     saige_importers_path=saige_importers_path,
                                     wdl_path=sparse_wdl_path,
                                     use_drc_ancestry_data=use_drc_ancestry_data,
-                                    overwrite=overwrite)
+                                    overwrite=overwrite,
+                                    use_plink=use_plink)
 
 
 if __name__ == '__main__':

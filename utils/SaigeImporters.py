@@ -37,18 +37,20 @@ def get_aou_util_path(util):
 
 
 # Genotypes
-def get_plink_for_null_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.01):
+def get_plink_for_null_path(geno_folder, pop, sample_qc, use_plink, use_drc_ancestry_data=False, af_cutoff=0.01):
     # recall, we always produce this with array data
-    prefix = os.path.join(geno_folder, f'ld_prune/aou_ld_pruned_maf0.01_forgrm{str(10)}_{pop}')
+    plink = '_plink' if use_plink else ''
+    prefix = os.path.join(geno_folder, f'ld_prune/aou_ld_pruned{plink}_maf0.01_forgrm{str(10)}_{pop}')
     return f'{prefix}.bed', f'{prefix}.bim', f'{prefix}.fam'
 
 
-def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_drc_ancestry_data=False, af_cutoff=0.01):
+def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_plink, use_drc_ancestry_data=False, af_cutoff=0.01):
     af = f'_maf{str(af_cutoff)}'
     related = f'_rel{str(relatedness)}'
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
-    prefix = os.path.join(geno_folder, f'sparse_grm/aou_ld_pruned_{pop}{af}_{str(n_markers)}markers{related}{drc_string}{qc}')
+    plink = '_plink' if use_plink else ''
+    prefix = os.path.join(geno_folder, f'sparse_grm/aou_ld_pruned_{pop}{qc}{drc_string}{af}{plink}_{str(n_markers)}markers{related}')
     return f'{prefix}.mtx', f'{prefix}.mtx.sampleIDs.txt'
 
 

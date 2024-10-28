@@ -20,6 +20,7 @@ workflow saige_sparse_grm {
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         # options
+        Boolean use_plink
         Boolean use_drc_ancestry_data = true
         Float min_af = 0.05
         Boolean sample_qc = true
@@ -42,6 +43,7 @@ workflow saige_sparse_grm {
             min_af = min_af,
             use_drc_ancestry_data = use_drc_ancestry_data,
             sample_qc = sample_qc,
+            use_plink = use_plink,
 
             SaigeImporters = SaigeImporters,
             HailDocker = HailDocker
@@ -104,6 +106,7 @@ task get_sparse_grm_paths {
         Float min_af
         Boolean use_drc_ancestry_data
         Boolean sample_qc
+        Boolean use_plink
 
         File SaigeImporters
         String HailDocker
@@ -112,6 +115,7 @@ task get_sparse_grm_paths {
 
     String drc = if use_drc_ancestry_data then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
+    String plink = if use_plink then 'plink' else 'no_plink'
 
     command <<<
         set -e
@@ -137,6 +141,7 @@ task get_sparse_grm_paths {
 
     drc_tf = '~{drc}' == 'drc'
     sample_qc_tf = '~{qc}' == 'qc'
+    plink_tf = '~{plink}' == 'plink'
     pops_to_iter = '~{sep="," pops}'.split(',')
 
     # generate filenames
@@ -152,9 +157,11 @@ task get_sparse_grm_paths {
                                           relatedness=~{relatedness_cutoff},
                                           sample_qc=sample_qc_tf,
                                           af_cutoff=~{min_af},
-                                          use_drc_ancestry_data=drc_tf)
+                                          use_drc_ancestry_data=drc_tf,
+                                          use_plink=plink_tf)
         pref = get_ld_pruned_array_data_path(gs_genotype_path, pop=pop, sample_qc=sample_qc_tf,
                                              use_drc_ancestry_data=drc_tf,
+                                             use_plink=plink_tf,
                                              af_cutoff=~{min_af}, extension='')
         bed.append(f'{pref}bed')
         bim.append(f'{pref}bim')
@@ -214,7 +221,7 @@ task create_sparse_grm {
         String SaigeDocker
 
         Int? n_cpu
-        
+
     }
 
     Int this_cpu = select_first([n_cpu, 8])
