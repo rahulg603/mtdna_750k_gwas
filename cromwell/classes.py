@@ -300,7 +300,7 @@ class CromwellManager:
             if self.batch is not None:
                 n_batches = ((ct_to_submit - 1) // self.batch) + 1
                 first_batch = list(to_submit_df.head(1).batch)[0]
-                print(f'Since batch mode is enabled, will submit {str(n_batches)} of size {str(self.batch)}, starting from batch {str(first_batch)}.', flush=True)
+                print(f'Since batch mode is enabled, will submit {str(n_batches)} of size {str(self.batch)}, starting from batch {str(int(first_batch))}.', flush=True)
             else:
                 n_batches = ct_to_submit
 

@@ -232,13 +232,13 @@ task create_sparse_grm {
         set -e
 
         Rscript /usr/local/bin/createSparseGRM.R \
-        " --bedfile=~{bedfile}" \
-        " --famfile=~{famfile}" \
-        " --bimfile=~{bimfile}" \
-        " --nThreads=~{this_cpu}" \
-        " --numRandomMarkerforSparseKin=~{n_markers}" \
-        " --relatednessCutoff=~{relatedness_cutoff}" \
-        " --outputPrefix=~{pop}"
+        "--bedfile=~{bedfile}" \
+        "--famfile=~{famfile}" \
+        "--bimfile=~{bimfile}" \
+        "--nThreads=~{this_cpu}" \
+        "--numRandomMarkerforSparseKin=~{n_markers}" \
+        "--relatednessCutoff=~{relatedness_cutoff}" \
+        "--outputPrefix=~{pop}"
 
         echo ~{pop}.sparseGRM.mtx > mtx.txt
         echo ~{pop}.sampleIDs.txt > ix.txt
