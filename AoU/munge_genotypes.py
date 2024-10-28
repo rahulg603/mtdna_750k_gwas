@@ -503,26 +503,20 @@ def produce_ld_pruned_genotype_mt(pop, sample_qc, min_af=0.01,
     return mt
 
 
-def generate_plink_files_for_grm(pop, sample_qc, min_af=0.01,
-                                 min_call_rate=CALLRATE_CUTOFF, 
+def generate_plink_files_for_grm(mt_dict, sample_qc, min_af=0.01,
                                  use_drc_ancestry_data=False, 
                                  overwrite=False, use_plink=False):
-    plink_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
-                                               use_drc_ancestry_data=use_drc_ancestry_data,
-                                               af_cutoff=min_af, extension='bed', 
-                                               window='1e7',
-                                               use_plink=use_plink)
-    if overwrite or not hl.hadoop_exists(plink_path):
-        mt = produce_ld_pruned_genotype_mt(pop=pop,
-                                           sample_qc=sample_qc,
-                                           min_af=min_af,
-                                           min_call_rate=min_call_rate,
-                                           use_drc_ancestry_data=use_drc_ancestry_data,
-                                           overwrite=overwrite)
-        hl.export_plink(mt, os.path.splitext(plink_path)[0])
-        print(f'PLINK files generated for sparse GRM construction for {pop}.')
-    else:
-        print(f'PLINK files already generated for sparse GRM construction for {pop}.')
+    for pop, mt in mt_dict.items():
+        plink_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
+                                                   use_drc_ancestry_data=use_drc_ancestry_data,
+                                                   af_cutoff=min_af, extension='bed', 
+                                                   window='1e7',
+                                                   use_plink=use_plink)
+        if overwrite or not hl.hadoop_exists(plink_path):
+            hl.export_plink(mt, os.path.splitext(plink_path)[0])
+            print(f'PLINK files generated for sparse GRM construction for {pop}.')
+        else:
+            print(f'PLINK files already generated for sparse GRM construction for {pop}.')
 
 
 def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
@@ -603,12 +597,9 @@ def main():
                                      min_af=min_af,
                                      use_drc_ancestry_data=use_drc_ancestry_data,
                                      overwrite=overwrite)
-        
-        for pop in POPS:
-            with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
-                f.write('\n'.join(mt_dict[pop].s.collect()) + '\n')
 
     else:
+        mt_dict = {}
         for pop in POPS:
             # export GRM sample list
             mt = produce_ld_pruned_genotype_mt(pop=pop,
@@ -616,20 +607,23 @@ def main():
                                                min_af=min_af,
                                                use_drc_ancestry_data=use_drc_ancestry_data,
                                                overwrite=overwrite)
-            
-            with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
-                f.write('\n'.join(mt.s.collect()) + '\n')
+            mt_dict.update({pop: mt})
 
-            # export plink files for GRM construction
-            generate_plink_files_for_grm(pop=pop,
-                                         sample_qc=sample_qc,
-                                         min_af=min_af,
-                                         use_drc_ancestry_data=use_drc_ancestry_data,
-                                         overwrite=overwrite)
+    for pop in POPS:
+        with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_plink=use_plink,
+                                                      use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
+            f.write('\n'.join(mt.s.collect()) + '\n')
 
-            # produce downsampled plink files
-            # TODO finish this
+        # produce downsampled plink files
+        # TODO finish this
 
+    # export plink files for GRM construction
+    _ = generate_plink_files_for_grm(mt_dict,
+                                     sample_qc=sample_qc,
+                                     min_af=min_af,
+                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                     overwrite=overwrite,
+                                     use_plink=use_plink)
     
     # produce sparse GRMs
     generate_sparse_grm_distributed(pops=POPS, sample_qc=sample_qc,
@@ -638,7 +632,7 @@ def main():
                                     relatedness=relatedness,
                                     no_wait=no_wait,
                                     saige_importers_path=saige_importers_path,
-                                    wdl_path=wdl_path,
+                                    wdl_path=sparse_wdl_path,
                                     use_drc_ancestry_data=use_drc_ancestry_data,
                                     overwrite=overwrite)
 

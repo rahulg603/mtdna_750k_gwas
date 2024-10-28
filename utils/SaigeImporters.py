@@ -103,10 +103,11 @@ def get_n_samples_per_pop_path(geno_folder, sample_qc, analysis_type, use_drc_an
     return os.path.join(geno_folder, f'sample_counts/counts_by_pop{source_str}{prune_str}{drc_string}.tsv') 
 
 
-def get_aou_samples_file_path(geno_folder, pop, sample_qc, use_drc_ancestry_data=False):
+def get_aou_samples_file_path(geno_folder, pop, sample_qc, use_plink=True, use_drc_ancestry_data=False):
     qc = '_sample_qc' if sample_qc else ''
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
-    return os.path.join(geno_folder, f'sample_counts/sample_list_{pop}{qc}{drc_string}.tsv') 
+    plink = '_plink' if use_plink else ''
+    return os.path.join(geno_folder, f'sample_counts/sample_list_{pop}{qc}{drc_string}{plink}.tsv') 
 
 
 # Phenotypes
