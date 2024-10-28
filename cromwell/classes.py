@@ -298,10 +298,9 @@ class CromwellManager:
                 'currently running samples. Given the provided submission and concurrency limits, '
                 f'will submit {str(ct_to_submit)} items.', flush=True)
             if self.batch is not None:
-                n_batches = ct_to_submit // self.batch
+                n_batches = (ct_to_submit // self.batch) + 1
                 first_batch = list(to_submit_df.head(1).batch)[0]
                 print(f'Since batch mode is enabled, will submit {str(n_batches)} of size {str(self.batch)}, starting from batch {str(first_batch)}.', flush=True)
-                ct_to_submit = n_batches * self.batch
             else:
                 n_batches = ct_to_submit
 
@@ -529,7 +528,7 @@ class CromwellManager:
 
     def update_run_statistics(self):
         # adds statistics about what items have each of a variety of statuses
-        self.n_pending = self.get_samples_with_status('Submission pending').cromwell_id.unique().shape[0]
+        self.n_pending = self.get_samples_with_status('Submission pending').shape[0]
         self.n_submitted = self.get_samples_with_status('Submitted').cromwell_id.unique().shape[0]
         self.n_running = self.get_samples_with_status('Running').cromwell_id.unique().shape[0]
         self.n_success = self.get_samples_with_status('Succeeded').cromwell_id.unique().shape[0]
