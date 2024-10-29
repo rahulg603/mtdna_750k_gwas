@@ -17,9 +17,14 @@ workflow saige_manager {
 
         Array[String] pops = ['eur']
 
+        # constants for pathing
         Int sparse_n_markers
         Float sparse_min_af
         Float sparse_relatedness_cutoff
+        
+        Int n_markers_common = 50000
+        Int n_markers_rare_maf = 10000
+        Int n_markers_rare_mac = 2000
 
         # path to gs folders
         String gs_bucket
@@ -110,9 +115,14 @@ workflow saige_manager {
                 rvas_mode = rvas_mode,
                 use_drc_ancestry_data = use_drc_ancestry_data,
                 sample_qc = sample_qc,
+
                 sparse_n_markers = sparse_n_markers,
                 min_maf = sparse_min_af,
                 relatedness = sparse_relatedness_cutoff,
+                n_markers_common = n_markers_common,
+                n_markers_rare_maf = n_markers_rare_maf,
+                n_markers_rare_mac = n_markers_rare_mac,
+
                 use_plink = use_plink,
 
                 gs_bucket = gs_bucket,
@@ -340,10 +350,15 @@ task get_tasks_to_run {
         Boolean overwrite_tests
         Boolean overwrite_hail_results
 
-        Boolean rvas_mode
         Int sparse_n_markers
         Float min_maf
         Float relatedness
+
+        Int n_markers_common
+        Int n_markers_rare_maf
+        Int n_markers_rare_mac
+
+        Boolean rvas_mode
         Boolean use_drc_ancestry_data
         Boolean sample_qc
         Boolean use_plink
@@ -509,9 +524,13 @@ task get_tasks_to_run {
     bed, bim, fam = get_plink_for_null_path(geno_folder=gs_genotype_path, 
                                             pop='~{pop}', 
                                             sample_qc=sample_qc_tf, 
-                                            use_plink=plink_tf,
+                                            analysis_type='both',
+                                            ld_pruned=True,
+                                            n_common=~{n_markers_common},
+                                            n_maf=~{n_markers_rare_maf},
+                                            n_mac=~{n_markers_rare_mac},
                                             use_drc_ancestry_data=drc_tf, 
-                                            af_cutoff=~{min_maf})
+                                            use_array_for_variant=False)
     mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
                                   pop='~{pop}', 
                                   n_markers=~{sparse_n_markers}, 
