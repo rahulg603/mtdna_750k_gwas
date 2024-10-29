@@ -494,7 +494,7 @@ def hail_ld_pruned_mt(pop, sample_qc, min_af=0.01,
                                r2=0.1,
                                bp_window_size=int(1e7),
                                memory_per_core=2048)
-        ht_prune = ht_prune.checkpoint(ld_pruned_ht_path, overwrite=True)
+        ht_prune = ht_prune.naive_coalesce(1000).checkpoint(ld_pruned_ht_path, overwrite=True)
     else:
         ht_prune = hl.read_table(ld_pruned_ht_path)
     
@@ -549,40 +549,43 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                      use_plink=use_plink)
         if overwrite or not hl.hadoop_exists(mtx):
             pops_to_queue.append(pop)
+
+    if len(pops_to_queue) > 0:
+        # make json
+        def remove_bucket(path):
+            return re.sub('^'+BUCKET, '', path)
+
+        this_run = {'pop': pops_to_queue}
+        df = pd.DataFrame(this_run)
+        df.to_csv(os.path.abspath('./this_run.tsv'), index=False, sep='\t') # ADD THIS
+
+        baseline = {'saige_sparse_grm.relatednessCutoff': relatedness,
+                    'saige_sparse_grm.min_af': af_cutoff,
+                    'saige_sparse_grm.num_markers': n_markers,
+                    'saige_sparse_grm.gs_bucket': BUCKET,
+                    'saige_sparse_grm.gs_genotype_path': remove_bucket(GENO_PATH),
+                    'saige_sparse_grm.SaigeImporters': saige_importers_path,
+                    'saige_sparse_grm.use_drc_ancestry_data': use_drc_ancestry_data,
+                    'saige_sparse_grm.use_plink': use_plink,
+                    'saige_sparse_grm.sample_qc': sample_qc,
+                    'saige_sparse_grm.n_cpu': n_cpu_sparse}
+        with open(os.path.abspath('./saige_template.json'), 'w') as j:
+            json.dump(baseline, j)
+
+        # run sparse GRM analysis
+        print('NOW COMMENCING GENERATION OF SPARSE GRMs.')
+        print('This stage will use Cromwell.')
+        manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
+                                inputs_file=df,
+                                json_template_path=os.path.abspath('./saige_template.json'),
+                                wdl_path=wdl_path,
+                                batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
+                                add_requester_pays_parameter=False,
+                                restart=False, batches_precomputed=False, 
+                                submission_sleep=0, check_freq=120, quiet=False)
+        manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
     
-    # make json
-    def remove_bucket(path):
-        return re.sub('^'+BUCKET, '', path)
-
-    this_run = {'pop': pops_to_queue}
-    df = pd.DataFrame(this_run)
-    df.to_csv(os.path.abspath('./this_run.tsv'), index=False, sep='\t') # ADD THIS
-
-    baseline = {'saige_sparse_grm.relatednessCutoff': relatedness,
-                'saige_sparse_grm.min_af': af_cutoff,
-                'saige_sparse_grm.num_markers': n_markers,
-                'saige_sparse_grm.gs_bucket': BUCKET,
-                'saige_sparse_grm.gs_genotype_path': remove_bucket(GENO_PATH),
-                'saige_sparse_grm.SaigeImporters': saige_importers_path,
-                'saige_sparse_grm.use_drc_ancestry_data': use_drc_ancestry_data,
-                'saige_sparse_grm.use_plink': use_plink,
-                'saige_sparse_grm.sample_qc': sample_qc,
-                'saige_sparse_grm.n_cpu': n_cpu_sparse}
-    with open(os.path.abspath('./saige_template.json'), 'w') as j:
-        json.dump(baseline, j)
-
-    # run sparse GRM analysis
-    print('NOW COMMENCING GENERATION OF SPARSE GRMs.')
-    print('This stage will use Cromwell.')
-    manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
-                              inputs_file=df,
-                              json_template_path=os.path.abspath('./saige_template.json'),
-                              wdl_path=wdl_path,
-                              batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
-                              add_requester_pays_parameter=False,
-                              restart=False, batches_precomputed=False, 
-                              submission_sleep=0, check_freq=120, quiet=False)
-    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
+    print('Generation of all sparse GRMs completed.')
 
 
 def main():
