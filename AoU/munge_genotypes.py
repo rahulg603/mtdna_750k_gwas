@@ -157,7 +157,7 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite, checkpoint=False
             if checkpoint:
                 # NOTE: this may be a giant MatrixTable!
                 mt_staging_path = f'{TEMP_PATH}/tmp_mt_genotypes_{analysis_type}_for_callstats_{pop}.mt'
-                geno_mt = geno_mt.checkpoint(mt_staging_path)
+                mt = mt.checkpoint(mt_staging_path)
 
             call_stats_ht = mt.annotate_rows(call_stats=hl.agg.call_stats(mt.GT, mt.alleles)).rows()
             call_stats_ht = call_stats_ht.naive_coalesce(n_partitions).checkpoint(path, overwrite=overwrite)
