@@ -2,51 +2,36 @@ version 1.0
 
 import "https://personal.broadinstitute.org/rahul/saige/saige_sparse_grm.wdl" as saige_tools
 
-workflow saige_multi {
+workflow saige_tests {
 
     input {
-        Array[String] pheno
+        String pheno
         String suffix
         String pop
 
-        Array[String] export_pheno
-        Array[Array[String]] null_model
-        Array[Array[Array[String]]] tests
-        Array[String] hail_merge
-
-        File sample_ids
-
-        Float test_min_mac = 0.5
-        Float test_min_maf = 0
-
-        File bedfile_vr_markers
-        File bimfile_vr_markers
-        File famfile_vr_markers
+        File null_rda
+        File null_var_ratio
+        File sample_list
         File? sparse_grm
         File? sparse_grm_ids
+        Array[Array[String]] tests
 
-        Float rel_cutoff
-
-        String covariates
-        File? additional_covariates
+        Float min_mac
+        Float min_maf
 
         # path to gs folders
         String gs_bucket
         String gs_genotype_path
-        String gs_phenotype_path
-        String gs_covariate_path
         String gs_output_path
         String? google_project_req_pays
 
         # options
         Boolean rvas_mode
-        Boolean use_drc_ancestry_data
         Boolean always_use_sparse_grm
         Boolean force_inverse_normalize
         Boolean disable_loco
 
         # runtime
-        Int n_cpu_null
         Int n_cpu_test
 
         # helper functions
@@ -59,11 +44,17 @@ workflow saige_multi {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    scatter (per_pheno_data in zip(zip(zip(zip(hail_merge, tests), null_model), export_pheno), pheno)) {
+    scatter (this_chr in tests) {
 
-        if (per_pheno_data.left.right == "") {
+        String chr = this_chr[0]
 
-            call export_phenotype_files {
+        if (this_chr[1] == "") {
+
+            call get_bgen_and_export_paths {
+
+            }
+
+            call run_test {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                 input:
                     phenotype_id = per_pheno_data.right,
@@ -77,96 +68,28 @@ workflow saige_multi {
                     gs_covariate_path = gs_covariate_path,
 
                     SaigeImporters = SaigeImporters,
-                    HailDocker = HailDocker
-            }
-
-        }
-
-        File pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
-
-        if (per_pheno_data.left.left.right[0] == '') {
-
-            call null {
-                input:
-                    # runs the null model
-                    phenotype_id = per_pheno_data.right,
-                    phenotype_file = pheno_file,
-                    covariates = covariates,
-
-                    bedfile_vr_markers = bedfile_vr_markers,
-                    bimfile_vr_markers = bimfile_vr_markers,
-                    famfile_vr_markers = famfile_vr_markers,
-                    sparse_grm = sparse_grm,
-                    sparse_grm_ids = sparse_grm_ids,
-
-                    rel_cutoff = rel_cutoff,
-                    n_cpu_null = n_cpu_null,
-
-                    analysis_type = analysis_type,
-                    force_inverse_normalize = force_inverse_normalize,
-                    disable_loco = disable_loco,
-
-                    SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker
             }
 
             call saige_tools.upload {
                 input:
-                    paths = [null.null_rda_path, null.null_var_path],
-                    files = [null.null_rda, null.null_var_ratio],
+                    paths = [get_bgen_and_export_paths.null_rda_path, get_bgen_and_export_paths.null_var_path],
+                    files = [run_test.null_rda, run_test.null_var_ratio],
                     HailDocker = HailDocker
             }
 
         }
-        File null_rda = select_first([null.null_rda, per_pheno_data.left.left.right[0]])
-        File null_var_ratio = select_first([null.null_var_ratio, per_pheno_data.left.left.right[1]])
 
-        call saige_tests.saige_tests as test_runner {
-            input:
-                pheno = per_pheno_data.right,
-                suffix = suffix,
-                pop = pop,
-
-                null_rda = null_rda,
-                null_var_ratio = null_var_ratio,
-                sample_list = sample_ids,
-
-                sparse_grm = sparse_grm,
-                sparse_grm_ids = sparse_grm_ids,
-
-                tests = per_pheno_data.left.left.left.right,
-
-                min_mac = test_min_mac,
-                min_maf = test_min_maf,
-
-                gs_bucket = gs_bucket, 
-                gs_genotype_path = gs_genotype_path, 
-                gs_output_path = gs_output_path, 
-                google_project_req_pays = google_project_req_pays, 
-
-                rvas_mode = rvas_mode,
-                always_use_sparse_grm = always_use_sparse_grm,
-                disable_loco = disable_loco,
-
-                n_cpu_test = n_cpu_test,
-                SaigeImporters = SaigeImporters,
-                HailDocker = HailDocker,
-                SaigeDocker = SaigeDocker
+        File test_output = select_first([run_test.null_rda, this_chr[1]])
+        if (analysis_type == 'gene') {
+            File test_output_2 = select_first([run_test.null_var_ratio, this_chr[2]])
         }
-
-        # if (per_pheno_data.left.left.left.left == '') {
-        #     call merge {
-
-        #     }
-        # }
-        # String ht_path = select_first([merge.ht_path, per_pheno_data.left.left.left.left])
-        # call manhattan {
-        # }
 
     }
 
     output {
-
+        Array[File] single_variant = test_output
+        Array[File?] gene_test = test_output_2
     }
 
 }

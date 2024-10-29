@@ -156,6 +156,7 @@ workflow saige_manager {
         File bedfile_vr_markers = tasks.bed
         File bimfile_vr_markers = tasks.bim
         File famfile_vr_markers = tasks.fam
+        File sample_ids = tasks.sample_ids
 
         call saige_runner.saige_multi as saige {
             
@@ -171,6 +172,8 @@ workflow saige_manager {
                 null_model = null_model,
                 tests = tests,
                 hail_merge = hail_merge,
+
+                sample_ids = sample_ids,
 
                 bedfile_vr_markers = bedfile_vr_markers,
                 bimfile_vr_markers = bimfile_vr_markers,
@@ -204,7 +207,6 @@ workflow saige_manager {
     }
 
     output {
-        #Array[Array[String]] pheno_files = pheno_file
     }
 
 }
@@ -555,6 +557,17 @@ task get_tasks_to_run {
     with open('ix.txt', 'w') as f:
         f.write(ix)
 
+
+    #### Get sample IDs file
+    sample_id = get_aou_samples_file_path(geno_folder=gs_genotype_path,
+                                          pop='~{pop}',
+                                          sample_qc=sample_qc_tf,
+                                          use_plink=plink_tf,
+                                          use_drc_ancestry_data=drc_tf)
+    
+    with open('samp.txt', 'w') as f:
+        f.write(sample_id)
+
     CODE
 
     >>>
@@ -577,6 +590,8 @@ task get_tasks_to_run {
 
         String mtx = read_string('mtx.txt')
         String ix = read_string('ix.txt')
+
+        String sample_ids = read_string('samp.txt')
     }
 }
 

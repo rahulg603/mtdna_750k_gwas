@@ -138,7 +138,7 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite,
                            use_drc_ancestry_data=False, use_array_for_variant=False):
     # TODO add or remove VEP as an option
 
-    n_partitions = 1000 if analysis_type=='variant' and use_array_for_variant else 10000
+    n_partitions = 1000 if analysis_type=='variant' and use_array_for_variant else 20000
     
     pops = deepcopy(POPS)
     pops.append('all')
@@ -153,7 +153,7 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite,
             mt = get_filtered_genotype_mt(analysis_type=analysis_type, pop=pop, 
                                           filter_variants=True, filter_samples=sample_qc,
                                           use_array_for_variant=use_array_for_variant,
-                                          use_drc_ancestry_data=use_drc_ancestry_data)
+                                          use_drc_ancestry_data=use_drc_ancestry_data)           
             call_stats_ht = mt.annotate_rows(call_stats=hl.agg.call_stats(mt.GT, mt.alleles)).rows()
             call_stats_ht = call_stats_ht.naive_coalesce(n_partitions).checkpoint(path, overwrite=overwrite)
     
