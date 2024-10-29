@@ -60,6 +60,8 @@ workflow saige_manager {
         Boolean overwrite_tests = false
         Boolean overwrite_hail_results = false
 
+        Int n_cpu_null
+
     }
 
     String suffix_this = suffix + if use_drc_ancestry_data then '_drccovar' else ''
@@ -165,6 +167,8 @@ workflow saige_manager {
                 famfile_vr_markers = famfile_vr_markers,
                 sparse_grm = sparse_grm,
                 sparse_grm_ids = sparse_grm_ids,
+
+                rel_cutoff = sparse_relatedness_cutoff,
                 
                 gs_bucket = gs_bucket,
                 gs_genotype_path = gs_genotype_path,
@@ -178,6 +182,8 @@ workflow saige_manager {
                 force_inverse_normalize = force_inverse_normalize,
                 disable_loco = disable_loco,
                 always_use_sparse_grm = always_use_sparse_grm,
+
+                n_cpu_null = n_cpu_null,
 
                 SaigeImporters = SaigeImporters,
                 HailDocker = HailDocker,

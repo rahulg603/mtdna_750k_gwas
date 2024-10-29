@@ -195,23 +195,70 @@ def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_co
     )
 
 
-def filter_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
-                             use_drc_ancestry_data=False, overwrite=False,
-                             n_common_variants_to_keep=50000, # 100000 for per pop
-                             min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01, 
-                             variants_per_mac_category=2000, variants_per_maf_category=10000):
+def filter_common_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
+                                    use_drc_ancestry_data=False, overwrite=False,
+                                    n_common_variants_to_keep=50000, # 100000 for per pop
+                                    min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01):
     
-    ht_sites_path = get_sites_for_null_path(GENO_PATH, extension='ht',
+    ht_sites_path = get_sites_for_null_path(GENO_PATH, extension='common.ht',
                                             pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
                                             use_drc_ancestry_data=use_drc_ancestry_data,
                                             use_array_for_variant=use_array_for_variant,
                                             ld_pruned=False,
                                             n_common=n_common_variants_to_keep, 
+                                            n_maf=0,
+                                            n_mac=0)
+    
+    if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
+        print(f'Number of common variants to sample: {n_common_variants_to_keep}')
+        n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
+                                              use_drc_ancestry_data=use_drc_ancestry_data)
+        ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
+                               use_drc_ancestry_data=use_drc_ancestry_data, 
+                               use_array_for_variant=use_array_for_variant, overwrite=overwrite)
+        ht = ht.filter(
+            (ht.locus.in_autosome())
+            & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
+            & (ht.call_stats.AC[1] > 0)
+        )
+
+        sampled_common_variants = ht.aggregate(
+            hl.agg.filter(
+                    ht.call_stats.AF[1] > min_maf_common_variants,
+                    hl.agg._reservoir_sample(ht.key, n_common_variants_to_keep),
+                ),
+        )
+        print('Finished sampling common variants...')
+        common_variants = [variant for variant in sampled_common_variants]
+        print(f"N common variants sampled: {len(common_variants)}")
+        
+        common_ht = hl.Table.parallelize(common_variants).key_by(*ht.key.keys())
+        ht = common_ht
+        ht = ht.checkpoint(ht_sites_path)
+    else:
+        ht = hl.read_table(ht_sites_path)
+    
+    ht.describe()
+
+    return ht
+
+
+def filter_rare_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
+                                  use_drc_ancestry_data=False, overwrite=False,
+                                  min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants = 0.01,
+                                  variants_per_mac_category=2000, variants_per_maf_category=10000):
+    
+    ht_sites_path = get_sites_for_null_path(GENO_PATH, extension='rare.ht',
+                                            pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_array_for_variant=use_array_for_variant,
+                                            ld_pruned=False,
+                                            n_common=0,
                                             n_maf=variants_per_maf_category,
                                             n_mac=variants_per_mac_category)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
-        print(f'Number of common variants to sample: {n_common_variants_to_keep}')
+
         n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
                                               use_drc_ancestry_data=use_drc_ancestry_data)
         ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
@@ -231,15 +278,6 @@ def filter_variants_for_null(pop, analysis_type, use_array_for_variant, sample_q
         bins = ht.aggregate(hl.agg.collect_as_set(ht.mac_category))
         ac_bins = [bin for bin in bins if (bin >= 1) and (bin<=5)]
         af_bins = [bin for bin in bins if (bin < 0.99) or (bin > 5)]
-
-        sampled_common_variants = ht.aggregate(
-            hl.agg.filter(
-                    ht.call_stats.AF[1] > min_maf_common_variants,
-                    hl.agg._reservoir_sample(ht.key, n_common_variants_to_keep),
-                ),
-        )
-        print('Finished sampling common variants...')
-        common_variants = [variant for variant in sampled_common_variants]
 
         binned_variants_af = ht.aggregate(
             hl.agg.array_agg(
@@ -267,10 +305,8 @@ def filter_variants_for_null(pop, analysis_type, use_array_for_variant, sample_q
         rare_variants = [variant for bin in binned_rare_variants for variant in bin]
 
         print(f"N rare variants sampled: {len(rare_variants)}")
-        print(f"N common variants sampled: {len(common_variants)}")
         rare_ht = hl.Table.parallelize(rare_variants).key_by(*ht.key.keys())
-        common_ht = hl.Table.parallelize(common_variants).key_by(*ht.key.keys())
-        ht = rare_ht.union(common_ht)
+        ht = rare_ht
         ht = ht.checkpoint(ht_sites_path)
     else:
         ht = hl.read_table(ht_sites_path)
@@ -325,6 +361,101 @@ def filter_mt_for_null(pop, analysis_type, use_array_for_variant, sample_qc,
 
     print(mt.count())
     return mt
+
+
+def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwrite,
+                                  n_common_variants_to_keep=50000, min_maf_common_variants=0.01,
+                                  variants_per_mac_category=2000, variants_per_maf_category=10000,
+                                  min_call_rate=CALLRATE_CUTOFF):
+    
+    # first produce filtered variants
+    ht_common = filter_common_variants_for_null(pop=pop, analysis_type='variant',
+                                                use_array_for_variant=False,
+                                                sample_qc=sample_qc, 
+                                                use_drc_ancestry_data=use_drc_ancestry_data,
+                                                overwrite=overwrite, 
+                                                n_common_variants_to_keep=n_common_variants_to_keep,
+                                                min_call_rate=min_call_rate, 
+                                                min_maf_common_variants=min_maf_common_variants)
+    ht_rare = filter_rare_variants_for_null(pop=pop, analysis_type='gene',
+                                            use_array_for_variant=False,
+                                            sample_qc=sample_qc, 
+                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            overwrite=overwrite, 
+                                            min_call_rate=min_call_rate, 
+                                            min_maf_common_variants=min_maf_common_variants,
+                                            variants_per_mac_category=variants_per_mac_category,
+                                            variants_per_maf_category=variants_per_maf_category)
+
+    # then produce filtered mt
+    mt_sites_path = get_sites_for_null_path(GENO_PATH, extension='mt',
+                                            pop=pop, analysis_type='both',
+                                            sample_qc=sample_qc,
+                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_array_for_variant=False,
+                                            ld_pruned=False,
+                                            n_common=n_common_variants_to_keep,
+                                            n_maf=variants_per_maf_category,
+                                            n_mac=variants_per_mac_category)
+    
+    if overwrite or not hl.hadoop_exists(os.path.join(mt_sites_path, '_SUCCESS')):
+        mt_variant = get_filtered_genotype_mt(analysis_type='variant', pop=pop, 
+                                              filter_samples=sample_qc, 
+                                              filter_variants=True,
+                                              use_array_for_variant=False, 
+                                              use_drc_ancestry_data=use_drc_ancestry_data)
+        mt_variant = mt_variant.filter_rows(hl.is_defined(ht_common[mt_variant.row_key]))
+
+        mt_gene = get_filtered_genotype_mt(analysis_type='gene', pop=pop, 
+                                           filter_samples=sample_qc, 
+                                           filter_variants=True,
+                                           use_array_for_variant=False, 
+                                           use_drc_ancestry_data=use_drc_ancestry_data)
+        mt_gene = mt_gene.filter_rows(hl.is_defined(ht_rare[mt_gene.row_key]))
+
+        mt = mt_variant.union_rows(mt_gene)
+        mt = mt.filter_rows(~hl.parse_locus_interval(INVERSION_LOCUS, reference_genome="GRCh38").contains(mt.locus) & \
+                            ~hl.parse_locus_interval(HLA_LOCUS, reference_genome="GRCh38").contains(mt.locus))
+        
+        mt = mt.naive_coalesce(1000).checkpoint(mt_sites_path)
+    else:
+        mt = hl.read_matrix_table(mt_sites_path)
+        
+    # then perform LD pruning
+    ht_pruned_path = get_sites_for_null_path(GENO_PATH, extension='ht',
+                                             pop=pop, analysis_type='both',
+                                             sample_qc=sample_qc,
+                                             use_drc_ancestry_data=use_drc_ancestry_data,
+                                             use_array_for_variant=False,
+                                             ld_pruned=True,
+                                             n_common=n_common_variants_to_keep,
+                                             n_maf=variants_per_maf_category,
+                                             n_mac=variants_per_mac_category)
+    
+    if overwrite or not hl.hadoop_exists(os.path.join(ht_pruned_path, '_SUCCESS')):
+        mt = mt.unfilter_entries()
+        ht_pruned_sites = hl.ld_prune(mt.GT,
+                                      r2=0.1,
+                                      bp_window_size=int(1e7),
+                                      memory_per_core=1024)
+        ht_pruned_sites = ht_pruned_sites.checkpoint(ht_pruned_path)
+    else:
+        ht_pruned_sites = hl.read_table(ht_pruned_path)
+
+    # then save as PLINK files
+    bed_path, _, _ = get_plink_for_null_path(GENO_PATH, pop=pop,
+                                             sample_qc=sample_qc,
+                                             analysis_type='both',
+                                             ld_pruned=True,
+                                             use_drc_ancestry_data=use_drc_ancestry_data,
+                                             use_array_for_variant=False,
+                                             n_common=n_common_variants_to_keep,
+                                             n_maf=variants_per_maf_category,
+                                             n_mac=variants_per_mac_category)
+    if overwrite or not hl.hadoop_exists(bed_path):
+        mt = hl.read_matrix_table(mt_sites_path, _n_partitions=250)
+        mt_for_export = mt.filter_rows(hl.is_defined(ht_pruned_sites[mt.row_key]))
+        hl.export_plink(mt_for_export, os.path.splitext(bed_path)[0])
 
 
 def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.01,
@@ -628,6 +759,7 @@ def main():
             f.write('\n'.join(mt.s.collect()) + '\n')
 
         # produce downsampled plink files
+        # note this will include a bunch of markers from the rare spectrum using WGS for common variants and WES for rare variants
         # TODO finish this
 
     # export plink files for GRM construction

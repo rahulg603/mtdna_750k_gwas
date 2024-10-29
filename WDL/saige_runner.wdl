@@ -20,6 +20,8 @@ workflow saige_multi {
         File? sparse_grm
         File? sparse_grm_ids
 
+        Float rel_cutoff
+
         String covariates
         File? additional_covariates
 
@@ -37,6 +39,9 @@ workflow saige_multi {
         Boolean always_use_sparse_grm
         Boolean force_inverse_normalize
         Boolean disable_loco
+
+        # runtime
+        Int n_cpu_null
 
         # helper functions
         File SaigeImporters
@@ -87,6 +92,9 @@ workflow saige_multi {
                     famfile_vr_markers = famfile_vr_markers,
                     sparse_grm = sparse_grm,
                     sparse_grm_ids = sparse_grm_ids,
+
+                    rel_cutoff = rel_cutoff,
+                    n_cpu_null = n_cpu_null,
 
                     analysis_type = analysis_type,
                     force_inverse_normalize = force_inverse_normalize,
@@ -239,6 +247,10 @@ task null {
 
         String analysis_type
 
+        Float rel_cutoff
+
+        Int n_cpu_null
+
         File SaigeImporters
         String SaigeDocker
     }
@@ -266,38 +278,41 @@ task null {
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
 
     saige_step_1 = ['Rscript', '/usr/local/bin/step1_fitNULLGLMM.R',
-                    '--bedFile', '~{bedfile_vr_markers}',
-                    '--bimFile', '~{bimfile_vr_markers}',
-                    '--famFile', '~{famfile_vr_markers}',
-                    '--phenoFile', '~{phenotype_file}',
-                    '--outputPrefix', '~{phenotype_id}',
-                    '--outputPrefix_varRatio', '~{phenotype_id}' + '.' + '~{analysis_type}',
-                    '--covarColList', '~{covariates}',
-                    '--phenoCol', 'value',
-                    '--sampleIDColinphenoFile', PHENO_SAMPLE_ID,
-                    '--traitType', trait_type,
-                    '--minCovariateCount', 1]
+                    '--bedFile=~{bedfile_vr_markers}',
+                    '--bimFile=~{bimfile_vr_markers}',
+                    '--famFile=~{famfile_vr_markers}',
+                    '--phenoFile=~{phenotype_file}',
+                    '--outputPrefix=~{phenotype_id}',
+                    '--outputPrefix_varRatio=~{phenotype_id + '.' + analysis_type}',
+                    '--covarColList=~{covariates}',
+                    '--phenoCol=value',
+                    f'--sampleIDColinphenoFile={PHENO_SAMPLE_ID}',
+                    f'--traitType={trait_type}',
+                    '--minCovariateCount=1',
+                    '--nThreads=~{n_cpu_null}']
 
     if "~{tf_defined_spGRM}" == 'defined':
-        saige_step_1 = saige_step_1 + ['--relatednessCutoff', 0.05,
-                                       '--sparseGRMFile', '~{sparse_grm}',
-                                       '--sparseGRMSampleIDFile', '~{sparse_grm_ids}',
-                                       '--useSparseGRMtoFitNULL', "TRUE",
-                                       '--LOCO', "FALSE"]
+        saige_step_1 = saige_step_1 + ['--relatednessCutoff=~{rel_cutoff}',
+                                       '--sparseGRMFile=~{sparse_grm}',
+                                       '--sparseGRMSampleIDFile=~{sparse_grm_ids}',
+                                       '--useSparseGRMtoFitNULL=TRUE',
+                                       '--useSparseGRMforVarRatio=TRUE',
+                                       '--LOCO=FALSE']
     else:
-        saige_step_1 = saige_step_1 + ['--nThreads', 16]
         if '~{loco}' == 'loco':
-            saige_step_1 = saige_step_1 + ['--LOCO', "TRUE"]
+            saige_step_1 = saige_step_1 + ['--LOCO=TRUE']
         else:
-            saige_step_1 = saige_step_1 + ['--LOCO', "FALSE"]
+            saige_step_1 = saige_step_1 + ['--LOCO=FALSE']
     
     if "~{analysis_type}" == 'gene':
-        saige_step_1 = saige_step_1 + ['--isCateVarianceRatio', "TRUE"]
+        saige_step_1 = saige_step_1 + ['--isCateVarianceRatio=TRUE',
+                                       '--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
+                                       '--cateVarRatioMaxMACVecInclude=1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5']
 
     if "~{invnorm}" == "inv_normal":
-        saige_step_1 = saige_step_1 + ['--invNormalize', "TRUE"]
+        saige_step_1 = saige_step_1 + ['--invNormalize=TRUE']
     else:
-        saige_step_1 = saige_step_1 + ['--invNormalize', "FALSE"]
+        saige_step_1 = saige_step_1 + ['--invNormalize=FALSE']
 
     with open('~{phenotype_id}' + ".log", "wb") as f:
         process = subprocess.Popen(saige_step_1, stdout=subprocess.PIPE)
@@ -313,12 +328,13 @@ task null {
     runtime {
         docker: SaigeDocker
         memory: '64 GB'
-        cpu: '16'
+        cpu: n_cpu_null
     }
 
     output {
         File null_rda = read_string('rda.txt')
         File null_var_ratio = read_string('null_var_ratio.txt')
+        File log = phenotype_id + ".log"
         String null_rda_path = read_string('rda_path.txt')
         String null_var_path = read_string('null_var_ratio_path.txt')
     }

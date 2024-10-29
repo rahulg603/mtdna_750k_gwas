@@ -37,11 +37,18 @@ def get_aou_util_path(util):
 
 
 # Genotypes
-def get_plink_for_null_path(geno_folder, pop, sample_qc, use_plink, use_drc_ancestry_data=False, af_cutoff=0.01):
+def get_plink_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
+                            n_common, n_maf, n_mac,
+                            use_drc_ancestry_data=False, use_array_for_variant=False):
     # recall, we always produce this with array data
-    plink = '_plink' if use_plink else ''
-    prefix = os.path.join(geno_folder, f'ld_prune/aou_ld_pruned{plink}_maf0.01_forgrm{str(10)}_{pop}')
-    return f'{prefix}.bed', f'{prefix}.bim', f'{prefix}.fam'
+    path_finder = lambda x: get_sites_for_null_path(geno_folder=geno_folder,
+                                                    pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
+                                                    ld_pruned=ld_pruned, n_common=n_common,
+                                                    n_mac=n_mac, n_maf=n_maf,
+                                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                                    use_array_for_variant=use_array_for_variant,
+                                                    extension=x)
+    return path_finder('bed'), path_finder('bim'), path_finder('fam')
 
 
 def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_plink, use_drc_ancestry_data=False, af_cutoff=0.01):
@@ -69,8 +76,10 @@ def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_prune
                             use_drc_ancestry_data=False, use_array_for_variant=False):
     if analysis_type == 'variant':
         source_str = '_array' if use_array_for_variant else '_wgs'
-    else:
+    elif analysis_type == 'gene':
         source_str = '_exome'
+    elif analysis_type == 'both':
+        source_str = '_array_and_exome' if use_array_for_variant else '_wgs_and_exome'
     prune_str = '_ldpruned' if ld_pruned else ''
     drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
