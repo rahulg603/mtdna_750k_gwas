@@ -42,6 +42,7 @@ workflow saige_manager {
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         # options
+        Boolean use_plink
         Boolean rvas_mode
         Boolean always_use_sparse_grm # Will use sparse GRM for both common- and rare-variant analyses.
                                       # Sparse GRM is always used for rare-variant analyses.
