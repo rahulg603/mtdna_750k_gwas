@@ -156,6 +156,7 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite, checkpoint=False
                                           use_drc_ancestry_data=use_drc_ancestry_data)
             if checkpoint:
                 # NOTE: this may be a giant MatrixTable!
+                # NOTE: you probably never want to enable this!
                 mt_staging_path = f'{TEMP_PATH}/tmp_mt_genotypes_{analysis_type}_for_callstats_{pop}.mt'
                 mt = mt.checkpoint(mt_staging_path)
 
@@ -363,25 +364,28 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                             n_mac=variants_per_mac_category)
     
     if overwrite or not hl.hadoop_exists(os.path.join(mt_sites_path, '_SUCCESS')):
+        print(f'Exporting subsetting genotype MTs for {pop}...')
         mt_variant = get_filtered_genotype_mt(analysis_type='variant', pop=pop, 
                                               filter_samples=sample_qc, 
                                               filter_variants=True,
                                               use_array_for_variant=False, 
                                               use_drc_ancestry_data=use_drc_ancestry_data)
-        mt_variant = mt_variant.filter_rows(hl.is_defined(ht_common[mt_variant.row_key]))
+        mt_variant = mt_variant.semi_join_rows(ht_common)
+        mt_variant = mt_variant.naive_coalesce(30000).checkpoint(f'{TEMP_PATH}/tmp_mt_genotypes_wgs_subsample_{pop}.mt', overwrite=True)
 
         mt_gene = get_filtered_genotype_mt(analysis_type='gene', pop=pop, 
                                            filter_samples=sample_qc, 
                                            filter_variants=True,
                                            use_array_for_variant=False, 
                                            use_drc_ancestry_data=use_drc_ancestry_data)
-        mt_gene = mt_gene.filter_rows(hl.is_defined(ht_rare[mt_gene.row_key]))
+        mt_gene = mt_gene.semi_join_rows(ht_rare)
+        mt_gene = mt_gene.naive_coalesce(30000).checkpoint(f'{TEMP_PATH}/tmp_mt_genotypes_exome_subsample_{pop}.mt', overwrite=True)
 
         mt = mt_variant.union_rows(mt_gene)
         mt = mt.filter_rows(~hl.parse_locus_interval(INVERSION_LOCUS, reference_genome="GRCh38").contains(mt.locus) & \
                             ~hl.parse_locus_interval(HLA_LOCUS, reference_genome="GRCh38").contains(mt.locus))
         
-        mt = mt.naive_coalesce(1000).checkpoint(mt_sites_path)
+        mt = mt.naive_coalesce(2500).checkpoint(mt_sites_path)
     else:
         mt = hl.read_matrix_table(mt_sites_path)
         
