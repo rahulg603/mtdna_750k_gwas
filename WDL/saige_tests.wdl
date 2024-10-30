@@ -44,15 +44,19 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
+    call get_bgen_and_export_wild_paths {
+
+        input:
+            SaigeImporters = SaigeImporters,
+            HailDocker = SaigeDocker
+
+    }
+
     scatter (this_chr in tests) {
 
         String chr = this_chr[0]
 
         if (this_chr[1] == "") {
-
-            call get_bgen_and_export_paths {
-
-            }
 
             call run_test {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
@@ -94,6 +98,46 @@ workflow saige_tests {
 
 }
 
+
+task get_bgen_and_export_paths {
+
+    input {
+        File SaigeImporters
+        String SaigeDocker
+    }
+
+    command <<<
+        set -e
+
+        python3.8 <<CODE
+    import importlib
+    import os, sys
+    import json
+
+    this_temp_path = '/cromwell_root/tmp/'
+    hl.init(log='log.log', tmp_dir=this_temp_path)
+
+    flpath = os.path.dirname('~{SaigeImporters}')
+    scriptname = os.path.basename('~{SaigeImporters}')
+    sys.path.append(flpath)
+    load_module = importlib.import_module(os.path.splitext(scriptname)[0])
+    globals().update(vars(load_module))
+
+    
+    >>>
+
+    runtime {
+        docker: SaigeDocker
+        memory: '4 GB'
+        cpu: '1'
+    }
+
+    output {
+        String covariate_list = read_string("this_covar.txt")
+        Boolean task_complete = true
+    }
+
+}
 
 task export_phenotype_files {
     input {

@@ -10,9 +10,11 @@ CHROMOSOMES = ['chr' + x for x in list(map(str, range(1, 23))) + ['X', 'Y']]
 AUTOSOMES = ['chr' + x for x in list(map(str, range(1, 23)))]
 SEXES = ('both_sexes', 'females', 'males')
 POPS = ['mid', 'eas', 'sas', 'amr', 'afr', 'eur']
-BASE_NONPC_COVARS = ['sex','age','age2','age_sex','age2_sex','site_bcm','site_uw']
+BASE_NONPC_COVARS = ['sex','age','age2','age_sex','age2_sex','site_id_bcm','site_id_uw']
 
 PHENO_SAMPLE_ID = 'userId'
+
+SHORT_READ_ROOT = "gs://fc-aou-datasets-controlled/v7/wgs/short_read/snpindel/"
 
 PHENO_DESCRIPTION_FIELDS = ('description', 'description_more', 'coding_description', 'category')
 PHENO_COLUMN_FIELDS = ('n_cases_both_sexes', 'n_cases_females', 'n_cases_males', *PHENO_DESCRIPTION_FIELDS)
@@ -101,6 +103,12 @@ def get_plink_inputs_ld_prune(geno_folder, pop, chr, extension, sample_qc, prune
     af = f'_af{str(af_cutoff)}'
     prun = f'_pruned{pruned}' if pruned is not None else ''
     return os.path.join(geno_folder, f'ld_prune/plink_chr/variants_for_ld_pruning_array_{str(chr)}_{pop}{qc}{drc_string}{af}{prun}.{extension}')
+
+
+def get_wildcard_path_genotype_bgen(analysis_type):
+    data_type = 'exome_v7.1' if analysis_type == 'gene' else 'acaf_threshold_v7.1'
+    file = 'exome' if analysis_type == 'gene' else 'acaf_threshold'
+    return os.path.join(SHORT_READ_ROOT,f'{data_type}/bgen/{file}@')
 
 
 # Samples
