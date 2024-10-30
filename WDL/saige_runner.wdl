@@ -1,7 +1,7 @@
 version 1.0
 
 import "https://personal.broadinstitute.org/rahul/saige/saige_sparse_grm.wdl" as saige_tools
-import "https://personal.broadinstitute.org/rahul/saige/saige_tests.wdl" as saige_tests
+#import "https://personal.broadinstitute.org/rahul/saige/saige_tests.wdl" as saige_tests
 
 workflow saige_multi {
 
@@ -122,38 +122,38 @@ workflow saige_multi {
         File null_rda = select_first([null.null_rda, per_pheno_data.left.left.right[0]])
         File null_var_ratio = select_first([null.null_var_ratio, per_pheno_data.left.left.right[1]])
 
-        call saige_tests.saige_tests as test_runner {
-            input:
-                pheno = per_pheno_data.right,
-                suffix = suffix,
-                pop = pop,
+        # call saige_tests.saige_tests as test_runner {
+        #     input:
+        #         pheno = per_pheno_data.right,
+        #         suffix = suffix,
+        #         pop = pop,
 
-                null_rda = null_rda,
-                null_var_ratio = null_var_ratio,
-                sample_list = sample_ids,
+        #         null_rda = null_rda,
+        #         null_var_ratio = null_var_ratio,
+        #         sample_list = sample_ids,
 
-                sparse_grm = sparse_grm,
-                sparse_grm_ids = sparse_grm_ids,
+        #         sparse_grm = sparse_grm,
+        #         sparse_grm_ids = sparse_grm_ids,
 
-                tests = per_pheno_data.left.left.left.right,
+        #         tests = per_pheno_data.left.left.left.right,
 
-                min_mac = test_min_mac,
-                min_maf = test_min_maf,
+        #         min_mac = test_min_mac,
+        #         min_maf = test_min_maf,
 
-                gs_bucket = gs_bucket, 
-                gs_genotype_path = gs_genotype_path, 
-                gs_output_path = gs_output_path, 
-                google_project_req_pays = google_project_req_pays, 
+        #         gs_bucket = gs_bucket, 
+        #         gs_genotype_path = gs_genotype_path, 
+        #         gs_output_path = gs_output_path, 
+        #         google_project_req_pays = google_project_req_pays, 
 
-                rvas_mode = rvas_mode,
-                always_use_sparse_grm = always_use_sparse_grm,
-                disable_loco = disable_loco,
+        #         rvas_mode = rvas_mode,
+        #         always_use_sparse_grm = always_use_sparse_grm,
+        #         disable_loco = disable_loco,
 
-                n_cpu_test = n_cpu_test,
-                SaigeImporters = SaigeImporters,
-                HailDocker = HailDocker,
-                SaigeDocker = SaigeDocker
-        }
+        #         n_cpu_test = n_cpu_test,
+        #         SaigeImporters = SaigeImporters,
+        #         HailDocker = HailDocker,
+        #         SaigeDocker = SaigeDocker
+        # }
 
         # if (per_pheno_data.left.left.left.left == '') {
         #     call merge {

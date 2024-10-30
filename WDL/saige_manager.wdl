@@ -67,6 +67,7 @@ workflow saige_manager {
         Boolean overwrite_hail_results = false
 
         Int n_cpu_null
+        Int n_cpu_test
 
     }
 
@@ -198,6 +199,7 @@ workflow saige_manager {
                 always_use_sparse_grm = always_use_sparse_grm,
 
                 n_cpu_null = n_cpu_null,
+                n_cpu_test = n_cpu_test,
 
                 SaigeImporters = SaigeImporters,
                 HailDocker = HailDocker,
