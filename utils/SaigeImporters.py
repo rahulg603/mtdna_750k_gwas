@@ -301,6 +301,7 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     cov_ht = cov_ht.persist()
     
     mt_this = mt.select_rows(**cov_ht[mt.row_key])
+    mt_this = mt_this.annotate_rows(**{k: hl.int(v)  for k, v in mt_this.row.items() if v.dtype == hl.tbool})
     mt_this = mt_this.select_entries(**format_entries(mt_this.value, mt_this.sex))
     mt_this = mt_this.select_cols(**{f'n_cases_{sex}': hl.agg.count_where(
             hl.cond(mt_this.trait_type == 'categorical', mt_this[sex] == 1.0, hl.is_defined(mt_this[sex]))

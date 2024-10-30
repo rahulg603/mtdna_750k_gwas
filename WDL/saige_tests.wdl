@@ -44,9 +44,10 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    call get_bgen_and_export_wild_paths {
+    call get_bgen_path {
 
         input:
+            analysis_type = analysis_type,
             SaigeImporters = SaigeImporters,
             HailDocker = SaigeDocker
 
@@ -58,18 +59,32 @@ workflow saige_tests {
 
         if (this_chr[1] == "") {
 
+            File this_bgen = sub(get_bgen_path.bgen, '@', chr) + '.bgen'
+            File this_bgi = sub(get_bgen_path.bgen, '@', chr) + '.bgen.bgi'
+            File this_bgen_sample = sub(get_bgen_path.bgen, '@', chr) + '.sample'
+
             call run_test {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                 input:
                     phenotype_id = per_pheno_data.right,
                     pop = pop,
+                    chr = chr,
                     suffix = suffix,
+
                     additional_covariates = additional_covariates,
                     use_drc_ancestry_data = use_drc_ancestry_data,
+
+                    bgen = this_bgen,
+                    bgi = this_bgi,
+                    bgen_sample = this_bgen_sample,
+
+                    null_rda = null_rda,
+                    null_var_ratio = null_var_ratio,
+                    sample_list = sample_list,
                     
                     gs_bucket = gs_bucket,
                     gs_phenotype_path = gs_phenotype_path,
-                    gs_covariate_path = gs_covariate_path,
+                    gs_output_path = gs_output_path,
 
                     SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker
@@ -99,9 +114,10 @@ workflow saige_tests {
 }
 
 
-task get_bgen_and_export_paths {
+task get_bgen_path {
 
     input {
+        String analysis_type
         File SaigeImporters
         String SaigeDocker
     }
@@ -123,120 +139,45 @@ task get_bgen_and_export_paths {
     load_module = importlib.import_module(os.path.splitext(scriptname)[0])
     globals().update(vars(load_module))
 
-    
+    bgen_prefix = get_wildcard_path_genotype_bgen(analysis_type)
+    with open('bgen.txt', 'w') as f:
+        f.write(bgen_prefix)
+
     >>>
 
     runtime {
         docker: SaigeDocker
-        memory: '4 GB'
+        memory: '2 GB'
         cpu: '1'
     }
 
     output {
-        String covariate_list = read_string("this_covar.txt")
-        Boolean task_complete = true
+        String bgen_prefix = read_string("bgen.txt")
     }
 
 }
 
-task export_phenotype_files {
+
+task run_test {
+
     input {
-        
         String phenotype_id
-        String pop
+        String chr
         String suffix
+        String pop
 
-        String gs_bucket
-        String gs_phenotype_path
-        String gs_covariate_path
-        File? additional_covariates
-        Boolean use_drc_ancestry_data
-
-        File SaigeImporters
-        String HailDocker
-    }
-
-    String addl_cov_file = select_first([additional_covariates, ''])
-    String drc = if use_drc_ancestry_data then 'drc' else 'custom'
-
-    command <<<
-        set -e
-
-        python3.8 <<CODE
-    import importlib
-    import os, sys
-    import json
-    import hail as hl
-
-    this_temp_path = '/cromwell_root/tmp/'
-    hl.init(log='log.log', tmp_dir=this_temp_path, default_reference='GRCh38')
-
-    flpath = os.path.dirname('~{SaigeImporters}')
-    scriptname = os.path.basename('~{SaigeImporters}')
-    sys.path.append(flpath)
-    load_module = importlib.import_module(os.path.splitext(scriptname)[0])
-    globals().update(vars(load_module))
-
-    gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
-    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}'.lstrip('/'))
-
-    pheno_export_dir = get_pheno_export_dir(gs_phenotype_path, '~{suffix}', '~{pop}')
-    pheno_dct = pheno_str_to_dict('~{phenotype_id}')
-    pheno_export_path = get_pheno_output_path(pheno_export_dir, pheno_dct)
-
-    addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
-    drc_tf = '~{drc}' == 'drc'
-
-    binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
-
-    suffix = '~{suffix}'
-    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", drc=drc_tf)
-    mt = mt.filter_cols(hl.all(lambda x: x, [mt[k] == pheno_dct[k] for k in PHENO_KEY_FIELDS if k != 'pheno_sex']))
-    pheno_sex_mt = mt.filter_cols(mt.pheno_sex == pheno_dct['pheno_sex'])
-    if pheno_sex_mt.count_cols() == 1:
-        mt = pheno_sex_mt
-    else:
-        mt = mt.filter_cols(mt.pheno_sex == 'both_sexes')
-    mt = mt.select_entries(value=mt[pheno_dct['pheno_sex']])
-    if binary_trait:
-        mt = mt.select_entries(value=hl.int(mt.value))
-    
-    ht = mt.key_cols_by().select_cols().entries()
-    ht.export(pheno_export_path)
-
-    with open('export_path.txt', 'w') as f:
-        f.write(pheno_export_path)
-    
-    CODE
-    >>>
-
-    runtime {
-        docker: HailDocker
-        memory: '4 GB'
-    }
-
-    output {
-        String pheno_file = read_string('export_path.txt')
-    }
-}
-
-
-task null {
-
-    input {
-        String phenotype_id
-        File phenotype_file
-
-        String covariates
-        #?qCovarColList # NOTE NEED TO FIGURE THIS OUT
-        #isCovariateOffset # NOTE NEED TO FIGURE THIS OUT
-
-        File bedfile_vr_markers
-        File bimfile_vr_markers
-        File famfile_vr_markers
+        File bgen
+        File bgi
+        File bgen_sample
         File? sparse_grm
         File? sparse_grm_ids
+
+        File null_rda
+        File null_var_ratio
+        File samples
+
+        Float min_maf
+        Float min_mac
 
         Boolean force_inverse_normalize
         Boolean disable_loco
@@ -250,6 +191,7 @@ task null {
         File SaigeImporters
         String SaigeDocker
     }
+
     String tf_defined_spGRM = if defined(sparse_grm) then "defined" else "not"
     String loco = if disable_loco then "noloco" else "loco"
     String invnorm = if force_inverse_normalize then "inv_normal" else "no_normal"
@@ -273,11 +215,16 @@ task null {
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
 
-    saige_step_1 = ['Rscript', '/usr/local/bin/step1_fitNULLGLMM.R',
-                    '--bedFile=~{bedfile_vr_markers}',
-                    '--bimFile=~{bimfile_vr_markers}',
-                    '--famFile=~{famfile_vr_markers}',
-                    '--phenoFile=~{phenotype_file}',
+    saige_step_1 = ['Rscript', '/usr/local/bin/step2_SPAtests.R',
+                    '--bgenFile=~{bgen}',
+                    '--bgenFileIndex=~{bgi}',
+                    '--chrom=~{chr}',
+                    '--minMAF=~{min_maf}',
+                    '--minMAC=~{min_mac}',
+                    '--sampleFile=~{samples}',
+                    '--GMMATmodelFile={null_rda}',
+                    '--varianceRatioFile={null_var_ratio}',
+                    '--AlleleOrder=ref-first',
                     '--outputPrefix=~{phenotype_id}',
                     '--outputPrefix_varRatio=~{phenotype_id + '.' + analysis_type}',
                     '--covarColList=~{covariates}',
