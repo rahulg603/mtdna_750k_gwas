@@ -364,7 +364,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                             n_mac=variants_per_mac_category)
     
     if overwrite or not hl.hadoop_exists(os.path.join(mt_sites_path, '_SUCCESS')):
-        print(f'Exporting subsetting genotype MTs for {pop}...')
+        print(f'Exporting subsampled genotype MatrixTables for {pop}...')
         mt_variant = get_filtered_genotype_mt(analysis_type='variant', pop=pop, 
                                               filter_samples=sample_qc, 
                                               filter_variants=True,
@@ -401,6 +401,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                              n_mac=variants_per_mac_category)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ht_pruned_path, '_SUCCESS')):
+        print(f'Performing LD pruning for pop {pop} for subsampled variants...')
         mt = mt.unfilter_entries()
         ht_pruned_sites = hl.ld_prune(mt.GT,
                                       r2=0.1,
@@ -421,8 +422,9 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                              n_maf=variants_per_maf_category,
                                              n_mac=variants_per_mac_category)
     if overwrite or not hl.hadoop_exists(bed_path):
+        print(f'Exporting subsampled plink files for pop {pop}...')
         mt = hl.read_matrix_table(mt_sites_path, _n_partitions=250)
-        mt_for_export = mt.filter_rows(hl.is_defined(ht_pruned_sites[mt.row_key]))
+        mt_for_export = mt.semi_join_rows(ht_pruned_sites)
         hl.export_plink(mt_for_export, os.path.splitext(bed_path)[0])
 
 
