@@ -1,6 +1,7 @@
 version 1.0
 
 import "https://personal.broadinstitute.org/rahul/saige/saige_sparse_grm.wdl" as saige_tools
+import "https://personal.broadinstitute.org/rahul/saige/saige_tests.wdl" as saige_tests
 
 workflow saige_multi {
 
