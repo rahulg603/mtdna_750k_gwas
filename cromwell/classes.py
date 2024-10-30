@@ -31,7 +31,7 @@ class CromwellManager:
     def __init__(self, run_name, inputs_file, json_template_path, wdl_path, save_specific_outputs=[],
                  batch=None, limit=None, n_parallel_workflows=N_PARALLEL_WORKFLOWS,
                  add_requester_pays_parameter=True, restart=False, batches_precomputed=False,
-                 submission_sleep=30, check_freq=120, quiet=False):
+                 submission_sleep=30, check_freq=120, quiet=False, _bypass_output_parsing=False):
         """
         Initialize a Cromwell manager.
 
@@ -102,7 +102,8 @@ class CromwellManager:
         self.sample_file = inputs_file
 
         # create placeholder for workflow status file
-        self.initialize_workflow_status_file(save_specific_outputs, restart)
+        if not _bypass_output_parsing:
+            self.initialize_workflow_status_file(save_specific_outputs, restart)
 
         # create parameters file
         run_params = self.get_initial_parameters_json()

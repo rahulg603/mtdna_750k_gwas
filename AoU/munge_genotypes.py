@@ -703,6 +703,11 @@ def main():
     plink_wdl_path = ''
     sparse_wdl_path = ''
     use_plink = True
+
+    n_common = 50000
+    min_maf_common = 0.01
+    n_mac = 2000
+    n_maf = 10000
     
     if use_plink:
         mt_dict = plink_ld_pruned_mt(sample_qc=sample_qc,
@@ -730,7 +735,13 @@ def main():
 
         # produce downsampled plink files
         # note this will include a bunch of markers from the rare spectrum using WGS for common variants and WES for rare variants
-        # TODO finish this
+        _ = generate_plink_files_for_null(pop, sample_qc=sample_qc,
+                                          use_drc_ancestry_data=use_drc_ancestry_data,
+                                          overwrite=overwrite,
+                                          n_common_variants_to_keep=n_common,
+                                          min_maf_common_variants=min_maf_common,
+                                          variants_per_mac_category=n_mac,
+                                          variants_per_maf_category=n_maf)
 
     # export plink files for GRM construction
     _ = generate_plink_files_for_grm(mt_dict,
