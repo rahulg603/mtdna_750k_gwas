@@ -16,6 +16,10 @@ workflow saige_tests {
         File? sparse_grm_ids
         Array[Array[String]] tests
 
+        File? group_file
+        File? groups
+        Float? max_maf_for_group
+
         Float min_mac
         Float min_maf
 
@@ -28,7 +32,6 @@ workflow saige_tests {
         # options
         Boolean rvas_mode
         Boolean always_use_sparse_grm
-        Boolean force_inverse_normalize
         Boolean disable_loco
 
         # runtime
@@ -49,7 +52,7 @@ workflow saige_tests {
         input:
             analysis_type = analysis_type,
             SaigeImporters = SaigeImporters,
-            HailDocker = SaigeDocker
+            SaigeDocker = SaigeDocker
 
     }
 
@@ -59,49 +62,60 @@ workflow saige_tests {
 
         if (this_chr[1] == "") {
 
-            File this_bgen = sub(get_bgen_path.bgen, '@', chr) + '.bgen'
-            File this_bgi = sub(get_bgen_path.bgen, '@', chr) + '.bgen.bgi'
-            File this_bgen_sample = sub(get_bgen_path.bgen, '@', chr) + '.sample'
+            File this_bgen = sub(get_bgen_path.bgen_prefix, '@', chr) + '.bgen'
+            File this_bgi = sub(get_bgen_path.bgen_prefix, '@', chr) + '.bgen.bgi'
+            File this_bgen_sample = sub(get_bgen_path.bgen_prefix, '@', chr) + '.sample'
 
             call run_test {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                 input:
-                    phenotype_id = per_pheno_data.right,
+                    phenotype_id = pheno,
                     pop = pop,
                     chr = chr,
                     suffix = suffix,
-
-                    additional_covariates = additional_covariates,
-                    use_drc_ancestry_data = use_drc_ancestry_data,
+                    analysis_type = analysis_type,
 
                     bgen = this_bgen,
                     bgi = this_bgi,
                     bgen_sample = this_bgen_sample,
+                    sparse_grm = sparse_grm,
+                    sparse_grm_ids = sparse_grm_ids,
+
+                    group_file = group_file,
+                    groups = groups,
+                    max_maf_for_group = max_maf_for_group,
 
                     null_rda = null_rda,
                     null_var_ratio = null_var_ratio,
-                    sample_list = sample_list,
+                    samples = sample_list,
                     
                     gs_bucket = gs_bucket,
-                    gs_phenotype_path = gs_phenotype_path,
                     gs_output_path = gs_output_path,
 
+                    always_use_sparse_grm = always_use_sparse_grm,
+                    disable_loco = disable_loco,
+
+                    min_maf = min_maf,
+                    min_mac = min_mac,
+
                     SaigeImporters = SaigeImporters,
-                    SaigeDocker = SaigeDocker
+                    SaigeDocker = SaigeDocker,
+
+                    n_cpu_test = n_cpu_test
             }
 
             call saige_tools.upload {
                 input:
-                    paths = [get_bgen_and_export_paths.null_rda_path, get_bgen_and_export_paths.null_var_path],
-                    files = [run_test.null_rda, run_test.null_var_ratio],
+                    paths = select_all([run_test.single_test_path, run_test.gene_test_path]),
+                    files = select_all([run_test.single_test, run_test.gene_test]),
                     HailDocker = HailDocker
             }
 
         }
 
-        File test_output = select_first([run_test.null_rda, this_chr[1]])
+        File test_output = select_first([run_test.single_test, this_chr[1]])
         if (analysis_type == 'gene') {
-            File test_output_2 = select_first([run_test.null_var_ratio, this_chr[2]])
+            File test_output_2 = select_first([run_test.gene_test, this_chr[2]])
         }
 
     }
@@ -172,29 +186,35 @@ task run_test {
         File? sparse_grm
         File? sparse_grm_ids
 
+        File? group_file
+        File? groups
+        Float? max_maf_for_group
+
         File null_rda
         File null_var_ratio
         File samples
 
+        String gs_bucket
+        String gs_output_path
+
         Float min_maf
         Float min_mac
 
-        Boolean force_inverse_normalize
         Boolean disable_loco
+        Boolean always_use_sparse_grm
 
         String analysis_type
 
-        Float rel_cutoff
-
-        Int n_cpu_null
+        Int n_cpu_test
 
         File SaigeImporters
         String SaigeDocker
     }
 
     String tf_defined_spGRM = if defined(sparse_grm) then "defined" else "not"
+    String always_spGRM = if always_use_sparse_grm then 'sp' else 'not'
     String loco = if disable_loco then "noloco" else "loco"
-    String invnorm = if force_inverse_normalize then "inv_normal" else "no_normal"
+    String output_prefix = phenotype_id + "." + analysis_type + "." + chr + "." + pop + "." + suffix
 
     command <<<
         set -e
@@ -212,10 +232,17 @@ task run_test {
     load_module = importlib.import_module(os.path.splitext(scriptname)[0])
     globals().update(vars(load_module))
 
+    gs_prefix = parse_bucket('~{gs_bucket}')
+    gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
+
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
+    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
+    pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
+    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
+    results_files = get_results_files(results_prefix, '~{analysis_type}')
 
-    saige_step_1 = ['Rscript', '/usr/local/bin/step2_SPAtests.R',
+    saige_step_2 = ['Rscript', '/usr/local/bin/step2_SPAtests.R',
                     '--bgenFile=~{bgen}',
                     '--bgenFileIndex=~{bgi}',
                     '--chrom=~{chr}',
@@ -225,60 +252,81 @@ task run_test {
                     '--GMMATmodelFile={null_rda}',
                     '--varianceRatioFile={null_var_ratio}',
                     '--AlleleOrder=ref-first',
-                    '--outputPrefix=~{phenotype_id}',
-                    '--outputPrefix_varRatio=~{phenotype_id + '.' + analysis_type}',
-                    '--covarColList=~{covariates}',
-                    '--phenoCol=value',
-                    f'--sampleIDColinphenoFile={PHENO_SAMPLE_ID}',
-                    f'--traitType={trait_type}',
-                    '--minCovariateCount=1',
-                    '--nThreads=~{n_cpu_null}']
+                    '--SAIGEOutputFile=~{output_prefix + ".result.txt"}']
 
-    if "~{tf_defined_spGRM}" == 'defined':
-        saige_step_1 = saige_step_1 + ['--relatednessCutoff=~{rel_cutoff}',
-                                       '--sparseGRMFile=~{sparse_grm}',
-                                       '--sparseGRMSampleIDFile=~{sparse_grm_ids}',
-                                       '--useSparseGRMtoFitNULL=TRUE',
-                                       '--useSparseGRMforVarRatio=TRUE',
-                                       '--LOCO=FALSE']
-    else:
-        if '~{loco}' == 'loco':
-            saige_step_1 = saige_step_1 + ['--LOCO=TRUE']
+    if "~{analysis_type}" == "variant":
+        if ("~{tf_defined_spGRM}" == 'defined') and ("~{always_spGRM}" == "sp"):
+            saige_step_2 = saige_step_2 + ['--sparseGRMFile=~{sparse_grm}',
+                                           '--sparseGRMSampleIDFile=~{sparse_grm_ids}',
+                                           '--is_fastTest=TRUE',
+                                           '--LOCO=FALSE']
         else:
-            saige_step_1 = saige_step_1 + ['--LOCO=FALSE']
+            if '~{loco}' == 'loco':
+                saige_step_2 = saige_step_2 + ['--LOCO=TRUE']
+            else:
+                saige_step_2 = saige_step_2 + ['--LOCO=FALSE']
     
     if "~{analysis_type}" == 'gene':
-        saige_step_1 = saige_step_1 + ['--isCateVarianceRatio=TRUE',
-                                       '--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
-                                       '--cateVarRatioMaxMACVecInclude=1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5']
+        saige_step_2 = saige_step_2 + ['--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
+                                       '--cateVarRatioMaxMACVecInclude=1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
+                                       '--groupFile=~{group_file}',
+                                       '--annotation_in_groupTest=~{groups}',
+                                       '--is_output_markerList_in_groupTest=TRUE',
+                                       '--maxMAF_in_groupTest=~{max_maf_for_group}',
+                                       '--is_single_in_groupTest=TRUE']
+        if trait_type == 'binary':
+            saige_step_2 = saige_step_2 + ['--is_output_moreDetails=TRUE']
 
-    if "~{invnorm}" == "inv_normal":
-        saige_step_1 = saige_step_1 + ['--invNormalize=TRUE']
-    else:
-        saige_step_1 = saige_step_1 + ['--invNormalize=FALSE']
+        if ("~{tf_defined_spGRM}" == 'defined'):
+            saige_step_2 = saige_step_2 + ['--sparseGRMFile=~{sparse_grm}',
+                                           '--sparseGRMSampleIDFile=~{sparse_grm_ids}',
+                                           '--is_fastTest=TRUE',
+                                           '--LOCO=FALSE']
 
     with open('~{phenotype_id}' + ".log", "wb") as f:
         process = subprocess.Popen(saige_step_1, stdout=subprocess.PIPE)
         for c in iter(lambda: process.stdout.read(1), b""):
             sys.stdout.buffer.write(c)
-            f.buffer.write(c)
+            f.write(c)
+
+    with open('single_test.txt', 'w') as f:
+        f.write(results_files[0])
+
+    if "~{analysis_type}" == 'gene':
+        with open('gene_test_path.txt', 'w') as f:
+            f.write(results_files[1])
 
     CODE
 
+    ls -lh
+
+    if [[ "~{analysis_type}" == 'gene' ]]; then
+        input_length=$(wc -l ~{group_file} | awk '{{print $1}}')
+        output_length=$(wc -l ~{output_prefix + ".result.txt"} | awk '{{print $1}}')
+        echo 'Got input:' $input_length 'output:' $output_length | tee -a ~{output_prefix + '.log'}
+        if [[ $input_length > 0 ]]; then 
+            echo 'got input' | tee -a ~{output_prefix + '.log'}
+            if [[ $output_length == 1 ]]; then 
+                echo 'but not enough output' | tee -a ~{output_prefix + '.log'}
+                rm -f ~{output_prefix + '.gene'} 
+                exit 1
+            fi
+        fi
+    fi
 
     >>>
 
     runtime {
         docker: SaigeDocker
-        memory: '64 GB'
-        cpu: n_cpu_null
+        memory: '16 GB'
+        cpu: n_cpu_test
     }
 
     output {
-        File null_rda = read_string('rda.txt')
-        File null_var_ratio = read_string('null_var_ratio.txt')
-        File log = phenotype_id + ".log"
-        String null_rda_path = read_string('rda_path.txt')
-        String null_var_path = read_string('null_var_ratio_path.txt')
+        File single_test = read_string('rda.txt')
+        File? gene_test = read_string('null_var_ratio.txt')
+        File log = output_prefix + ".log"
+        String single_test_path = read_string('single_test.txt')
+        String? gene_test_path = read_string('gene_test_path.txt')
     }
 }

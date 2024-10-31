@@ -1,7 +1,7 @@
 version 1.0
 
 import "https://personal.broadinstitute.org/rahul/saige/saige_sparse_grm.wdl" as saige_tools
-#import "https://personal.broadinstitute.org/rahul/saige/saige_tests.wdl" as saige_tests
+import "https://personal.broadinstitute.org/rahul/saige/saige_tests.wdl" as saige_tests
 
 workflow saige_multi {
 
@@ -19,6 +19,10 @@ workflow saige_multi {
 
         Float test_min_mac = 0.5
         Float test_min_maf = 0
+
+        File? group_file
+        File? groups
+        Float? max_maf_for_group
 
         File bedfile_vr_markers
         File bimfile_vr_markers
@@ -92,6 +96,10 @@ workflow saige_multi {
                     # runs the null model
                     phenotype_id = per_pheno_data.right,
                     phenotype_file = pheno_file,
+
+                    pop = pop,
+                    suffix = suffix,
+
                     covariates = covariates,
 
                     bedfile_vr_markers = bedfile_vr_markers,
@@ -99,6 +107,9 @@ workflow saige_multi {
                     famfile_vr_markers = famfile_vr_markers,
                     sparse_grm = sparse_grm,
                     sparse_grm_ids = sparse_grm_ids,
+
+                    gs_bucket = gs_bucket,
+                    gs_output_path = gs_output_path,
 
                     rel_cutoff = rel_cutoff,
                     n_cpu_null = n_cpu_null,
@@ -122,38 +133,42 @@ workflow saige_multi {
         File null_rda = select_first([null.null_rda, per_pheno_data.left.left.right[0]])
         File null_var_ratio = select_first([null.null_var_ratio, per_pheno_data.left.left.right[1]])
 
-        # call saige_tests.saige_tests as test_runner {
-        #     input:
-        #         pheno = per_pheno_data.right,
-        #         suffix = suffix,
-        #         pop = pop,
+        call saige_tests.saige_tests as test_runner {
+            input:
+                pheno = per_pheno_data.right,
+                suffix = suffix,
+                pop = pop,
 
-        #         null_rda = null_rda,
-        #         null_var_ratio = null_var_ratio,
-        #         sample_list = sample_ids,
+                null_rda = null_rda,
+                null_var_ratio = null_var_ratio,
+                sample_list = sample_ids,
 
-        #         sparse_grm = sparse_grm,
-        #         sparse_grm_ids = sparse_grm_ids,
+                sparse_grm = sparse_grm,
+                sparse_grm_ids = sparse_grm_ids,
 
-        #         tests = per_pheno_data.left.left.left.right,
+                tests = per_pheno_data.left.left.left.right,
 
-        #         min_mac = test_min_mac,
-        #         min_maf = test_min_maf,
+                group_file = group_file,
+                groups = groups,
+                max_maf_for_group = max_maf_for_group,
 
-        #         gs_bucket = gs_bucket, 
-        #         gs_genotype_path = gs_genotype_path, 
-        #         gs_output_path = gs_output_path, 
-        #         google_project_req_pays = google_project_req_pays, 
+                min_mac = test_min_mac,
+                min_maf = test_min_maf,
 
-        #         rvas_mode = rvas_mode,
-        #         always_use_sparse_grm = always_use_sparse_grm,
-        #         disable_loco = disable_loco,
+                gs_bucket = gs_bucket, 
+                gs_genotype_path = gs_genotype_path, 
+                gs_output_path = gs_output_path, 
+                google_project_req_pays = google_project_req_pays, 
 
-        #         n_cpu_test = n_cpu_test,
-        #         SaigeImporters = SaigeImporters,
-        #         HailDocker = HailDocker,
-        #         SaigeDocker = SaigeDocker
-        # }
+                rvas_mode = rvas_mode,
+                always_use_sparse_grm = always_use_sparse_grm,
+                disable_loco = disable_loco,
+
+                n_cpu_test = n_cpu_test,
+                SaigeImporters = SaigeImporters,
+                HailDocker = HailDocker,
+                SaigeDocker = SaigeDocker
+        }
 
         # if (per_pheno_data.left.left.left.left == '') {
         #     call merge {
@@ -262,6 +277,9 @@ task null {
         String phenotype_id
         File phenotype_file
 
+        String pop
+        String suffix
+
         String covariates
         #?qCovarColList # NOTE NEED TO FIGURE THIS OUT
         #isCovariateOffset # NOTE NEED TO FIGURE THIS OUT
@@ -271,6 +289,9 @@ task null {
         File famfile_vr_markers
         File? sparse_grm
         File? sparse_grm_ids
+
+        String gs_bucket
+        String gs_output_path
 
         Boolean force_inverse_normalize
         Boolean disable_loco
@@ -284,9 +305,11 @@ task null {
         File SaigeImporters
         String SaigeDocker
     }
+
     String tf_defined_spGRM = if defined(sparse_grm) then "defined" else "not"
     String loco = if disable_loco then "noloco" else "loco"
     String invnorm = if force_inverse_normalize then "inv_normal" else "no_normal"
+    String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
 
     command <<<
         set -e
@@ -297,6 +320,7 @@ task null {
     import os, sys
     import json
     import subprocess
+    import pandas as pd
 
     flpath = os.path.dirname('~{SaigeImporters}')
     scriptname = os.path.basename('~{SaigeImporters}')
@@ -306,14 +330,30 @@ task null {
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
+    
+    gs_prefix = parse_bucket('~{gs_bucket}')
+    gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
+    null_model_dir = get_null_model_path(gs_output_path, '~{suffix}', '~{pop}')
+    rda_path, var_ratio_path = get_null_model_file_paths(null_model_dir, pheno_dct, '~{analysis_type}')
+
+    # we need to recode the bimfile to have numeric chromosome names
+    df = pd.read_csv('~{bimfile_vr_markers}', header=None, sep='\t')
+    l1 = [x.replace('chr', '') for x in CHROMOSOMES]
+    mapper = {y: '23' if x == 'X' else ('24' if x == 'Y' else x) for x, y in zip(l1, CHROMOSOMES)}
+    if df[0].isin(mapper.keys()).any():
+        df[0] = df[0].map(mapper)
+        df.to_csv('updated_bim.bim', header=None, index=None, sep='\t')
+        path_to_bim = 'updated_bim.bim'
+    else:
+        path_to_bim = '~{bimfile_vr_markers}'
 
     saige_step_1 = ['Rscript', '/usr/local/bin/step1_fitNULLGLMM.R',
                     '--bedFile=~{bedfile_vr_markers}',
-                    '--bimFile=~{bimfile_vr_markers}',
+                    f'--bimFile={path_to_bim}',
                     '--famFile=~{famfile_vr_markers}',
                     '--phenoFile=~{phenotype_file}',
-                    '--outputPrefix=~{phenotype_id}',
-                    '--outputPrefix_varRatio=~{phenotype_id + '.' + analysis_type}',
+                    '--outputPrefix=~{output_prefix}',
+                    '--outputPrefix_varRatio=~{output_prefix}',
                     '--covarColList=~{covariates}',
                     '--phenoCol=value',
                     f'--sampleIDColinphenoFile={PHENO_SAMPLE_ID}',
@@ -344,14 +384,21 @@ task null {
     else:
         saige_step_1 = saige_step_1 + ['--invNormalize=FALSE']
 
-    with open('~{phenotype_id}' + ".log", "wb") as f:
-        process = subprocess.Popen(saige_step_1, stdout=subprocess.PIPE)
+    with open('~{output_prefix}' + ".log", "wb") as f:
+        process = subprocess.Popen(saige_step_1, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         for c in iter(lambda: process.stdout.read(1), b""):
             sys.stdout.buffer.write(c)
-            f.buffer.write(c)
+            f.write(c)
+
+    with open('rda_path.txt', 'w') as f:
+        f.write(rda_path)
+
+    with open('null_var_ratio_path.txt', 'w') as f:
+        f.write(var_ratio_path)
 
     CODE
 
+    ls -lh
 
     >>>
 
@@ -362,9 +409,9 @@ task null {
     }
 
     output {
-        File null_rda = read_string('rda.txt')
-        File null_var_ratio = read_string('null_var_ratio.txt')
-        File log = phenotype_id + ".log"
+        File null_rda = output_prefix + '.rda'
+        File null_var_ratio = output_prefix + '.varianceRatio.txt'
+        File log = output_prefix + ".log"
         String null_rda_path = read_string('rda_path.txt')
         String null_var_path = read_string('null_var_ratio_path.txt')
     }

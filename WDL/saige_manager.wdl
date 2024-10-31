@@ -479,7 +479,7 @@ task get_tasks_to_run {
             results_already_created = {}
         
         for chr in CHROMOSOMES:
-            results_prefix = get_results_prefix(pheno_results_dir, pheno_key_dict, chr)
+            results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
             results_files = get_results_files(results_prefix, '~{analysis_type}')
             if '~{analysis_type}' == 'variant':
                 res_found = results_files[0] in results_already_created
