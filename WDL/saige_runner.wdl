@@ -420,3 +420,50 @@ task null {
         String null_var_path = read_string('null_var_ratio_path.txt')
     }
 }
+
+
+task merge {
+
+    input {
+        Int n_cpu_merge
+        File SaigeImporters
+        String HailDocker
+    }
+
+    command <<<
+        set -e
+
+        python3.8 <<CODE
+    import hail as hl
+    import importlib
+    import os, sys
+    from datetime import date
+
+    curdate = date.today().strftime("%y%m%d")
+
+    this_temp_path = '/cromwell_root/tmp/'
+    hl.init(master=f'local[str(~{n_cpu_merge})]',
+            log='load_results.log', tmp_dir=this_temp_path)
+
+    # import relevant objects
+    flpath = os.path.dirname('~{SaigeImporters}')
+    scriptname = os.path.basename('~{SaigeImporters}')
+    sys.path.append(flpath)
+    load_module = importlib.import_module(os.path.splitext(scriptname)[0])
+    globals().update(vars(load_module))
+
+    CODE
+
+    >>>
+
+    runtime {
+        docker: HailDocker
+        memory: '16 GB'
+        cpu: n_cpu_merge
+    }
+
+    output {
+        File flat_file = "flat.txt"
+    }
+
+}

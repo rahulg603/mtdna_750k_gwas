@@ -564,7 +564,7 @@ task get_tasks_to_run {
 
 
     #### Get BGEN prefix
-    bgen_prefix = get_wildcard_path_genotype_bgen(analysis_type)
+    bgen_prefix = get_wildcard_path_genotype_bgen("~{analysis_type}")
     with open('bgen.txt', 'w') as f:
         f.write(bgen_prefix)
 
