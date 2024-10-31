@@ -108,7 +108,7 @@ def get_plink_inputs_ld_prune(geno_folder, pop, chr, extension, sample_qc, prune
 def get_wildcard_path_genotype_bgen(analysis_type):
     data_type = 'exome_v7.1' if analysis_type == 'gene' else 'acaf_threshold_v7.1'
     file = 'exome' if analysis_type == 'gene' else 'acaf_threshold'
-    return os.path.join(SHORT_READ_ROOT,f'{data_type}/bgen/{file}@')
+    return os.path.join(SHORT_READ_ROOT,f'{data_type}/bgen/{file}.@')
 
 
 # Samples
@@ -190,7 +190,7 @@ def get_null_model_path(gs_output_path, suffix, pop):
 
 def get_null_model_file_paths(null_model_path, pheno_dict, analysis_type):
     root = get_pheno_output_path(null_model_path, pheno_dict, '')
-    return f'{root}.rda', f'{root}.{analysis_type}.varianceRatio.txt'
+    return f'{root}.rda', f'{root}.{analysis_type}.varianceRatio.txt', f'{root}.null.log'
 
 
 # GWAS results
@@ -205,9 +205,9 @@ def get_results_prefix(pheno_results_dir, pheno_key_dict, chromosome):
 
 def get_results_files(results_pre, analysis_type):
     if analysis_type == 'variant':
-        return f'{results_pre}.single_variant.txt', None
+        return f'{results_pre}.single_variant.txt', None, f'{results_pre}.log'
     else:
-        return f'{results_pre}.txt', f'{results_pre}.txt.singleAssoc.txt'
+        return f'{results_pre}.txt', f'{results_pre}.txt.singleAssoc.txt', f'{results_pre}.log'
 
 
 def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct):
@@ -333,3 +333,19 @@ def summarize_data(pheno_folder, suffix, overwrite):
     ht = ht.key_by('pop', *PHENO_KEY_FIELDS)
     ht = ht.checkpoint(get_custom_phenotype_summary_path(pheno_folder, suffix), overwrite=overwrite, _read_if_exists=not overwrite)
     ht.flatten().export(get_custom_phenotype_summary_path(pheno_folder, suffix, 'tsv'))
+
+
+def get_cases_controls_from_logs():
+    return -1, -1
+
+
+def get_heritability_from_log(null_log):
+    return -1
+
+
+def get_inverse_normalize_status(null_log, trait_type):
+    return -1
+
+
+def get_saige_version_from_log(null_log):
+    return -1

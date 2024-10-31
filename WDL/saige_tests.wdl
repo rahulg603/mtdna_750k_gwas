@@ -99,23 +99,25 @@ workflow saige_tests {
 
             call saige_tools.upload {
                 input:
-                    paths = select_all([run_test.single_test_path, run_test.gene_test_path]),
-                    files = select_all([run_test.single_test, run_test.gene_test]),
+                    paths = select_all([run_test.single_test_path, run_test.gene_test_path, run_test.log_path]),
+                    files = select_all([run_test.single_test, run_test.gene_test, run_test.log]),
                     HailDocker = HailDocker
             }
 
         }
 
-        File test_output = select_first([run_test.single_test, this_chr[1]])
+        File single_test_output = select_first([run_test.single_test, this_chr[1]])
+        File test_log = select_first([run_test.log, this_chr[3]])
         if (analysis_type == 'gene') {
-            File test_output_2 = select_first([run_test.gene_test, this_chr[2]])
+            File gene_test_output = select_first([run_test.gene_test, this_chr[2]])
         }
 
     }
 
     output {
-        Array[File] single_variant = test_output
-        Array[File?] gene_test = test_output_2
+        Array[File] single_variant = single_test_output
+        Array[File] test_logs = test_log
+        Array[File?] gene_test = gene_test_output
     }
 
 }
@@ -151,7 +153,7 @@ task get_bgen_path {
         f.write(bgen_prefix)
 
     CODE
-    
+
     >>>
 
     runtime {
@@ -287,6 +289,9 @@ task run_test {
     with open('single_test.txt', 'w') as f:
         f.write(results_files[0])
 
+    with open('log.txt', 'w') as f:
+        f.write(results_files[2])
+
     if "~{analysis_type}" == 'gene':
         with open('gene_test_path.txt', 'w') as f:
             f.write(results_files[1])
@@ -323,5 +328,6 @@ task run_test {
         File log = output_prefix + ".log"
         String single_test_path = read_string('single_test.txt')
         String? gene_test_path = read_string('gene_test_path.txt')
+        String log_path = read_string('log.txt')
     }
 }

@@ -134,6 +134,7 @@ workflow saige_multi {
         }
         File null_rda = select_first([null.null_rda, per_pheno_data.left.left.right[0]])
         File null_var_ratio = select_first([null.null_var_ratio, per_pheno_data.left.left.right[1]])
+        File null_log = select_first([null.log, per_pheno_data.left.left.right[2]])
 
         call saige_tests.saige_tests as test_runner {
             input:
@@ -425,9 +426,20 @@ task null {
 task merge {
 
     input {
-        Int n_cpu_merge
+        String phenotype_id
+        String suffix
+        String pop
+        String analysis_type
+
+        File null_log
+        Array[File] test_logs
+        Array[File] single_test
+        Array[File?] gene_test
+        
         File SaigeImporters
         String HailDocker
+
+        Int n_cpu_merge
     }
 
     command <<<
@@ -451,6 +463,18 @@ task merge {
     sys.path.append(flpath)
     load_module = importlib.import_module(os.path.splitext(scriptname)[0])
     globals().update(vars(load_module))
+
+    pheno_dct = pheno_str_to_dict('~{phenotype_id}')
+    trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
+    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
+    pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
+    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
+    results_files = get_results_files(results_prefix, '~{analysis_type}')
+
+    cases, controls = get_cases_controls_from_logs()
+    heritability = get_heritability_from_log(null_log, trait_type)
+    inv_normalized = get_inverse_normalize_status(null_log)
+    saige_version = get_saige_version_from_log(null_log)
 
     CODE
 

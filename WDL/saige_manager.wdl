@@ -459,7 +459,7 @@ task get_tasks_to_run {
             export_phenotype.append(pheno_export_path)
 
         # null model
-        rda, var_ratio = get_null_model_file_paths(null_model_dir, pheno_dct, '~{analysis_type}')
+        rda, var_ratio, null_log = get_null_model_file_paths(null_model_dir, pheno_dct, '~{analysis_type}')
         overwrite_null_tf = ('~{overwrite_n}' == 'overwrite')
         if not overwrite_null_tf and hl.hadoop_exists(null_model_dir):
             null_models_existing = {x['path'] for x in hl.hadoop_ls(null_model_dir)}
@@ -467,9 +467,9 @@ task get_tasks_to_run {
             null_models_existing = {}
         files_found = rda in null_models_existing and var_ratio in null_models_existing
         if overwrite_null_tf or (not files_found):
-            null_model.append(['',''])
+            null_model.append(['','', ''])
         else:
-            null_model.append([rda, var_ratio])
+            null_model.append([rda, var_ratio, null_log])
 
         # tests
         this_pheno_result_holder = []
