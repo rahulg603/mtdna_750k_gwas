@@ -184,6 +184,8 @@ workflow saige_manager {
                 sparse_grm_ids = sparse_grm_ids,
 
                 rel_cutoff = sparse_relatedness_cutoff,
+
+                bgen_prefix = get_tasks_to_run.bgen_prefix,
                 
                 gs_bucket = gs_bucket,
                 gs_genotype_path = gs_genotype_path,
@@ -561,6 +563,12 @@ task get_tasks_to_run {
         f.write(ix)
 
 
+    #### Get BGEN prefix
+    bgen_prefix = get_wildcard_path_genotype_bgen(analysis_type)
+    with open('bgen.txt', 'w') as f:
+        f.write(bgen_prefix)
+
+
     #### Get sample IDs file
     sample_id = get_aou_samples_file_path(geno_folder=gs_genotype_path,
                                           pop='~{pop}',
@@ -595,6 +603,8 @@ task get_tasks_to_run {
         String ix = read_string('ix.txt')
 
         String sample_ids = read_string('samp.txt')
+
+        String bgen_prefix = read_string('bgen.txt')
     }
 }
 

@@ -30,6 +30,8 @@ workflow saige_multi {
         File? sparse_grm
         File? sparse_grm_ids
 
+        String bgen_prefix
+
         Float rel_cutoff
 
         String covariates
@@ -145,6 +147,8 @@ workflow saige_multi {
 
                 sparse_grm = sparse_grm,
                 sparse_grm_ids = sparse_grm_ids,
+
+                bgen_prefix = bgen_prefix,
 
                 tests = per_pheno_data.left.left.left.right,
 

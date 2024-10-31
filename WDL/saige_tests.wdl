@@ -23,6 +23,8 @@ workflow saige_tests {
         Float min_mac
         Float min_maf
 
+        String bgen_prefix
+
         # path to gs folders
         String gs_bucket
         String gs_genotype_path
@@ -47,24 +49,15 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    call get_bgen_path {
-
-        input:
-            analysis_type = analysis_type,
-            SaigeImporters = SaigeImporters,
-            SaigeDocker = SaigeDocker
-
-    }
-
     scatter (this_chr in tests) {
 
         String chr = this_chr[0]
 
         if (this_chr[1] == "") {
 
-            File this_bgen = sub(get_bgen_path.bgen_prefix, '@', chr) + '.bgen'
-            File this_bgi = sub(get_bgen_path.bgen_prefix, '@', chr) + '.bgen.bgi'
-            File this_bgen_sample = sub(get_bgen_path.bgen_prefix, '@', chr) + '.sample'
+            File this_bgen = sub(bgen_prefix, '@', chr) + '.bgen'
+            File this_bgi = sub(bgen_prefix, '@', chr) + '.bgen.bgi'
+            File this_bgen_sample = sub(bgen_prefix, '@', chr) + '.sample'
 
             call run_test {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
@@ -157,6 +150,8 @@ task get_bgen_path {
     with open('bgen.txt', 'w') as f:
         f.write(bgen_prefix)
 
+    CODE
+    
     >>>
 
     runtime {
