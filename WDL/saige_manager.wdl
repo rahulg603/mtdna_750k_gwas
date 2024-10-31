@@ -148,7 +148,7 @@ workflow saige_manager {
         Array[String] export_pheno = read_json(tasks.export_phe)
         Array[Array[String]] null_model = read_json(tasks.null)
         Array[Array[Array[String]]] tests = read_json(tasks.test)
-        Array[String] hail_merge = read_json(tasks.merge)
+        Array[Array[String]] hail_merge = read_json(tasks.merge)
 
 
         if (always_use_sparse_grm) {

@@ -90,7 +90,7 @@ workflow saige_multi {
 
         }
 
-        File pheno_file = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
+        File pheno_file_comb = select_first([export_phenotype_files.pheno_file, per_pheno_data.left.right])
 
         if (per_pheno_data.left.left.right[0] == '') {
 
@@ -98,7 +98,7 @@ workflow saige_multi {
                 input:
                     # runs the null model
                     phenotype_id = per_pheno_data.right,
-                    phenotype_file = pheno_file,
+                    phenotype_file = pheno_file_comb,
 
                     pop = pop,
                     suffix = suffix,
@@ -125,7 +125,7 @@ workflow saige_multi {
                     SaigeDocker = SaigeDocker
             }
 
-            call saige_tools.upload {
+            call saige_tools.upload as u1 {
                 input:
                     paths = [null.null_rda_path, null.null_var_path, null.log_path],
                     files = [null.null_rda, null.null_var_ratio, null.log],
@@ -133,9 +133,9 @@ workflow saige_multi {
             }
 
         }
-        File null_rda = select_first([null.null_rda, per_pheno_data.left.left.right[0]])
-        File null_var_ratio = select_first([null.null_var_ratio, per_pheno_data.left.left.right[1]])
-        File null_log = select_first([null.log, per_pheno_data.left.left.right[2]])
+        File null_rda_comb = select_first([null.null_rda, per_pheno_data.left.left.right[0]])
+        File null_var_ratio_comb = select_first([null.null_var_ratio, per_pheno_data.left.left.right[1]])
+        File null_log_comb = select_first([null.log, per_pheno_data.left.left.right[2]])
 
         call saige_tests.saige_tests as test_runner {
             input:
@@ -143,8 +143,8 @@ workflow saige_multi {
                 suffix = suffix,
                 pop = pop,
 
-                null_rda = null_rda,
-                null_var_ratio = null_var_ratio,
+                null_rda = null_rda_comb,
+                null_var_ratio = null_var_ratio_comb,
                 sample_list = sample_ids,
 
                 sparse_grm = sparse_grm,
@@ -185,10 +185,13 @@ workflow saige_multi {
                     pop = pop,
                     analysis_type = analysis_type,
 
-                    null_log = null_log,
+                    null_log = null_log_comb,
                     test_logs = test_runner.test_logs,
                     single_test = test_runner.single_variant,
                     gene_test = test_runner.gene_test,
+
+                    gs_bucket = gs_bucket, 
+                    gs_output_path = gs_output_path, 
                     
                     SaigeImporters = SaigeImporters,
                     HailDocker = HailDocker,
@@ -196,7 +199,7 @@ workflow saige_multi {
                     n_cpu_merge = n_cpu_merge
             }
 
-            call saige_tools.upload {
+            call saige_tools.upload as u2 {
                 input:
                     paths = [merge.single_variant_flat_path],
                     files = [merge.single_variant_flat_file],
@@ -465,6 +468,9 @@ task merge {
         Array[File] single_test
         Array[File?] gene_test
         
+        String gs_bucket
+        String gs_output_path
+
         File SaigeImporters
         String HailDocker
 
