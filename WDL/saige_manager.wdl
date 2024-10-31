@@ -185,7 +185,7 @@ workflow saige_manager {
 
                 rel_cutoff = sparse_relatedness_cutoff,
 
-                bgen_prefix = get_tasks_to_run.bgen_prefix,
+                bgen_prefix = tasks.bgen_prefix,
                 
                 gs_bucket = gs_bucket,
                 gs_genotype_path = gs_genotype_path,
