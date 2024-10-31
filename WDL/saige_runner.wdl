@@ -13,7 +13,7 @@ workflow saige_multi {
         Array[String] export_pheno
         Array[Array[String]] null_model
         Array[Array[Array[String]]] tests
-        Array[String] hail_merge
+        Array[Array[String]] hail_merge
 
         File sample_ids
 
@@ -55,6 +55,7 @@ workflow saige_multi {
         # runtime
         Int n_cpu_null
         Int n_cpu_test
+        Int n_cpu_merge = 16
 
         # helper functions
         File SaigeImporters
@@ -126,8 +127,8 @@ workflow saige_multi {
 
             call saige_tools.upload {
                 input:
-                    paths = [null.null_rda_path, null.null_var_path],
-                    files = [null.null_rda, null.null_var_ratio],
+                    paths = [null.null_rda_path, null.null_var_path, null.log_path],
+                    files = [null.null_rda, null.null_var_ratio, null.log],
                     HailDocker = HailDocker
             }
 
@@ -175,12 +176,36 @@ workflow saige_multi {
                 SaigeDocker = SaigeDocker
         }
 
-        # if (per_pheno_data.left.left.left.left == '') {
-        #     call merge {
+        if (per_pheno_data.left.left.left.left[0] == '') {
 
-        #     }
-        # }
-        # String ht_path = select_first([merge.ht_path, per_pheno_data.left.left.left.left])
+            call merge {
+                input:
+                    phenotype_id = per_pheno_data.right,
+                    suffix = suffix,
+                    pop = pop,
+                    analysis_type = analysis_type,
+
+                    null_log = null_log,
+                    test_logs = test_runner.test_logs,
+                    single_test = test_runner.single_variant,
+                    gene_test = test_runner.gene_test,
+                    
+                    SaigeImporters = SaigeImporters,
+                    HailDocker = HailDocker,
+
+                    n_cpu_merge = n_cpu_merge
+            }
+
+            call saige_tools.upload {
+                input:
+                    paths = [merge.single_variant_flat_path],
+                    files = [merge.single_variant_flat_file],
+                    HailDocker = HailDocker
+            }
+        }
+        
+        File sumstats = select_first([merge.single_variant_flat_file, per_pheno_data.left.left.left.left[1]])
+        
         # call manhattan {
         # }
 
@@ -339,7 +364,7 @@ task null {
     gs_prefix = parse_bucket('~{gs_bucket}')
     gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
     null_model_dir = get_null_model_path(gs_output_path, '~{suffix}', '~{pop}')
-    rda_path, var_ratio_path = get_null_model_file_paths(null_model_dir, pheno_dct, '~{analysis_type}')
+    rda_path, var_ratio_path, log_path = get_null_model_file_paths(null_model_dir, pheno_dct, '~{analysis_type}')
 
     # we need to recode the bimfile to have numeric chromosome names
     df = pd.read_csv('~{bimfile_vr_markers}', header=None, sep='\t')
@@ -401,6 +426,9 @@ task null {
     with open('null_var_ratio_path.txt', 'w') as f:
         f.write(var_ratio_path)
 
+    with open('null_log_path.txt', 'w') as f:
+        f.write(log_path)
+    
     CODE
 
     ls -lh
@@ -419,6 +447,7 @@ task null {
         File log = output_prefix + ".log"
         String null_rda_path = read_string('rda_path.txt')
         String null_var_path = read_string('null_var_ratio_path.txt')
+        String log_path = read_string('null_log_path.txt')
     }
 }
 
@@ -442,6 +471,9 @@ task merge {
         Int n_cpu_merge
     }
 
+    Int disk = ceil((size(single_test, 'G') + size(gene_test, 'G')) * 2)
+    String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
+
     command <<<
         set -e
 
@@ -464,6 +496,9 @@ task merge {
     load_module = importlib.import_module(os.path.splitext(scriptname)[0])
     globals().update(vars(load_module))
 
+    gs_prefix = parse_bucket('~{gs_bucket}')
+    gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
+
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
     result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
@@ -471,10 +506,33 @@ task merge {
     results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
     results_files = get_results_files(results_prefix, '~{analysis_type}')
 
-    cases, controls = get_cases_controls_from_logs()
-    heritability = get_heritability_from_log(null_log, trait_type)
-    inv_normalized = get_inverse_normalize_status(null_log)
-    saige_version = get_saige_version_from_log(null_log)
+    variant_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
+
+    ht = load_variant_data(output_ht_path=variant_ht,
+                           paths='~{sep="," single_test}'.split(','),
+                           extension='',
+                           trait_type=trait_type,
+                           pheno_dict=pheno_dct,
+                           null_log='~{null_log}',
+                           test_logs='~{sep="," test_logs}'.split(','))
+
+
+    gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, gene_analysis=True)
+    if "~{analysis_type}" == "gene":
+        load_gene_data(output_ht_path=gene_ht,
+                       paths='~{sep="," single_test}'.split(','),
+                       extension='',
+                       trait_type=trait_type,
+                       pheno_dict=pheno_dct,
+                       null_log='~{null_log}',
+                       test_logs='~{sep="," test_logs}'.split(','))
+
+    ht.export('~{output_prefix + ".tsv.bgz"}')
+
+    single_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
+
+    with open('flat_path.txt', 'w') as f:
+        f.write(single_flat)
 
     CODE
 
@@ -484,10 +542,12 @@ task merge {
         docker: HailDocker
         memory: '16 GB'
         cpu: n_cpu_merge
+        disks: 'local-disk ' + disk + ' SSD'
     }
 
     output {
-        File flat_file = "flat.txt"
+        File single_variant_flat_file = output_prefix + ".tsv.bgz"
+        String single_variant_flat_path = read_string('flat_path.txt')
     }
 
 }

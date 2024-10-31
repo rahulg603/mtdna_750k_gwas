@@ -499,13 +499,14 @@ task get_tasks_to_run {
         
         # merged hail table
         merged_ht_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
+        merged_flat_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
         overwrite_hail_tf = ('~{overwrite_h}' == 'overwrite')
         if overwrite_test_tf or overwrite_hail_tf or \
                 merged_ht_path not in results_already_created or \
                 not hl.hadoop_exists(f'{merged_ht_path}/_SUCCESS'):
-            run_hail_merge.append('')
+            run_hail_merge.append(['',''])
         else:
-            run_hail_merge.append(merged_ht_path)
+            run_hail_merge.append([merged_ht_path, merged_flat_path])
 
     # phenotype names
     with open('pheno.json', 'w') as f:

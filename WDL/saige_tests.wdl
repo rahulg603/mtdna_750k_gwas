@@ -49,7 +49,7 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    scatter (this_chr in tests) {
+    scatter (this_chr in [tests[20], tests[21]]) {
 
         String chr = this_chr[0]
 
@@ -122,53 +122,6 @@ workflow saige_tests {
 
 }
 
-
-task get_bgen_path {
-
-    input {
-        String analysis_type
-        File SaigeImporters
-        String SaigeDocker
-    }
-
-    command <<<
-        set -e
-
-        python3.8 <<CODE
-    import importlib
-    import os, sys
-    import json
-
-    this_temp_path = '/cromwell_root/tmp/'
-    hl.init(log='log.log', tmp_dir=this_temp_path)
-
-    flpath = os.path.dirname('~{SaigeImporters}')
-    scriptname = os.path.basename('~{SaigeImporters}')
-    sys.path.append(flpath)
-    load_module = importlib.import_module(os.path.splitext(scriptname)[0])
-    globals().update(vars(load_module))
-
-    bgen_prefix = get_wildcard_path_genotype_bgen(analysis_type)
-    with open('bgen.txt', 'w') as f:
-        f.write(bgen_prefix)
-
-    CODE
-
-    >>>
-
-    runtime {
-        docker: SaigeDocker
-        memory: '2 GB'
-        cpu: '1'
-    }
-
-    output {
-        String bgen_prefix = read_string("bgen.txt")
-    }
-
-}
-
-
 task run_test {
 
     input {
@@ -213,9 +166,13 @@ task run_test {
     String loco = if disable_loco then "noloco" else "loco"
     String output_prefix = phenotype_id + "." + analysis_type + "." + chr + "." + pop + "." + suffix
 
+    Int disk = ceil(size(bgen, 'G') * 1.1)
+
     command <<<
         set -e
         set -o pipefail
+
+        tail -n +3 ~{bgen_sample} | sed 's/ / /' | awk '{print $1}' > bgen_trunc.sample
 
         python3.8 <<CODE
     import importlib
@@ -245,9 +202,9 @@ task run_test {
                     '--chrom=~{chr}',
                     '--minMAF=~{min_maf}',
                     '--minMAC=~{min_mac}',
-                    '--sampleFile=~{samples}',
-                    '--GMMATmodelFile={null_rda}',
-                    '--varianceRatioFile={null_var_ratio}',
+                    '--sampleFile=bgen_trunc.sample',
+                    '--GMMATmodelFile=~{null_rda}',
+                    '--varianceRatioFile=~{null_var_ratio}',
                     '--AlleleOrder=ref-first',
                     '--SAIGEOutputFile=~{output_prefix + ".result.txt"}']
 
@@ -281,7 +238,7 @@ task run_test {
                                            '--LOCO=FALSE']
 
     with open('~{phenotype_id}' + ".log", "wb") as f:
-        process = subprocess.Popen(saige_step_1, stdout=subprocess.PIPE)
+        process = subprocess.Popen(saige_step_2, stdout=subprocess.PIPE)
         for c in iter(lambda: process.stdout.read(1), b""):
             sys.stdout.buffer.write(c)
             f.write(c)
@@ -292,9 +249,8 @@ task run_test {
     with open('log.txt', 'w') as f:
         f.write(results_files[2])
 
-    if "~{analysis_type}" == 'gene':
-        with open('gene_test_path.txt', 'w') as f:
-            f.write(results_files[1])
+    with open('gene_test_path.txt', 'w') as f:
+        f.write(results_files[1])
 
     CODE
 
@@ -318,16 +274,17 @@ task run_test {
 
     runtime {
         docker: SaigeDocker
-        memory: '16 GB'
+        memory: '32 GB'
         cpu: n_cpu_test
+        disks: 'local-disk ' + disk + ' SSD'
     }
 
     output {
-        File single_test = read_string('rda.txt')
-        File? gene_test = read_string('null_var_ratio.txt')
+        File single_test = output_prefix + '.result.txt'
+        File gene_test = output_prefix + '.geneAssoc.txt'
         File log = output_prefix + ".log"
         String single_test_path = read_string('single_test.txt')
-        String? gene_test_path = read_string('gene_test_path.txt')
+        String gene_test_path = read_string('gene_test_path.txt')
         String log_path = read_string('log.txt')
     }
 }

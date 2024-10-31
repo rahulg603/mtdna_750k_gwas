@@ -210,9 +210,20 @@ def get_results_files(results_pre, analysis_type):
         return f'{results_pre}.txt', f'{results_pre}.txt.singleAssoc.txt', f'{results_pre}.log'
 
 
-def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct):
+def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct, gene_analysis=False):
     result_dir = get_result_path(gs_output_path, suffix, pop)
-    return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.ht'
+    if gene_analysis:
+        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.ht'
+    else:
+        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.ht'
+
+def get_merged_flat_path(gs_output_path, suffix, pop, pheno_dct, gene_analysis=False):
+    result_dir = get_result_path(gs_output_path, suffix, pop)
+    if gene_analysis:
+        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.tsv.bgz'
+    else:
+        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.tsv.bgz'
+
 
 ######### IMPORT UTILS ##########
 def parse_bucket(gs_bucket):
@@ -335,17 +346,137 @@ def summarize_data(pheno_folder, suffix, overwrite):
     ht.flatten().export(get_custom_phenotype_summary_path(pheno_folder, suffix, 'tsv'))
 
 
-def get_cases_controls_from_logs():
-    return -1, -1
+def get_cases_controls_from_logs(log_list):
+    cases = controls = -1
+    for log in log_list:
+        try:
+            with open(log, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('Analyzing'):
+                        fields = line.split()
+                        if len(fields) == 6:
+                            try:
+                                cases = int(fields[1])
+                                controls = int(fields[4])
+                                break
+                            except ValueError:
+                                print(f'Could not load number of cases or controls from {line}.')
+                    elif line.endswith('samples were used in fitting the NULL glmm model and are found in sample file') or \
+                            line.endswith('samples have been used to fit the glmm null model') or \
+                            line.endswith('samples will be used for analysis'):
+                        # This is ahead of the case/control count line ("Analyzing ...") above so this should be ok
+                        fields = line.split()
+                        try:
+                            cases = int(fields[0])
+                        except ValueError:
+                            print(f'Could not load number of cases or controls from {line}.')
+            return cases, controls
+        except:
+            pass
+    return cases, controls
 
 
-def get_heritability_from_log(null_log):
-    return -1
+def get_heritability_from_log(null_log, trait_type):
+    import math
+    heritability = -1
+    with open(null_log, 'r') as f:
+        for line in f:
+            if line.startswith('Final'):
+                fields = line.strip().split()
+                if len(fields) == 4:
+                    try:
+                        tau = float(fields[2])
+                        if trait_type == 'quantitative':
+                            tau1 = float(fields[1])
+                            heritability = tau / (tau1 + tau)
+                        else:
+                            heritability = tau / (tau + math.pi ** 2 / 3)
+                        break
+                    except:
+                        print(f'Could not load heritability from {line}.')
+    return heritability
 
 
-def get_inverse_normalize_status(null_log, trait_type):
-    return -1
+def get_inverse_normalize_status(null_log):
+    status = 'Unknown'
+    with hl.hadoop_open(null_log) as f:
+        for line in f:
+            if line.startswith('$invNormalize'):
+                try:
+                    status = f.readline().strip().split()[1]
+                except:
+                    print(f'Could not load inv_norm status from {line} in {null_log}.')
+    return status.capitalize()
 
 
 def get_saige_version_from_log(null_log):
-    return -1
+    version = 'NA'
+    with open(null_log, 'r') as f:
+        for line in f:
+            if line.startswith('other attached packages:'):
+                try:
+                    line2 = f.readline()
+                    packages = line2.strip().split()
+                    version = [x for x in packages if 'SAIGE' in x][0]
+                except:
+                    print(f'Could not load version number from {line2} in {null_log}.')
+    return version
+
+
+def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
+                      null_log, test_logs):
+    
+    n_cases, n_controls = get_cases_controls_from_logs(test_logs)
+    heritability = get_heritability_from_log(null_log, trait_type)
+    inv_normalized = get_inverse_normalize_status(null_log)
+    saige_version = get_saige_version_from_log(null_log)
+
+    ht = hl.import_table(paths, delimiter='\t', impute=True)
+    print(f'Loading variant data...')
+    marker_id_col = 'markerID' if extension == 'single.txt' else 'MarkerID'
+    locus_alleles = ht[marker_id_col].split('_')
+    if n_cases == -1: n_cases = hl.null(hl.tint)
+    if n_controls == -1: n_controls = hl.null(hl.tint)
+    if heritability == -1.0: heritability = hl.null(hl.tfloat)
+    if saige_version == 'NA': saige_version = hl.null(hl.tstr)
+    if inv_normalized == 'NA': inv_normalized = hl.null(hl.tstr)
+
+    ht = ht.key_by(locus=hl.parse_locus(locus_alleles[0]), alleles=locus_alleles[1].split('/'),
+                   **pheno_dict).distinct().naive_coalesce(100)
+    if marker_id_col == 'MarkerID':
+        ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
+    ht = ht.transmute(Pvalue=ht['p.value']).annotate_globals(
+        n_cases=n_cases, n_controls=n_controls, heritability=heritability, saige_version=saige_version,
+        inv_normalized=inv_normalized)
+    ht = ht.drop('Tstat')
+    return ht.checkpoint(output_ht_path, overwrite=True)
+
+
+def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
+                      null_log, test_logs):
+    
+    n_cases, n_controls = get_cases_controls_from_logs(test_logs)
+    heritability = get_heritability_from_log(null_log, trait_type)
+    inv_normalized = get_inverse_normalize_status(null_log)
+    saige_version = get_saige_version_from_log(null_log)
+
+    print(f'Loading gene data ...')
+    types = {f'Nmarker_MACCate_{i}': hl.tint32 for i in range(1, 9)}
+    types.update({x: hl.tfloat64 for x in ('Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT', 'Pvalue_skato_NA', 'Pvalue_burden_NA', 'Pvalue_skat_NA')})
+    ht = hl.import_table(paths, delimiter=' ', impute=True, types=types)
+    if n_cases == -1: n_cases = hl.null(hl.tint)
+    if n_controls == -1: n_controls = hl.null(hl.tint)
+    if heritability == -1.0: heritability = hl.null(hl.tfloat)
+    if saige_version == 'NA': saige_version = hl.null(hl.tstr)
+    if inv_normalized == 'NA': inv_normalized = hl.null(hl.tstr)
+
+    ht = ht.filter(hl.len(ht.Gene.split('_')) == 3)
+    fields = ht.Gene.split('_')
+    # gene_ht = hl.read_table(gene_ht_map_path).select('interval').distinct()
+    # ht = ht.key_by(gene_id=fields[0], gene_symbol=fields[1], annotation=fields[2],
+    #                **pheno_dict).drop('Gene').naive_coalesce(10).annotate_globals(
+    #     n_cases=n_cases, n_controls=n_controls, heritability=heritability, saige_version=saige_version, inv_normalized=inv_normalized)
+    # ht = ht.annotate(total_variants=hl.sum([v for k, v in list(ht.row_value.items()) if 'Nmarker' in k]),
+    #                  interval=gene_ht.key_by('gene_id')[ht.gene_id].interval)
+    ht = ht.checkpoint(output_ht_path, overwrite=True).drop('n_cases', 'n_controls')
