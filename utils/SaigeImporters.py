@@ -315,6 +315,7 @@ def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix,
     mt = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(pheno_folder, suffix))
     covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates, drc=drc)
     mt = mt.annotate_rows(**covars[mt.row_key])
+    mt = mt.annotate_rows(**{k: hl.int(v)  for k, v in mt.row.items() if v.dtype == hl.tbool})
     if pop != 'all':
         mt = mt.filter_rows(mt.pop == pop)
     
