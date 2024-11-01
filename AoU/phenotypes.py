@@ -8,11 +8,11 @@ from AoU.paths import *
 
 
 def get_final_annotated_variant_path():
-    return f'{BUCKET}/final_v7_merged_callset/all_v7_callset_20241030/vcf/filt_annotated/annotated_combined_processed_flat.tsv.bgz'
+    return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/filt_annotated/annotated_combined_processed_flat.tsv.bgz')
 
 
 def get_final_munged_case_only_hl_path(num_to_keep, type):
-    base_path = f'{BUCKET}/final_v7_merged_callset/all_v7_callset_20241030/munged/'
+    base_path = os.path.join(BUCKET, f'final_v7_merged_callset/all_v7_callset_20241030/munged/')
     if type == 'ht':
         return base_path + f'case_only_calls_low_hl_fullqc_N_{str(num_to_keep)}.ht'
     elif type == 'tsv':
