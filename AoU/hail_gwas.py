@@ -66,7 +66,8 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
         mt_a = get_filtered_genotype_mt('variant', pop,
                                         filter_samples=True, filter_variants=True,
                                         use_array_for_variant=False,
-                                        use_drc_ancestry_data=True)
+                                        use_drc_ancestry_data=True,
+                                        remove_related=True)
         mt_a = mt_a.annotate_cols(phenotypes = ht_pheno[mt_a.s])
         mt_a = mt_a.annotate_cols(covariates = sample_covariates[mt_a.s])
         pheno_f = [x for x in pheno if mt_a.aggregate_cols(hl.agg.count_where(hl.is_defined(mt_a.phenotypes[x]))) > min_cases]

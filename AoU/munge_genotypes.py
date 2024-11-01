@@ -97,7 +97,7 @@ def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, u
 def get_filtered_genotype_mt(analysis_type, pop,
                              filter_samples=True, filter_variants=True,
                              use_array_for_variant=False, use_custom_pcs=True,
-                             use_drc_ancestry_data=False):
+                             use_drc_ancestry_data=False, remove_related=False):
     if analysis_type == 'gene':
         mt_path = EXOME_PATH
     elif analysis_type == 'variant':
@@ -121,7 +121,10 @@ def get_filtered_genotype_mt(analysis_type, pop,
 
     if filter_samples:
         mt = mt.filter_cols(mt.pass_qc)
-    
+        if remove_related:
+            related_samples = hl.import_table(get_aou_related_samples(), key='sample_id')
+            mt = mt.anti_join_cols(related_samples)
+
     if filter_variants:
         mt = mt.filter_rows(mt.info.AC[0] > 0)
 
