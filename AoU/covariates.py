@@ -17,11 +17,11 @@ def generate_indicator(ht, col, baseline_item):
     return ht.annotate(**{f'{col}_{x}': ht[col] == x for x in all_values if x != baseline_item})
 
 
-def load_ancestry_data(use_drc_data=True):
+def load_ancestry_data(use_drc_data=True, use_custom_data=False):
     # if use_drc_data is True, will return the first 15 covariates as produced by DRC.
     # if use_drc_data is False, will return the first 20 covariates as produced for AllxAllofUs
     if use_drc_data:
-        npcs = 15
+        npcs = 16
         ancestry_pred = hl.import_table(get_ancestry_flat_file(),
                                         key="research_id", 
                                         impute=True, 
@@ -30,6 +30,12 @@ def load_ancestry_data(use_drc_data=True):
         ancestry_pred = ancestry_pred.select(pop = ancestry_pred.ancestry_pred,
                                              **{f'PC{str(idx+1)}': ancestry_pred.pca_features[idx] for idx in range(0,npcs+1)})
         ancestry_pred = ancestry_pred.rename({'research_id': 's'}).key_by('s')
+        return npcs, ancestry_pred
+    elif use_custom_data:
+        npcs = 20
+        ancestry_pred = load_custom_pcs(iteration=0)
+        ancestry_pred = ancestry_pred.select(pop = ancestry_pred.pop,
+                                             **{f'PC{str(idx+1)}': ancestry_pred[f'PC{str(idx+1)}'] for idx in range(0,npcs)})
         return npcs, ancestry_pred
     else:
         # TODO AxAoU data
@@ -68,38 +74,41 @@ def load_aou_flagged_samples():
     return ht
 
 
-def get_all_demographics(overwrite=False, use_drc_ancestry_data=True):
-    covar_path = get_demographics_path(COVAR_PATH, use_drc_ancestry_data)
+def load_custom_pcs(iteration=0):
+    return hl.read_table(get_custom_pc_path(COVAR_PATH, iteration))
+
+
+def get_all_demographics(overwrite=False, use_drc_ancestry_data=True, use_custom_data=False):
+    covar_path = get_demographics_path(COVAR_PATH, use_drc_ancestry_data, use_custom_data)
     if not overwrite and hl.hadoop_exists(os.path.join(covar_path, '_SUCCESS')):
         sample_covariates = hl.read_table(covar_path)
     else:
-        npcs, ancestry_pred = load_ancestry_data(use_drc_ancestry_data)
-        dataset = os.getenv('WORKSPACE_CDR')
+        npcs, ancestry_pred = load_ancestry_data(use_drc_ancestry_data, use_custom_data)
         person_sql = f"""
         SELECT  person.person_id,
                 person.birth_datetime,
                 p_location_concept.concept_name as loc,
                 p_site_concept.concept_name as site
             FROM
-                `{dataset}.person` person 
+                `{DATASET}.person` person 
             LEFT JOIN
-                `{dataset}.concept` p_location_concept 
+                `{DATASET}.concept` p_location_concept 
                     on person.location_id = p_location_concept.CONCEPT_ID 
             LEFT JOIN
-                `{dataset}.concept` p_site_concept 
+                `{DATASET}.concept` p_site_concept 
                     on person.care_site_id = p_site_concept.CONCEPT_ID
             WHERE
                 person.PERSON_ID IN (
                     select
                         person_id  
                     from
-                        `{dataset}.cb_search_person` cb_search_person  
+                        `{DATASET}.cb_search_person` cb_search_person  
                     where
                         cb_search_person.person_id in (
                             select
                                 person_id 
                             from
-                                `{dataset}.cb_search_person` p 
+                                `{DATASET}.cb_search_person` p 
                             where
                                 has_whole_genome_variant = 1 
                         ) 
@@ -137,7 +146,7 @@ def get_all_demographics(overwrite=False, use_drc_ancestry_data=True):
                                                        age2 = sample_covariates.age**2)
         sample_covariates = sample_covariates.annotate(age2_isFemale = sample_covariates.age2 * sample_covariates.isFemale)
         sample_covariates = sample_covariates.annotate(ancestry = hl.struct(pop = ancestry_pred[sample_covariates.s].pop,
-                                                                            **{f'PC{str(idx+1)}': ancestry_pred[sample_covariates.s][f'PC{str(idx+1)}'] for idx in range(0,npcs+1)}))
+                                                                            **{f'PC{str(idx+1)}': ancestry_pred[sample_covariates.s][f'PC{str(idx+1)}'] for idx in range(0,npcs)}))
 
         # add flag for passing axaou
         sample_covariates = sample_covariates.annotate(pass_axaou_qc = hl.is_defined(axaou_sample_qc[sample_covariates.s]))
@@ -153,11 +162,11 @@ def get_all_demographics(overwrite=False, use_drc_ancestry_data=True):
     return sample_covariates
 
 
-def get_gwas_covariates(overwrite=False, use_drc_ancestry_data=True):
-    baseline_covar_path = get_base_covariates_path(COVAR_PATH, drc=use_drc_ancestry_data)
+def get_gwas_covariates(overwrite=False, use_drc_ancestry_data=True, use_custom_data=False):
+    baseline_covar_path = get_base_covariates_path(COVAR_PATH, drc=use_drc_ancestry_data, custom=use_custom_data)
     if overwrite or not hl.hadoop_exists(os.path.join(baseline_covar_path, '_SUCCESS')):
         # now producing baseline covariates, which includes making indicator variables for sequencing center and keeping PCs 1-16, age, age2, sex, age2_sex
-        sample_covariates = get_all_demographics(overwrite=overwrite, use_drc_ancestry_data=use_drc_ancestry_data)
+        sample_covariates = get_all_demographics(overwrite=overwrite, use_drc_ancestry_data=use_drc_ancestry_data, use_custom_data=use_custom_data)
         baseline_covar = generate_indicator(sample_covariates, col='site_id', baseline_item='bi').key_by('s')
         dict_update = {}
         dict_update.update({x: baseline_covar['ancestry'][x] for x in baseline_covar.ancestry.keys() if re.search('^PC[0-9]{1,2}$', x)})

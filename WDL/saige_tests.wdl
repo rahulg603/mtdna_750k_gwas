@@ -49,7 +49,7 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    scatter (this_chr in [tests[20], tests[21]]) {
+    scatter (this_chr in tests) {
 
         String chr = this_chr[0]
 
@@ -97,11 +97,22 @@ workflow saige_tests {
                     n_cpu_test = n_cpu_test
             }
 
-            call saige_tools.upload {
-                input:
-                    paths = select_all([run_test.single_test_path, run_test.gene_test_path, run_test.log_path]),
-                    files = select_all([run_test.single_test, run_test.gene_test, run_test.log]),
-                    HailDocker = HailDocker
+            if (analysis_type == 'variant') {
+                call saige_tools.upload as u_variant {
+                    input:
+                        paths = select_all([run_test.single_test_path, run_test.log_path]),
+                        files = select_all([run_test.single_test, run_test.log]),
+                        HailDocker = HailDocker
+                }
+            }
+
+            if (analysis_type == 'gene') {
+                call saige_tools.upload as u_gene {
+                    input:
+                        paths = select_all([run_test.single_test_path, run_test.gene_test_path, run_test.log_path]),
+                        files = select_all([run_test.single_test, run_test.gene_test, run_test.log]),
+                        HailDocker = HailDocker
+                }
             }
 
         }
@@ -193,7 +204,7 @@ task run_test {
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
     result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
     pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
-    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
+    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, '~{chr}')
     results_files = get_results_files(results_prefix, '~{analysis_type}')
 
     saige_step_2 = ['Rscript', '/usr/local/bin/step2_SPAtests.R',
@@ -237,7 +248,7 @@ task run_test {
                                            '--is_fastTest=TRUE',
                                            '--LOCO=FALSE']
 
-    with open('~{phenotype_id}' + ".log", "wb") as f:
+    with open('~{output_prefix}' + ".log", "wb") as f:
         process = subprocess.Popen(saige_step_2, stdout=subprocess.PIPE)
         for c in iter(lambda: process.stdout.read(1), b""):
             sys.stdout.buffer.write(c)
@@ -250,7 +261,11 @@ task run_test {
         f.write(results_files[2])
 
     with open('gene_test_path.txt', 'w') as f:
-        f.write(results_files[1])
+        if results_files[1] is None:
+            f.write('')
+        else:
+            f.write(results_files[1])
+
 
     CODE
 
@@ -268,13 +283,15 @@ task run_test {
                 exit 1
             fi
         fi
+    else
+        touch ~{output_prefix + ".geneAssoc.txt"}
     fi
 
     >>>
 
     runtime {
         docker: SaigeDocker
-        memory: '32 GB'
+        memory: '16 GB'
         cpu: n_cpu_test
         disks: 'local-disk ' + disk + ' SSD'
     }

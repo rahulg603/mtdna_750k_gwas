@@ -173,14 +173,28 @@ def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.ts
 
 
 # Covariates
-def get_base_covariates_path(cov_folder, drc):
-    drc_string = '_drc' if drc else '_axaou'
+def get_base_covariates_path(cov_folder, drc, custom):
+    if drc:
+        drc_string = '_drc'
+    elif custom:
+        drc_string = '_custom'
+    else:
+        drc_string = '_axaou'
     return os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}.ht')
 
 
-def get_demographics_path(cov_folder, drc):
-    drc_string = '_drc' if drc else '_axaou'
+def get_demographics_path(cov_folder, drc, custom):
+    if drc:
+        drc_string = '_drc'
+    elif custom:
+        drc_string = '_custom'
+    else:
+        drc_string = '_axaou'
     return os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}.ht')
+
+
+def get_custom_pc_path(cov_folder, iteration):
+    return f'{cov_folder}/PCA/recomputed_pca_gnomad{make_iteration_suffix(iteration)}.ht'
 
 
 # Null model
@@ -216,6 +230,7 @@ def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct, gene_analysis=Fal
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.ht'
     else:
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.ht'
+
 
 def get_merged_flat_path(gs_output_path, suffix, pop, pheno_dct, gene_analysis=False):
     result_dir = get_result_path(gs_output_path, suffix, pop)
@@ -480,3 +495,10 @@ def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
     # ht = ht.annotate(total_variants=hl.sum([v for k, v in list(ht.row_value.items()) if 'Nmarker' in k]),
     #                  interval=gene_ht.key_by('gene_id')[ht.gene_id].interval)
     ht = ht.checkpoint(output_ht_path, overwrite=True).drop('n_cases', 'n_controls')
+
+
+def make_iteration_suffix(iteration):
+    if iteration == 0:
+        return ''
+    else:
+        return f'_iter{str(iteration)}'
