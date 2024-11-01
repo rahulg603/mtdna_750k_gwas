@@ -116,25 +116,6 @@ def export_for_manhattan(mt, phenos, entry_keep, model, fold, suffix, overwrite,
             ht_f.export(file_out)
 
 
-def get_lambdas_path(suffix, pop, extn):
-    return os.path.join(HAIL_GWAS_PATH, f'lambdas/{suffix}/lambda_export_{pop}.{extn}')
-
-
-def aou_generate_final_lambdas(mt, suffix, overwrite):
-    mt = mt.annotate_cols(
-        pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
-            lambda ss: hl.agg.filter(~ss.low_confidence,
-                hl.struct(lambda_gc=hl.methods.statgen._lambda_gc_agg(ss.Pvalue),
-                          n_variants=hl.agg.count_where(hl.is_defined(ss.Pvalue)),
-                          n_sig_variants=hl.agg.count_where(ss.Pvalue < 5e-8))),
-            mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
-    )
-    ht = mt.cols()
-    ht = ht.checkpoint(get_lambdas_path(suffix, 'full', 'ht'), overwrite=overwrite, _read_if_exists=not overwrite)
-    ht.explode('pheno_data').flatten().export(get_lambdas_path(suffix, 'full', 'txt.bgz'))
-    return mt
-
-
 def filter_mt_per_pop_maf(mt, pop, cutoff, overwrite_gt, perform_per_pop_hwe=False):
     """ Expects that MT has a GT and .covariates.pop field.
     Also filters based on p_hwe (two sided) per-population.

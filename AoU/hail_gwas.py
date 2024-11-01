@@ -29,13 +29,15 @@ from AoU.paths import *
 from AoU.covariates import *
 from utils.SaigeImporters import *
 from AoU.munge_genotypes import *
+from AoU.sumstats import *
 
 
-ANALYSIS_POP = ['afr','amr','eur','sas','eas','mid']
+ANALYSIS_POP = ['afr','amr','eur','sas','eas']
+#ANALYSIS_POP = ['amr']
 MIN_CASES = 100
 IRNT = True
-OVERWRITE_SUMSTATS = True
-EXPORT_SUMSTATS = True
+OVERWRITE_SUMSTATS = False
+EXPORT_SUMSTATS = False
 overwrite_full_gt = True
 
 hl.init(tmp_dir = f'{TEMP_PATH}/')
@@ -78,7 +80,7 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
 
         if EXPORT_SUMSTATS:
             export_for_manhattan(mt=res, phenos=pheno_f, entry_keep=['N','Pvalue','BETA','SE','tstat','ytx','AC','minor_AC','AF', 'minor_AF', 'low_confidence'], 
-                                 model='additive', fold=fold, suffix=f'_{this_suffix(pop)}_geno_af_0.001.tsv.bgz', 
+                                 model='additive', fold=fold, suffix=f'_{this_suffix(pop)}_geno_af_0.01.tsv.bgz', 
                                  overwrite=OVERWRITE_SUMSTATS, include_cols_for_mung=False)
         
         # finish formatting MT
@@ -93,14 +95,24 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
         mts.append(res)
     
     # Collapse into single MT
-    full_mt = mts[0]
-    for this_mt in mts[1:]:
-        full_mt = full_mt.union_cols(this_mt, row_join_type='outer')
-    full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_full.mt'), overwrite=True)
-    full_mt = full_mt.collect_cols_by_key()
-    full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_lambdas.mt'), overwrite=True)
-    full_mt = aou_generate_final_lambdas(full_mt, this_suffix('full'), overwrite=True)
-    full_mt.write(os.path.join(HAIL_GWAS_PATH, f'all_pop_mt/{this_suffix("full")}.mt'), overwrite=True)
+    if len(mts) > 1:
+        full_mt = mts[0]
+        for this_mt in mts[1:]:
+            full_mt = full_mt.union_cols(this_mt, row_join_type='outer')
+        full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_full.mt'), overwrite=True)
+        full_mt = full_mt.collect_cols_by_key()
+        full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_lambdas.mt'), overwrite=True)
+        full_mt = aou_generate_final_lambdas(full_mt, this_suffix('full'), overwrite=True)
+        full_mt.describe()
+
+        meta_name = os.path.join(HAIL_GWAS_PATH, 'mt', f'{this_suffix("full_meta")}_gwas_additive.mt')
+        full_mt_meta = run_meta_analysis(full_mt)
+        full_mt_meta = full_mt_meta.checkpoint(meta_name)
+        #full_mt.write(os.path.join(HAIL_GWAS_PATH, f'all_pop_mt/{this_suffix("full")}.mt'), overwrite=True)
+
+        return full_mt_meta
+    else:
+        return mts[0]
 
 
 # Import covariates
@@ -129,12 +141,5 @@ if IRNT:
 
 # Run GWAS using new PCs, no iterations (raw)
 fold = '241031_selected_variant_gwas_heteroplasmies'
-run_full_gwas(gwas_covariates, ht_pheno_for_analysis, num_PC=20, overwrite_gt=True, 
+run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20, overwrite_gt=True, 
               naming_insert='newPCs_iter0_hail', fold=fold, pheno=pheno_irnt + pheno_non_irnt, min_cases=MIN_CASES)
-
-# AFR: 40832109
-# AMR: 34642693
-# EUR: 22513978
-# SAS: 27266217
-# EAS: 17856139
-
