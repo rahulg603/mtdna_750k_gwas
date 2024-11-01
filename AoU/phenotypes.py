@@ -4,7 +4,7 @@ import pandas as pd
 import subprocess
 import os, re
 
-from paths import *
+from AoU.paths import *
 
 
 def get_final_annotated_variant_path():

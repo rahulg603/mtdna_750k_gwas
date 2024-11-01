@@ -1,7 +1,7 @@
 import hail as hl
 import pandas as pd
-from paths import *
-from phenotypes import *
+from AoU.paths import *
+from AoU.phenotypes import *
 
 HAP_CUTOFF = 30
 
