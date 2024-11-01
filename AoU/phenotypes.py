@@ -9,7 +9,7 @@ from AoU.paths import *
 
 def get_final_annotated_variant_path(version):
     if version == 'v6':
-        return os.path.join('gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/vcf/filt_annotated/annotated_combined_filtered.tsv.bgz')
+        return os.path.join('gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/vcf/221012_filt_annotated/annotated_combined_processed_flat.tsv.bgz')
     if version == 'v7':
         return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/annotated/annotated_combined_processed_flat.tsv.bgz')
 
@@ -20,6 +20,11 @@ def get_final_munged_case_only_hl_path(num_to_keep, type, version):
         return base_path + f'case_only_calls_low_hl_fullqc_N_{str(num_to_keep)}.ht'
     elif type == 'tsv':
         return base_path + f'case_only_calls_low_hl_fullqc_long_format_N_{str(num_to_keep)}.tsv'
+
+
+def get_final_munged_snvcount_path(version):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
+    return base_path + f'heteroplasmic_snv_count_fullqc.ht'
 
 
 def get_path_raw_positive_control():
@@ -129,9 +134,9 @@ def get_raw_positive_control_phenotypes():
             df_sub = wgs_data_measure_latest[wgs_data_measure_latest.munged_concept_name == pheno][['PERSON_ID', 'VALUE_AS_NUMBER']].rename({'PERSON_ID': 's', 'VALUE_AS_NUMBER': this_target_name}, axis=1)
             backbone = backbone.merge(df_sub, how='left', on=['s'])
 
-    local_pheno_path = os.path.abspath('./241016_positive_control_phenotypes.tsv')
-    backbone.to_csv(local_pheno_path, sep='\t', index=False, na_rep='NA')
-    _ = subprocess.run(['gsutil','-u',os.getenv('GOOGLE_PROJECT'),'cp',local_pheno_path, pheno_path])
+        local_pheno_path = os.path.abspath('./241016_positive_control_phenotypes.tsv')
+        backbone.to_csv(local_pheno_path, sep='\t', index=False, na_rep='NA')
+        _ = subprocess.run(['gsutil','-u',os.getenv('GOOGLE_PROJECT'),'cp',local_pheno_path, pheno_path])
     
     return backbone
 
@@ -191,26 +196,36 @@ def get_case_only_mtdna_callset(version, num_to_keep=310, overwrite=False):
         ht = hl.read_table(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version))
     
     else:
-        df = pd.read_csv(get_final_annotated_variant_path(version), sep='\t', 
-                         compression='gzip',
-                         dtype={'locus': 'str', 'alleles': 'str', 's': 'str',
-                                'rsid': 'str', 'variant':'str', 'batch':'str',
-                                'common_low_heteroplasmy': 'boolean',
-                                'hap_defining_variant': 'boolean',
-                                'region': 'str',
-                                'variant_context': 'str',
-                                'dp_mean': 'float64',
-                                'mq_mean': 'float64', 'tlod_mean': 'float64',
-                                'AF_hom': 'float64', 'AF_het': 'float64',
-                                'AC_hom': 'int64', 'AC_het': 'int64',
-                                'max_hl': 'float64', 'dp_mean': 'float64',
-                                'major_haplogroup':'str', 'hap':'str', 
-                                'wgs_median_coverage':'float64', 'mt_mean_coverage':'float64',
-                                'mito_cn':'float64', 'age':'float64', 'pop':'str',
-                                'DP':'float64', 'AD_ref':'float64','AD_alt':'float64',
-                                'MQ':'float64','TLOD':'float64', 'GT':'str',
-                                'OriginalSelfRefAlleles':'str', 'SwappedFieldIDs':'str', 'FT':'str', 'FT_LIFT':'str',
-                                'artifact_prone':'boolean', 'lifted':'boolean', 'fail_gt':'boolean', 'missing_call':'boolean'})
+        type_dict = {'locus': 'str', 'alleles': 'str', 's': 'str',
+                                    'rsid': 'str', 'variant':'str', 'batch':'str',
+                                    'common_low_heteroplasmy': 'boolean',
+                                    'hap_defining_variant': 'boolean',
+                                    'region': 'str',
+                                    'variant_context': 'str',
+                                    'dp_mean': 'float64',
+                                    'mq_mean': 'float64', 'tlod_mean': 'float64',
+                                    'AF_hom': 'float64', 'AF_het': 'float64',
+                                    'AC_hom': 'int64', 'AC_het': 'int64',
+                                    'max_hl': 'float64', 'dp_mean': 'float64',
+                                    'major_haplogroup':'str', 'hap':'str', 
+                                    'wgs_median_coverage':'float64', 'mt_mean_coverage':'float64',
+                                    'mito_cn':'float64', 'age':'float64', 'pop':'str',
+                                    'DP':'float64', 'AD_ref':'float64','AD_alt':'float64',
+                                    'MQ':'float64','TLOD':'float64', 'GT':'str',
+                                    'OriginalSelfRefAlleles':'str', 'SwappedFieldIDs':'str', 'FT':'str', 'FT_LIFT':'str',
+                                    'artifact_prone':'boolean', 'lifted':'boolean', 'fail_gt':'boolean', 'missing_call':'boolean'}
+        if version == 'v6andv7':
+            df6 = pd.read_csv(get_final_annotated_variant_path('v6'), sep='\t', 
+                            compression='gzip',
+                            dtype=type_dict)
+            df7 = pd.read_csv(get_final_annotated_variant_path('v7'), sep='\t', 
+                            compression='gzip',
+                            dtype=type_dict)
+            df = pd.concat([df6, df7])
+        else:
+            df = pd.read_csv(get_final_annotated_variant_path(version), sep='\t', 
+                            compression='gzip',
+                            dtype=type_dict)
         df_for_enumeration = df[(~df['HL'].isna()) & (df['HL'] < 0.95) & (df['common_low_heteroplasmy'])]
         counted_variants = df_for_enumeration.groupby('variant')['HL'].count().sort_values(ascending=False)
         variants_to_extract = list(counted_variants[counted_variants > num_to_keep].index)
@@ -235,31 +250,46 @@ def get_case_only_mtdna_callset(version, num_to_keep=310, overwrite=False):
     return ht
 
 
-def get_snv_count_phenotype():
-    ht = hl.import_table(get_final_annotated_variant_path(),
-                         types={'locus': hl.tstr, 'alleles': hl.tstr, 's': hl.tstr,
-                                'rsid': hl.tstr, 'variant':hl.tstr, 'batch':hl.tstr,
-                                'common_low_heteroplasmy': hl.tbool,
-                                'hap_defining_variant': hl.tbool,
-                                'region': hl.tstr,
-                                'variant_context': hl.tstr,
-                                'dp_mean': hl.tfloat64,
-                                'mq_mean': hl.tfloat64, 'tlod_mean': hl.tfloat64,
-                                'AF_hom': hl.tfloat64, 'AF_het': hl.tfloat64,
-                                'AC_hom': hl.tint64, 'AC_het': hl.tint64,
-                                'max_hl': hl.tfloat64, 'dp_mean': hl.tfloat64,
-                                'major_haplogroup':hl.tstr, 'hap':hl.tstr, 
-                                'wgs_median_coverage':hl.tfloat64, 'mt_mean_coverage':hl.tfloat64,
-                                'mito_cn':hl.tfloat64, 'age':hl.tfloat64, 'pop':hl.tstr,
-                                'DP':hl.tfloat64, 'AD_ref':hl.tfloat64,'AD_alt':hl.tfloat64,
-                                'MQ':hl.tfloat64,'TLOD':hl.tfloat64, 'GT':hl.tstr, 'HL':hl.tfloat64,
-                                'OriginalSelfRefAlleles':hl.tstr, 'SwappedFieldIDs':hl.tstr, 'FT':hl.tstr, 'FT_LIFT':hl.tstr,
-                                'artifact_prone':hl.tbool, 'lifted':hl.tbool, 'fail_gt':hl.tbool, 'missing_call':hl.tbool}, min_partitions=50)
-    all_s_table = ht.select('s').key_by('s').distinct()
-    ht_heteroplasmies = ht.filter(hl.is_defined(ht.HL) & (ht.HL < 0.95)).repartition(40)
-    ht_heteroplasmies = ht_heteroplasmies.annotate(alleles = ht_heteroplasmies.alleles.split(','))
-    ht_heteroplasmies = ht_heteroplasmies.filter(~hl.is_indel(ht_heteroplasmies.alleles[0], ht_heteroplasmies.alleles[1]))
-    ht_snv_count = ht_heteroplasmies.group_by(ht_heteroplasmies.s).aggregate(N = hl.agg.count())
-    s_not_found = all_s_table.anti_join(ht_snv_count).annotate(N = hl.int64(hl.literal(0)))
-    ht_snv_count = hl.Table.union(ht_snv_count, s_not_found)
-    return ht_snv_count.rename({'N':'snv_count_qcpass'})
+def get_snv_count_phenotype(version, overwrite=False):
+    if hl.hadoop_exists(f"{get_final_munged_snvcount_path(version)}/_SUCCESS") and not overwrite:
+        ht_snv_count = hl.read_table(get_final_munged_snvcount_path(version))
+    
+    else:
+        type_dict = {'locus': hl.tstr, 'alleles': hl.tstr, 's': hl.tstr,
+                                    'rsid': hl.tstr, 'variant':hl.tstr, 'batch':hl.tstr,
+                                    'common_low_heteroplasmy': hl.tbool,
+                                    'hap_defining_variant': hl.tbool,
+                                    'region': hl.tstr,
+                                    'variant_context': hl.tstr,
+                                    'dp_mean': hl.tfloat64,
+                                    'mq_mean': hl.tfloat64, 'tlod_mean': hl.tfloat64,
+                                    'AF_hom': hl.tfloat64, 'AF_het': hl.tfloat64,
+                                    'AC_hom': hl.tint64, 'AC_het': hl.tint64,
+                                    'max_hl': hl.tfloat64, 'dp_mean': hl.tfloat64,
+                                    'major_haplogroup':hl.tstr, 'hap':hl.tstr, 
+                                    'wgs_median_coverage':hl.tfloat64, 'mt_mean_coverage':hl.tfloat64,
+                                    'mito_cn':hl.tfloat64, 'age':hl.tfloat64, 'pop':hl.tstr,
+                                    'DP':hl.tfloat64, 'AD_ref':hl.tfloat64,'AD_alt':hl.tfloat64,
+                                    'MQ':hl.tfloat64,'TLOD':hl.tfloat64, 'GT':hl.tstr, 'HL':hl.tfloat64,
+                                    'OriginalSelfRefAlleles':hl.tstr, 'SwappedFieldIDs':hl.tstr, 'FT':hl.tstr, 'FT_LIFT':hl.tstr,
+                                    'artifact_prone':hl.tbool, 'lifted':hl.tbool, 'fail_gt':hl.tbool, 'missing_call':hl.tbool}
+        if version == 'v6andv7':
+            ht6 = hl.import_table(get_final_annotated_variant_path('v6'),
+                                types=type_dict, min_partitions=50)
+            ht7 = hl.import_table(get_final_annotated_variant_path('v7'),
+                                types=type_dict, min_partitions=50)
+            ht = ht6.union(ht7, unify=True)
+        else:
+            ht = hl.import_table(get_final_annotated_variant_path(version),
+                                types=type_dict, min_partitions=50)
+        all_s_table = ht.select('s').key_by('s').distinct()
+        ht_heteroplasmies = ht.filter(hl.is_defined(ht.HL) & (ht.HL < 0.95)).repartition(40)
+        ht_heteroplasmies = ht_heteroplasmies.annotate(alleles = ht_heteroplasmies.alleles.split(','))
+        ht_heteroplasmies = ht_heteroplasmies.filter(~hl.is_indel(ht_heteroplasmies.alleles[0], ht_heteroplasmies.alleles[1]))
+        ht_snv_count = ht_heteroplasmies.group_by(ht_heteroplasmies.s).aggregate(N = hl.agg.count())
+        s_not_found = all_s_table.anti_join(ht_snv_count).annotate(N = hl.int64(hl.literal(0)))
+        ht_snv_count = hl.Table.union(ht_snv_count, s_not_found)
+        ht_snv_count = ht_snv_count.rename({'N':'snv_count_qcpass'})
+        ht_snv_count = ht_snv_count.checkpoint(get_final_munged_snvcount_path(version))
+    
+    return ht_snv_count

@@ -96,7 +96,7 @@ def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, u
 
 def get_filtered_genotype_mt(analysis_type, pop,
                              filter_samples=True, filter_variants=True,
-                             use_array_for_variant=False,
+                             use_array_for_variant=False, use_custom_pcs=True,
                              use_drc_ancestry_data=False):
     if analysis_type == 'gene':
         mt_path = EXOME_PATH
@@ -112,7 +112,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
     else:
         mt = hl.read_matrix_table(mt_path, _n_partitions=15000)
     
-    meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data)
+    meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data, use_custom_data=use_custom_pcs)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
     mt = mt.annotate_cols(pop = mt.ancestry.pop)
 

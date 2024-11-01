@@ -1,3 +1,24 @@
+"""
+Setup:
+pip install git+https://github.com/broadinstitute/cromshell;
+
+pip install --upgrade pip;
+pip install --upgrade aiohttp;
+pip install --upgrade gnomad;
+
+git clone https://github.com/broadinstitute/gnomad_methods.git;
+
+cd ~;
+mkdir mtSwirl_fork;
+cd mtSwirl_fork;
+git clone https://github.com/rahulg603/mtSwirl.git;
+cd mtSwirl;
+git switch refactor_merging;
+cd ~;
+
+git clone https://github.com/rahulg603/saige_aou_wdl.git
+"""
+
 import os, re
 from tempfile import tempdir
 import pandas as pd
@@ -7,7 +28,7 @@ from AoU.hail_gwas_helpers import *
 from AoU.paths import *
 from AoU.covariates import *
 from utils.SaigeImporters import *
-from AoU.munge_genotypes import get_filtered_genotype_mt
+from AoU.munge_genotypes import *
 
 
 ANALYSIS_POP = ['afr','amr','eur','sas','eas','mid']
@@ -16,6 +37,8 @@ IRNT = True
 OVERWRITE_SUMSTATS = True
 EXPORT_SUMSTATS = True
 overwrite_full_gt = True
+
+hl.init(tmp_dir = f'{TEMP_PATH}/')
 
 
 def apply_qc_continuous(mt, min_case_count: int = 50):
@@ -43,7 +66,7 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
         mt_a = get_filtered_genotype_mt('variant', pop,
                                         filter_samples=True, filter_variants=True,
                                         use_array_for_variant=False,
-                                        use_drc_ancestry_data=False)
+                                        use_drc_ancestry_data=True)
         mt_a = mt_a.annotate_cols(phenotypes = ht_pheno[mt_a.s])
         mt_a = mt_a.annotate_cols(covariates = sample_covariates[mt_a.s])
         pheno_f = [x for x in pheno if mt_a.aggregate_cols(hl.agg.count_where(hl.is_defined(mt_a.phenotypes[x]))) > min_cases]
@@ -76,24 +99,35 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
     full_mt = full_mt.collect_cols_by_key()
     full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_lambdas.mt'), overwrite=True)
     full_mt = aou_generate_final_lambdas(full_mt, this_suffix('full'), overwrite=True)
-    full_mt.write(os.path.join(HAIL_GWAS_PATH, f'/all_pop_mt/{this_suffix("full")}.mt'), overwrite=True)
+    full_mt.write(os.path.join(HAIL_GWAS_PATH, f'all_pop_mt/{this_suffix("full")}.mt'), overwrite=True)
 
 
 # Import covariates
 gwas_covariates = get_gwas_covariates(overwrite=False, use_drc_ancestry_data=False, use_custom_data=True)
 
-# Import phenotypes and IRNT
-ht_pheno = get_case_only_mtdna_callset(num_to_keep=300, overwrite=False, version='v7')
-pheno = [x for x in ht_pheno.row if x not in ht_pheno.key]
+# Import phenotypes
+ht_pheno = get_case_only_mtdna_callset(num_to_keep=300, overwrite=False, version='v6andv7')
+ht_snv = get_snv_count_phenotype(version='v6andv7')
+ht_positive_control = hl.import_table(get_path_raw_positive_control(), impute=True, types={'s':hl.tstr}, key='s')
+
+ht_pheno = ht_pheno.annotate(**ht_snv[ht_pheno.key])
+ht_pheno = ht_pheno.annotate(**ht_positive_control[ht_pheno.key])
+pheno_irnt = [x for x in ht_pheno.row if x.startswith('chrM_302_A_AC') or x == 'height']
+pheno_non_irnt = ['snv_count_qcpass']
+ht_pheno_for_analysis = ht_pheno.select(*pheno_irnt)
+ht_pheno_non_irnt = ht_pheno.select(*pheno_non_irnt)
+
+# IRNT phenotypes
 if IRNT:
-    ht_pheno = apply_irnt(ht_pheno, pheno)
-    ht_pheno = ht_pheno.checkpoint(f'{TEMP_PATH}phenotypes_after_irnt_checkpoint.ht', overwrite=True)
-    ht_pheno.export(f'{BUCKET}/analyses/221206_final_gwas_heteroplasmies_hwefix/Data/phenotypes_post_irnt.tsv')
+    ht_pheno_for_analysis = apply_irnt(ht_pheno_for_analysis, pheno_irnt)
+    ht_pheno_for_analysis = ht_pheno_for_analysis.annotate(**ht_pheno_non_irnt[ht_pheno_for_analysis.key])
+    ht_pheno_for_analysis = ht_pheno_for_analysis.checkpoint(f'{TEMP_PATH}/phenotypes_after_irnt_checkpoint.ht', overwrite=True)
+    ht_pheno_for_analysis.export(os.path.join(BUCKET, f'analyses/241031_gwas_302_snvcount/Data/phenotypes_post_irnt.tsv'))
 
 # Run GWAS using new PCs, no iterations (raw)
 fold = '241031_selected_variant_gwas_heteroplasmies'
-run_full_gwas(gwas_covariates, ht_pheno, num_PC=20, overwrite_gt=True, 
-              naming_insert='newPCs_iter0_hail', fold=fold, pheno=pheno, min_cases=MIN_CASES)
+run_full_gwas(gwas_covariates, ht_pheno_for_analysis, num_PC=20, overwrite_gt=True, 
+              naming_insert='newPCs_iter0_hail', fold=fold, pheno=pheno_irnt + pheno_non_irnt, min_cases=MIN_CASES)
 
 # AFR: 40832109
 # AMR: 34642693

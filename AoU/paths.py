@@ -46,7 +46,3 @@ def get_aou_related_samples():
 
 def get_all_by_all_qc_samples():
     return os.path.join(REFERENCE_PATH, '241021_allbyall_qc_sample_ids.tsv')
-
-
-def get_processed_positive_control_phenotypes():
-    return None
