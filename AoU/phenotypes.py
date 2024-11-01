@@ -7,12 +7,15 @@ import os, re
 from AoU.paths import *
 
 
-def get_final_annotated_variant_path():
-    return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/filt_annotated/annotated_combined_processed_flat.tsv.bgz')
+def get_final_annotated_variant_path(version):
+    if version == 'v6':
+        return os.path.join('gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/vcf/filt_annotated/annotated_combined_filtered.tsv.bgz')
+    if version == 'v7':
+        return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/annotated/annotated_combined_processed_flat.tsv.bgz')
 
 
-def get_final_munged_case_only_hl_path(num_to_keep, type):
-    base_path = os.path.join(BUCKET, f'final_v7_merged_callset/all_v7_callset_20241030/munged/')
+def get_final_munged_case_only_hl_path(num_to_keep, type, version):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
     if type == 'ht':
         return base_path + f'case_only_calls_low_hl_fullqc_N_{str(num_to_keep)}.ht'
     elif type == 'tsv':
@@ -181,14 +184,14 @@ def get_fancy_positive_control_phenotypes(sample_covariates, overwrite=False):
     return ht_pheno_out, ht_covar_out, phenotypes
 
 
-def get_case_only_mtdna_callset(num_to_keep=310, overwrite=False):
+def get_case_only_mtdna_callset(version, num_to_keep=310, overwrite=False):
     """ Here we implement the munging pipeline in Python and Pandas.
     """
-    if hl.hadoop_exists(f"{get_final_munged_case_only_hl_path(num_to_keep, 'ht')}/_SUCCESS") and not overwrite:
-        ht = hl.read_table(get_final_munged_case_only_hl_path(num_to_keep, 'ht'))
+    if hl.hadoop_exists(f"{get_final_munged_case_only_hl_path(num_to_keep, 'ht', version)}/_SUCCESS") and not overwrite:
+        ht = hl.read_table(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version))
     
     else:
-        df = pd.read_csv(get_final_annotated_variant_path(), sep='\t', 
+        df = pd.read_csv(get_final_annotated_variant_path(version), sep='\t', 
                          compression='gzip',
                          dtype={'locus': 'str', 'alleles': 'str', 's': 'str',
                                 'rsid': 'str', 'variant':'str', 'batch':'str',
@@ -213,7 +216,7 @@ def get_case_only_mtdna_callset(num_to_keep=310, overwrite=False):
         variants_to_extract = list(counted_variants[counted_variants > num_to_keep].index)
 
         variants_to_analyze = df[df['variant'].isin(variants_to_extract) & (~df['HL'].isna()) & (df['HL'] < 0.95)]
-        variants_to_analyze.to_csv(get_final_munged_case_only_hl_path(num_to_keep, 'tsv'), sep='\t', index=False)
+        variants_to_analyze.to_csv(get_final_munged_case_only_hl_path(num_to_keep, 'tsv', version), sep='\t', index=False)
         
         pivoted_vars = variants_to_analyze.pivot(index='s', columns='variant',values='HL').reset_index()
         alls = pd.DataFrame({'s': list(set(df['s']))})
@@ -227,7 +230,7 @@ def get_case_only_mtdna_callset(num_to_keep=310, overwrite=False):
 
         ht = hl.import_table(f'{TEMP_PATH}pivoted_flat_file_lowHLqc.tsv', impute=True, missing='')
         ht = ht.annotate(s = hl.str(ht.s)).key_by('s')
-        ht = ht.repartition(50).checkpoint(get_final_munged_case_only_hl_path(num_to_keep, 'ht'))
+        ht = ht.repartition(50).checkpoint(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version))
     
     return ht
 

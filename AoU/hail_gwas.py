@@ -83,7 +83,7 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
 gwas_covariates = get_gwas_covariates(overwrite=False, use_drc_ancestry_data=False, use_custom_data=True)
 
 # Import phenotypes and IRNT
-ht_pheno = get_case_only_mtdna_callset(num_to_keep=300, overwrite=False)
+ht_pheno = get_case_only_mtdna_callset(num_to_keep=300, overwrite=False, version='v7')
 pheno = [x for x in ht_pheno.row if x not in ht_pheno.key]
 if IRNT:
     ht_pheno = apply_irnt(ht_pheno, pheno)
