@@ -105,6 +105,8 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
 
 # Import covariates
 gwas_covariates = get_gwas_covariates(overwrite=False, use_drc_ancestry_data=False, use_custom_data=True)
+hap_covariates = get_hap_covariates('v6andv7', 'wide')
+covariates = gwas_covariates.annotate(**hap_covariates[gwas_covariates.key])
 
 # Import phenotypes
 ht_pheno = get_case_only_mtdna_callset(num_to_keep=300, overwrite=False, version='v6andv7')
@@ -113,7 +115,7 @@ ht_positive_control = hl.import_table(get_path_raw_positive_control(), impute=Tr
 
 ht_pheno = ht_pheno.annotate(**ht_snv[ht_pheno.key])
 ht_pheno = ht_pheno.annotate(**ht_positive_control[ht_pheno.key])
-pheno_irnt = [x for x in ht_pheno.row if x.startswith('chrM_302_A_AC') or x == 'height']
+pheno_irnt = [x for x in ht_pheno.row if x in ['chrM_302_A_AC', 'chrM_302_A_ACC', 'height']]
 pheno_non_irnt = ['snv_count_qcpass']
 ht_pheno_for_analysis = ht_pheno.select(*pheno_irnt)
 ht_pheno_non_irnt = ht_pheno.select(*pheno_non_irnt)

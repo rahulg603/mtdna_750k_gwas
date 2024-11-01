@@ -3,17 +3,6 @@ import pandas as pd
 from AoU.paths import *
 from AoU.phenotypes import *
 
-HAP_CUTOFF = 30
-
-
-def hap_to_dummy(ht, field_name='hap', count_cutoff=HAP_CUTOFF):
-    counts = ht.aggregate(hl.agg.counter(ht[field_name]))
-    haps_to_keep = [hap for hap, ct in counts.items() if ct > count_cutoff]
-    ht = ht.filter(hl.literal(haps_to_keep).contains(ht[field_name]))
-    unique_haps = list(ht.aggregate(hl.agg.collect_as_set(ht[field_name])))
-    ht = ht.annotate(**{f'{field_name}_{hap}': hl.if_else(ht[field_name] == hap, 1, 0) for hap in unique_haps})
-    return ht.drop(field_name)
-
 
 def apply_irnt(ht, cols):
     # similar to Neale lab round 2 approach:
@@ -82,7 +71,7 @@ def run_regressions(mt, phenos, covars, pass_through, gwas_name, thresh=0, model
         ht_res = ht_res.select(*(pass_through + ['entries']))
         mt = ht_res._unlocalize_entries('entries', 'columns', ['phenotype'])
         mt = mt.repartition(n_partition)
-        mt = mt.checkpoint(mt_dir+filename_raw, overwrite=True)
+        mt = mt.checkpoint(os.path.join(mt_dir,filename_raw), overwrite=True)
 
         mt = mt.select_entries(N = mt.n,
                                AC = mt.sum_x,

@@ -27,6 +27,21 @@ def get_final_munged_snvcount_path(version):
     return base_path + f'heteroplasmic_snv_count_fullqc.ht'
 
 
+def get_final_sample_stats_flat_path(version):
+    if version == 'v6':
+        return 'gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/221012_filtered_aou_tab_per_sample_stats.tsv'
+    if version == 'v7':
+        return os.path.join(BUCKET, 'final_v7_merged_callset/total_stats.merge.csv')
+
+
+def get_hap_ht_path(version, format):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
+    if format == 'wide':
+        return base_path + f'haplogroup_wide.ht'
+    else:
+        return base_path + f'haplogroup_tall.ht'
+
+
 def get_path_raw_positive_control():
     return os.path.join(PHENO_PATH, 'raw', '241016_positive_control_phenotypes.tsv')
 
