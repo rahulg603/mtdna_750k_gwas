@@ -24,9 +24,10 @@ def all_and_leave_one_out(x, pop_array, all_f=hl.sum, loo_f=lambda i, x: hl.sum(
     return hl.or_missing(hl.any(hl.is_defined, x), arr)
 
 ### ADAPTED FROM UPDATED PAN UKBB REPO
-def run_meta_analysis(mt):
+def run_meta_analysis(mt, remove_low_confidence=True):
     """
     Run inverse-variance fixed-effect meta-analysis for a given MatrixTable. 
+    Modified now to remove entries that are low confidence prior to meta-analysis.
 
     :param mt: Input MatrixTable, formatted similar to `load_final_sumstats_mt()`
     ...
@@ -36,6 +37,9 @@ def run_meta_analysis(mt):
     # Annotate per-entry sample size
     def get_n(pheno_data, i):
         return pheno_data[i].n_cases + hl.or_else(pheno_data[i].n_controls, 0)
+    
+    if remove_low_confidence:
+        mt = mt.annotate_entries(summary_stats = mt.summary_stats.map(lambda x: hl.if_else(x.low_confidence, hl.missing(x.dtype), x)))
 
     mt = mt.annotate_entries(
         summary_stats=hl.map(
@@ -154,6 +158,7 @@ def get_hail_sumstats_path(model, fold):
 def make_manhattan_plots(wdl_path, 
                          sumstat_paths: list, phenotypes: list, pops: list,
                          suffix, p_col, af_col, conf_col=None,
+                         run_name='aou_manhattan_plotting',
                          wid=1300, hei=640, cex=1.3, point_size=18,
                          hq_file=None,
                          exponentiate_p=False,
@@ -212,7 +217,7 @@ def make_manhattan_plots(wdl_path,
     # run manhattan plotting
     print('Starting manhattan plotting...')
     print('This stage will use Cromwell.')
-    manager = CromwellManager(run_name='aou_manhattan_plotting',
+    manager = CromwellManager(run_name=run_name,
                               inputs_file=df,
                               json_template_path=os.path.abspath('./saige_template.json'),
                               wdl_path=wdl_path,

@@ -37,8 +37,7 @@ ANALYSIS_POP = ['afr','amr','eur','sas','eas']
 MIN_CASES = 100
 IRNT = True
 OVERWRITE_SUMSTATS = False
-EXPORT_SUMSTATS = False
-overwrite_full_gt = True
+EXPORT_SUMSTATS = True
 
 hl.init(tmp_dir = f'{TEMP_PATH}/')
 
@@ -65,7 +64,6 @@ def merge_mt_list(mts, this_suffix):
         full_mt = full_mt.checkpoint(get_all_pop_mt_path(this_suffix), overwrite=True)
 
         full_mt.describe()
-
         full_mt_meta = run_meta_analysis(full_mt)
         full_mt_meta = full_mt_meta.checkpoint(get_meta_path(this_suffix))
 
@@ -182,18 +180,48 @@ run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20,
 export_meta_for_manhattan(this_suffix, fold)
 
 # make manhattan plots
+# meta:
 phenotypes = pheno_non_irnt + pheno_irnt
 meta_suffix = this_suffix('meta')
 for_paths = '_geno_af_0.01.tsv.bgz'
 filenames = [x + '_' + meta_suffix + for_paths for x in phenotypes]
 file_path = get_hail_sumstats_path('additive', fold)
 
-output = make_manhattan_plots(wdl_path='/home/jupyter/saige_aou_wdl/WDL/ManhattanPlotter.wdl', 
+output = make_manhattan_plots(run_name='aou_manhattan_meta',
+                              wdl_path='/home/jupyter/saige_aou_wdl/WDL/ManhattanPlotter.wdl', 
                               sumstat_paths = [os.path.join(file_path, x + "_" + meta_suffix + for_paths) for x in phenotypes], 
                               phenotypes = phenotypes, 
                               pops = ['meta' for _ in phenotypes],
                               suffix=meta_suffix, p_col='Pvalue', af_col='AF', conf_col=None,
-                              wid=1300, hei=640, cex=1.3, point_size=18,
+                              wid=1300, hei=640, cex=1.1, point_size=16,
+                              hq_file=None,
+                              exponentiate_p=False,
+                              keep_x=False,
+                              af_filter=None,
+                              var_as_rsid=True,
+                              mem=60,
+                              no_wait=False)
+
+# all pops:
+suffix = this_suffix('indiv_pop')
+files = []
+pops = []
+phenos = []
+for pop in ANALYSIS_POP:
+    phenos.append(phenotypes)
+    pops.append([pop for _ in phenotypes])
+    files.append([os.path.join(file_path, x + "_" + this_suffix(pop) + for_paths) for x in phenotypes])
+phenos = [y for x in phenos for y in x]
+pops = [y for x in pops for y in x]
+files = [y for x in files for y in x]
+
+output = make_manhattan_plots(run_name='aou_manhattan_pops',
+                              wdl_path='/home/jupyter/saige_aou_wdl/WDL/ManhattanPlotter.wdl', 
+                              sumstat_paths = files, 
+                              phenotypes = phenos, 
+                              pops = pops,
+                              suffix=suffix, p_col='Pvalue', af_col='AF', conf_col='low_confidence',
+                              wid=1300, hei=640, cex=1.1, point_size=16,
                               hq_file=None,
                               exponentiate_p=False,
                               keep_x=False,
