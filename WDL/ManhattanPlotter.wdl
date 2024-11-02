@@ -95,7 +95,7 @@ task RunManhattan {
       Int? preemptible_tries
       Int? mem
   }
-  Float stat_size = size(sumstats, "GB") * 5
+  Float stat_size = size(sumstats, "GB") * 10
   Int disk_size = ceil(stat_size) + 20
   Int machine_mem = select_first([mem, 20])
 
@@ -137,7 +137,7 @@ task RunManhattan {
   >>>
   runtime {
     memory: machine_mem + " GB"
-    disks: "local-disk " + disk_size + " HDD"
+    disks: "local-disk " + disk_size + " SSD"
     docker: "us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/r_for_manhattans"
     preemptible: select_first([preemptible_tries, 5])
   }
