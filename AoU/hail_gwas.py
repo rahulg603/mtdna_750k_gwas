@@ -64,6 +64,7 @@ def merge_mt_list(mts, this_suffix):
         full_mt = full_mt.checkpoint(get_all_pop_mt_path(this_suffix), overwrite=True)
 
         full_mt.describe()
+        print('Running meta analysis...')
         full_mt_meta = run_meta_analysis(full_mt)
         full_mt_meta = full_mt_meta.checkpoint(get_meta_path(this_suffix), overwrite=True)
 
@@ -93,7 +94,8 @@ def only_merge_gwas(naming_insert):
     return merge_mt_list(mts, this_suffix)
 
 
-def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, pheno, min_cases):
+def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, pheno, min_cases,
+                  _quick_fix_for_call_rate=False):
     
     # Prepare mt for regressions
     covar_full_list = list(sample_covariates.row)
@@ -106,8 +108,11 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, phen
     this_suffix = lambda pop: f'241031_{pop}_{naming_insert}_mtdna_variant_qc_hl_case_only{irntsuff}'
 
     # Run per-population GWAS
+    n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=True, use_array_for_variant=False, use_drc_ancestry_data=True)
+    
     mts = []
     for pop in ANALYSIS_POP:
+        print(f'Performing GWAS for pop {pop}...')
         
         # filter table by per-pop MAF (and to specific pop)
         mt_a = get_filtered_genotype_mt('variant', pop,
@@ -115,6 +120,21 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, phen
                                         use_array_for_variant=False,
                                         use_drc_ancestry_data=True,
                                         remove_related=True)
+        
+        # filter table by call rate
+        ht = get_call_stats_ht(pop=pop, sample_qc=True, analysis_type='variant',
+                               use_drc_ancestry_data=True, 
+                               use_array_for_variant=False,
+                               overwrite=False)
+        ht = ht.filter(
+            (ht.call_stats.AN >= (n_samples[pop] * 2 * CALLRATE_CUTOFF))
+            & (ht.call_stats.AC[1] > 0)
+            & (ht.call_stats.AC[0] > 0)
+        )
+
+        if not _quick_fix_for_call_rate:
+            mt_a = mt_a.semi_join_rows(ht)
+
         mt_a = mt_a.annotate_cols(phenotypes = ht_pheno[mt_a.s])
         mt_a = mt_a.annotate_cols(covariates = sample_covariates[mt_a.s])
         pheno_f = [x for x in pheno if mt_a.aggregate_cols(hl.agg.count_where(hl.is_defined(mt_a.phenotypes[x]))) > min_cases]
@@ -122,8 +142,13 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, phen
         # Run variant HL GWAS and export sumstats
         res = run_regressions(mt_a, pheno_f, covars, [], 
                               this_suffix(pop), overwrite=OVERWRITE_SUMSTATS)
+        
+        if _quick_fix_for_call_rate:
+            print('Applying hotfix call rate filter *after* performing GWAS...')
+            res = res.semi_join_rows(ht)
 
         if EXPORT_SUMSTATS:
+            print('Exporting summary statistics...')
             export_for_manhattan(mt=res, phenos=pheno_f, entry_keep=['N','Pvalue','BETA','SE','tstat','ytx','AC','minor_AC','AF', 'minor_AF', 'low_confidence'], 
                                  model='additive', fold=fold, suffix=f'_{this_suffix(pop)}_geno_af_0.01.tsv.bgz', 
                                  overwrite=OVERWRITE_SUMSTATS, include_cols_for_mung=False)
@@ -173,7 +198,7 @@ irntsuff = '_irnt' if IRNT else ''
 this_suffix = get_this_suffix(naming_insert='newPCs_iter0_hail', irnt_suff=irntsuff)
 
 # Run GWAS using new PCs, no iterations (raw)
-run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20,
+run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20, _quick_fix_for_call_rate=True,
               naming_insert='newPCs_iter0_hail', fold=fold, pheno=pheno_irnt + pheno_non_irnt, min_cases=MIN_CASES)
 
 # export sumstats for meta analysis
@@ -193,7 +218,7 @@ output = make_manhattan_plots(run_name='aou_manhattan_meta',
                               phenotypes = phenotypes, 
                               pops = ['meta' for _ in phenotypes],
                               suffix=meta_suffix, p_col='Pvalue', af_col='AF', conf_col=None,
-                              wid=1300, hei=640, cex=1.1, point_size=16,
+                              wid=1300, hei=640, cex=1.0, point_size=18,
                               hq_file=None,
                               exponentiate_p=False,
                               keep_x=False,
@@ -221,7 +246,7 @@ output = make_manhattan_plots(run_name='aou_manhattan_pops',
                               phenotypes = phenos, 
                               pops = pops,
                               suffix=suffix, p_col='Pvalue', af_col='AF', conf_col='low_confidence',
-                              wid=1300, hei=640, cex=1.1, point_size=16,
+                              wid=1300, hei=640, cex=1.0, point_size=18,
                               hq_file=None,
                               exponentiate_p=False,
                               keep_x=False,

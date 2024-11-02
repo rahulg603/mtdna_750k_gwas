@@ -254,7 +254,7 @@ class CromwellManager:
                     raise to_raise
                 
                 run_meta = json.loads(run_meta_resp.stdout.decode())
-                run_metrics = run_metrics_holder.copy()
+                run_metrics = deepcopy(run_metrics_holder)
 
                 # the usual stuff
                 run_metrics['cromwell_id'].append(workflow_id)
