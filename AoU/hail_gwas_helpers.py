@@ -5,6 +5,14 @@ from AoU.phenotypes import *
 from AoU.sumstats import *
 
 
+def get_meta_path(this_suffix, model='additive'):
+    return os.path.join(HAIL_GWAS_PATH, 'mt', f'{this_suffix("full_meta")}_{model}.mt')
+
+
+def get_all_pop_mt_path(this_suffix, model='additive'):
+    return os.path.join(HAIL_GWAS_PATH, f'all_pop_mt/{this_suffix("full")}_{model}.mt')
+
+
 def apply_irnt(ht, cols):
     # similar to Neale lab round 2 approach:
     # https://github.com/Nealelab/UK_Biobank_GWAS/blob/master/0.2/irnt.biomarkers.py
@@ -96,7 +104,7 @@ def export_for_manhattan(mt, phenos, entry_keep, model, fold, suffix, overwrite,
         entry_keep = [entry_keep]
 
     for pheno in phenos:
-        file_out = os.path.join(HAIL_GWAS_PATH,f'sumstats/{model}/{fold}/{pheno}{suffix}')
+        file_out = os.path.join(get_hail_sumstats_path(model, fold), f'{pheno}{suffix}')
         if include_cols_for_mung:
             extra_cols = ['rsid']
         else:

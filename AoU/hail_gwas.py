@@ -179,11 +179,16 @@ irntsuff = '_irnt' if IRNT else ''
 this_suffix = get_this_suffix(naming_insert='newPCs_iter0_hail', irnt_suff=irntsuff)
 export_meta_for_manhattan(this_suffix, fold)
 
+phenotypes = pheno_non_irnt + pheno_irnt
+meta_suffix = this_suffix('meta')
+for_paths = '_geno_af_0.01.tsv.bgz'
+filenames = [x + '_' + meta_suffix + for_paths for x in phenotypes]
+file_path = get_hail_sumstats_path('additive', fold)
 
 make_manhattan_plots(wdl_path='saige_aou_wdl/WDL/ManhattanPlotter.wdl', 
-                     sumstat_paths = [], 
-                     phenotypes = [], 
-                     pops = [],
+                     sumstat_paths = [os.path.join(file_path, x + "_" + meta_suffix + for_paths) for x in phenotypes], 
+                     phenotypes = phenotypes, 
+                     pops = ['meta' for _ in phenotypes],
                      suffix=get_this_suffix('meta'), p_col='', af_col='', conf_col=None,
                      wid=1300, hei=640, cex=1.3, point_size=18,
                      hq_file=None,

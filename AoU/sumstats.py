@@ -147,12 +147,8 @@ def aou_generate_final_lambdas(mt, suffix, overwrite):
     return mt
 
 
-def get_meta_path(this_suffix, model='additive'):
-    return os.path.join(HAIL_GWAS_PATH, 'mt', f'{this_suffix("full_meta")}_{model}.mt')
-
-
-def get_all_pop_mt_path(this_suffix, model='additive'):
-    return os.path.join(HAIL_GWAS_PATH, f'all_pop_mt/{this_suffix("full")}_{model}.mt')
+def get_hail_sumstats_path(model, fold):
+    return os.path.join(HAIL_GWAS_PATH, f'sumstats/{model}/{fold}')
 
 
 def make_manhattan_plots(wdl_path, 
