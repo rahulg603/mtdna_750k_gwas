@@ -39,6 +39,7 @@ def run_meta_analysis(mt, remove_low_confidence=True):
         return pheno_data[i].n_cases + hl.or_else(pheno_data[i].n_controls, 0)
     
     if remove_low_confidence:
+        print('Removing low_confidence variants prior to meta-analysis...')
         mt = mt.annotate_entries(summary_stats = mt.summary_stats.map(lambda x: hl.if_else(x.low_confidence, hl.missing(x.dtype), x)))
 
     mt = mt.annotate_entries(

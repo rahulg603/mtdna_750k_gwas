@@ -65,7 +65,7 @@ def merge_mt_list(mts, this_suffix):
 
         full_mt.describe()
         full_mt_meta = run_meta_analysis(full_mt)
-        full_mt_meta = full_mt_meta.checkpoint(get_meta_path(this_suffix))
+        full_mt_meta = full_mt_meta.checkpoint(get_meta_path(this_suffix), overwrite=True)
 
         return full_mt
     else:

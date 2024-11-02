@@ -221,7 +221,7 @@ class CromwellManager:
                     self.print_status(flush=True)
                 n_non_terminal = self.n_running + self.n_pending + self.n_submitted
                 final_check = n_non_terminal == 0
-                
+
                 # Get completed workflow IDs
                 completed_workflow_ids = list(self.get_samples_with_status('Succeeded').cromwell_id.unique())
                 # If there was an existing run_metrics file, filter for just the workflow_ids that haven't been 
@@ -230,7 +230,8 @@ class CromwellManager:
             
             # now get the results for all of the newly-succeeded workflows
             if not self.quiet and (len(completed_workflow_ids) > 0):
-                print('Collating information on newly completed workflows...', flush=True)
+                print(f'Collating information on {str(len(completed_workflow_ids))} newly completed workflows...', flush=True)
+
             for idx, workflow_id in enumerate(completed_workflow_ids):
                 if idx and not idx%10:
                     if not self.quiet:
