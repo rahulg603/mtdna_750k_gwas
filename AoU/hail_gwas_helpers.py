@@ -2,6 +2,7 @@ import hail as hl
 import pandas as pd
 from AoU.paths import *
 from AoU.phenotypes import *
+from AoU.sumstats import *
 
 
 def apply_irnt(ht, cols):
@@ -114,6 +115,18 @@ def export_for_manhattan(mt, phenos, entry_keep, model, fold, suffix, overwrite,
                 ht_f = ht_f.annotate(variant = hl.str(ht_f.locus)+ ':' + hl.delimit(ht_f.alleles, ':'))
                 ht_f = ht_f.drop(ht_f.locus, ht_f.alleles, ht_f.phenotype).key_by('variant')
             ht_f.export(file_out)
+
+
+def export_meta_for_manhattan(this_suffix, export_fold):
+    mt = hl.read_matrix_table(get_meta_path(this_suffix))
+    mt = mt.select_entries(meta_analysis=mt.meta_analysis[0]).select_cols()
+    mt = mt.select_entries(**{x: mt.meta_analysis[x] for x in mt.meta_analysis.keys()})
+    mt = mt.annotate_entries(minor_AF = hl.min([mt.AF, 1-mt.AF]), Pvalue = hl.exp(mt.Pvalue))
+    pheno = list(mt.aggregate_cols(hl.agg.collect_as_set(mt.phenotype)))
+    
+    export_for_manhattan(mt=mt, phenos=pheno, entry_keep=['N','Pvalue','BETA','SE','Q','Pvalue_het','N_pops','AF', 'minor_AF'], 
+                         model='additive', fold=export_fold, suffix=f'_{this_suffix("meta")}_geno_af_0.01.tsv.bgz', 
+                         overwrite=True, include_cols_for_mung=False)
 
 
 def filter_mt_per_pop_maf(mt, pop, cutoff, overwrite_gt, perform_per_pop_hwe=False):

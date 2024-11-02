@@ -48,7 +48,54 @@ def apply_qc_continuous(mt, min_case_count: int = 50):
     return mt
 
 
-def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_insert, fold, pheno, min_cases):
+def get_this_suffix(naming_insert, irnt_suff):
+    return lambda pop: f'241031_{pop}_{naming_insert}_mtdna_variant_qc_hl_case_only{irnt_suff}'
+
+
+def merge_mt_list(mts, this_suffix):
+    if len(mts) > 1:
+        print('Starting summary statistics merging...')
+        full_mt = mts[0]
+        for this_mt in mts[1:]:
+            full_mt = full_mt.union_cols(this_mt, row_join_type='outer')
+        full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_full.mt'), overwrite=True)
+        full_mt = full_mt.collect_cols_by_key()
+        full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_lambdas.mt'), overwrite=True)
+        full_mt = aou_generate_final_lambdas(full_mt, this_suffix('full'), overwrite=True)
+        full_mt = full_mt.checkpoint(get_all_pop_mt_path(this_suffix), overwrite=True)
+
+        full_mt.describe()
+
+        full_mt_meta = run_meta_analysis(full_mt)
+        full_mt_meta = full_mt_meta.checkpoint(get_meta_path(this_suffix))
+
+        return full_mt
+    else:
+        return mts[0]
+
+
+def only_merge_gwas(naming_insert):
+    mts = []
+    irntsuff = '_irnt' if IRNT else ''
+    this_suffix = get_this_suffix(naming_insert=naming_insert, irnt_suff=irntsuff)
+    for pop in ANALYSIS_POP:
+        res = run_regressions(hl.MatrixTable, [], [], [], 
+                              this_suffix(pop), overwrite=False)
+        res = res.annotate_cols(n_cases = hl.array(hl.agg.collect_as_set(res.N)).filter(lambda x: hl.is_defined(x))[0],
+                                n_controls = hl.missing(hl.tint32),
+                                pop = pop,
+                                inv_normalized = IRNT,
+                                log_pvalue = False)
+        res = apply_qc_continuous(res)
+        res = res.select_cols(pheno_data=res.col_value)
+        res = res.select_entries(summary_stats=res.entry)
+        mts.append(res)
+
+    # Collapse into single MT
+    return merge_mt_list(mts, this_suffix)
+
+
+def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, pheno, min_cases):
     
     # Prepare mt for regressions
     covar_full_list = list(sample_covariates.row)
@@ -95,24 +142,7 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, overwrite_gt, naming_inse
         mts.append(res)
     
     # Collapse into single MT
-    if len(mts) > 1:
-        full_mt = mts[0]
-        for this_mt in mts[1:]:
-            full_mt = full_mt.union_cols(this_mt, row_join_type='outer')
-        full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_full.mt'), overwrite=True)
-        full_mt = full_mt.collect_cols_by_key()
-        full_mt = full_mt.checkpoint(os.path.join(TEMP_PATH, 'mt/staging_lambdas.mt'), overwrite=True)
-        full_mt = aou_generate_final_lambdas(full_mt, this_suffix('full'), overwrite=True)
-        full_mt.describe()
-
-        meta_name = os.path.join(HAIL_GWAS_PATH, 'mt', f'{this_suffix("full_meta")}_gwas_additive.mt')
-        full_mt_meta = run_meta_analysis(full_mt)
-        full_mt_meta = full_mt_meta.checkpoint(meta_name)
-        #full_mt.write(os.path.join(HAIL_GWAS_PATH, f'all_pop_mt/{this_suffix("full")}.mt'), overwrite=True)
-
-        return full_mt_meta
-    else:
-        return mts[0]
+    return merge_mt_list(mts, this_suffix)
 
 
 # Import covariates
@@ -141,5 +171,25 @@ if IRNT:
 
 # Run GWAS using new PCs, no iterations (raw)
 fold = '241031_selected_variant_gwas_heteroplasmies'
-run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20, overwrite_gt=True, 
+run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20,
               naming_insert='newPCs_iter0_hail', fold=fold, pheno=pheno_irnt + pheno_non_irnt, min_cases=MIN_CASES)
+
+# export sumstats for meta analysis
+irntsuff = '_irnt' if IRNT else ''
+this_suffix = get_this_suffix(naming_insert='newPCs_iter0_hail', irnt_suff=irntsuff)
+export_meta_for_manhattan(this_suffix, fold)
+
+
+make_manhattan_plots(wdl_path='saige_aou_wdl/WDL/ManhattanPlotter.wdl', 
+                     sumstat_paths = [], 
+                     phenotypes = [], 
+                     pops = [],
+                     suffix=get_this_suffix('meta'), p_col='', af_col='', conf_col=None,
+                     wid=1300, hei=640, cex=1.3, point_size=18,
+                     hq_file=None,
+                     exponentiate_p=False,
+                     keep_x=False,
+                     af_filter=None,
+                     var_as_rsid=True,
+                     mem=20,
+                     no_wait=False)
