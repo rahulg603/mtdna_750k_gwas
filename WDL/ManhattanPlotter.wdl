@@ -123,12 +123,12 @@ task RunManhattan {
 
   command <<<
     set -e
-    file_holder=$(PWD)
+    file_holder=$PWD
     cd '/~{til}/'
     tar -xf variants.tsv.tar.gz
-    gunzip -c '~{sumstats}' > ${file_holder}/this_extracted_file.tsv
+    gunzip -c '~{sumstats}' > $file_holder/this_extracted_file.tsv
 
-    Rscript '~{plotting_script}' ${file_holder}/this_extracted_file.tsv '~{pheno}' '~{p_col}' '~{af_col}' '~{af_field_this}' '~{conf_field_this}' '~{exponentiate_argument}' '~{x_arg}' '~{point_size}' '~{wid}' '~{hei}' '~{cex}' '~{var_arg}' '~{hq_field_this}' '~{pop}_~{suffix}'
+    Rscript '~{plotting_script}' $file_holder/this_extracted_file.tsv '~{pheno}' '~{p_col}' '~{af_col}' '~{af_field_this}' '~{conf_field_this}' '~{exponentiate_argument}' '~{x_arg}' '~{point_size}' '~{wid}' '~{hei}' '~{cex}' '~{var_arg}' '~{hq_field_this}' '~{pop}_~{suffix}'
 
     cp ~{path_manhattan} /cromwell_root/~{path_manhattan}
     cp ~{path_qq} /cromwell_root/~{path_qq}

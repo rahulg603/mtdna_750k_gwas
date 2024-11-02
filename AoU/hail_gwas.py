@@ -169,14 +169,16 @@ if IRNT:
     ht_pheno_for_analysis = ht_pheno_for_analysis.checkpoint(f'{TEMP_PATH}/phenotypes_after_irnt_checkpoint.ht', overwrite=True)
     ht_pheno_for_analysis.export(os.path.join(BUCKET, f'analyses/241031_gwas_302_snvcount/Data/phenotypes_post_irnt.tsv'))
 
-# Run GWAS using new PCs, no iterations (raw)
+# variables
 fold = '241031_selected_variant_gwas_heteroplasmies'
+irntsuff = '_irnt' if IRNT else ''
+this_suffix = get_this_suffix(naming_insert='newPCs_iter0_hail', irnt_suff=irntsuff)
+
+# Run GWAS using new PCs, no iterations (raw)
 run_full_gwas(covariates, ht_pheno_for_analysis, num_PC=20,
               naming_insert='newPCs_iter0_hail', fold=fold, pheno=pheno_irnt + pheno_non_irnt, min_cases=MIN_CASES)
 
 # export sumstats for meta analysis
-irntsuff = '_irnt' if IRNT else ''
-this_suffix = get_this_suffix(naming_insert='newPCs_iter0_hail', irnt_suff=irntsuff)
 export_meta_for_manhattan(this_suffix, fold)
 
 # make manhattan plots
@@ -190,7 +192,7 @@ make_manhattan_plots(wdl_path='/home/jupyter/saige_aou_wdl/WDL/ManhattanPlotter.
                      sumstat_paths = [os.path.join(file_path, x + "_" + meta_suffix + for_paths) for x in phenotypes], 
                      phenotypes = phenotypes, 
                      pops = ['meta' for _ in phenotypes],
-                     suffix=meta_suffix, p_col='', af_col='', conf_col=None,
+                     suffix=meta_suffix, p_col='Pvalue', af_col='AF', conf_col=None,
                      wid=1300, hei=640, cex=1.3, point_size=18,
                      hq_file=None,
                      exponentiate_p=False,
