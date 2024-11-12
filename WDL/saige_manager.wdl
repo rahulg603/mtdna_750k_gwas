@@ -19,6 +19,13 @@ workflow saige_manager {
 
         String pop = 'eur'
 
+        # files and parameters for test
+        Float test_min_mac = 0.5
+        Float test_min_maf = 0
+        File? group_file
+        File? groups
+        Float? max_maf_for_group
+
         # constants for pathing
         Int sparse_n_markers
         Float sparse_min_af
@@ -71,6 +78,7 @@ workflow saige_manager {
 
         Int n_cpu_null
         Int n_cpu_test
+        Int n_cpu_merge = 16
 
     }
 
