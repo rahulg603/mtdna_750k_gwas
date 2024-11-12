@@ -52,6 +52,7 @@ workflow saige_manager {
         Boolean disable_loco # disables leave-one-chromosome-out
 
         Boolean use_drc_ancestry_data = true
+        Boolean use_custom_pcs = true
         Boolean sample_qc = true
 
         Boolean include_base_covariates
@@ -116,9 +117,7 @@ workflow saige_manager {
             overwrite_hail_results = overwrite_hail_results,
 
             SaigeImporters = SaigeImporters,
-            HailDocker = HailDocker,
-
-            wait_for_pheno_mt = process_phenotype_table.task_complete
+            HailDocker = HailDocker
     }
 
     
@@ -151,6 +150,7 @@ workflow saige_manager {
                     suffix = suffix_this,
                     additional_covariates = additional_covariates,
                     use_drc_ancestry_data = use_drc_ancestry_data,
+                    use_custom_pcs = use_custom_pcs,
                     
                     gs_bucket = gs_bucket,
                     gs_phenotype_path = gs_phenotype_path,
@@ -695,13 +695,15 @@ task export_phenotype_files {
         String gs_covariate_path
         File? additional_covariates
         Boolean use_drc_ancestry_data
+        Boolean use_custom_pcs
 
         File SaigeImporters
         String HailDocker
     }
 
     String addl_cov_file = select_first([additional_covariates, ''])
-    String drc = if use_drc_ancestry_data then 'drc' else 'custom'
+    String drc = if use_drc_ancestry_data then 'drc' else 'aou'
+    String custom_pcs = if use_custom_pcs then 'pc' else 'stock'
 
     command <<<
         set -e
@@ -731,11 +733,12 @@ task export_phenotype_files {
 
     addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
     drc_tf = '~{drc}' == 'drc'
+    custom_pcs_tf = '~{custom_pcs}' == 'pc'
 
     binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
 
     suffix = '~{suffix}'
-    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", drc=drc_tf)
+    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", drc=drc_tf, custom_pcs=custom_pcs_tf)
     mt = mt.filter_cols(hl.all(lambda x: x, [mt[k] == pheno_dct[k] for k in PHENO_KEY_FIELDS if k != 'pheno_sex']))
     pheno_sex_mt = mt.filter_cols(mt.pheno_sex == pheno_dct['pheno_sex'])
     if pheno_sex_mt.count_cols() == 1:

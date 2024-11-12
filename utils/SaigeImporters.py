@@ -249,8 +249,8 @@ def parse_bucket(gs_bucket):
         return f'gs://{gs_bucket}'
 
 
-def get_covariates_with_custom(cov_folder, custom=None, drc=False):
-    new_covariates = hl.read_table(get_base_covariates_path(cov_folder, drc=drc))
+def get_covariates_with_custom(cov_folder, custom=None, drc=False, custom_pcs=False):
+    new_covariates = hl.read_table(get_base_covariates_path(cov_folder, drc=drc, custom=custom_pcs))
     if custom is None:
         return new_covariates, []
     else:
@@ -302,7 +302,7 @@ def format_entries(field, sex_field):
 
 
 def load_custom_pheno_with_covariates(data_path, trait_type, modifier, 
-                                      cov_folder, custom=None, drc=False,
+                                      cov_folder, custom=None, drc=False, custom_pcs=True,
                                       sex: str = 'both_sexes', sample_col='s'):
     print(f'Loading {data_path}...')
     extension = os.path.splitext(data_path)[1]
@@ -324,7 +324,7 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     mt.describe()
 
     print(f'Now loading covariate table...')
-    cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom, drc=drc)
+    cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom, drc=drc, custom_pcs=custom_pcs)
     cov_ht = cov_ht.persist()
     
     mt_this = mt.select_rows(**cov_ht[mt.row_key])
@@ -338,9 +338,9 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     return full_mt, cust_covar_list
 
 
-def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all', drc = False):
+def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all', drc = False, custom_pcs=True):
     mt = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(pheno_folder, suffix))
-    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates, drc=drc)
+    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates, drc=drc, custom_pcs=custom_pcs)
     mt = mt.annotate_rows(**covars[mt.row_key])
     mt = mt.annotate_rows(**{k: hl.int(v)  for k, v in mt.row.items() if v.dtype == hl.tbool})
     if pop != 'all':
@@ -363,7 +363,7 @@ def summarize_data(pheno_folder, suffix, overwrite):
 
 
 def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
-                            pheno_path, covar_path, num_pcs,
+                            pheno_path, covar_path, num_pcs, custom_pcs=True,
                             sample_col='s', include_base_covars=True, 
                             addl_cov=None, drc_tf=True,
                             overwrite=False, append=False):
@@ -376,7 +376,8 @@ def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
               'cov_folder': covar_path,
               'custom': addl_cov,
               'sample_col': sample_col,
-              'drc': drc_tf}
+              'drc': drc_tf,
+              'custom_pcs': custom_pcs}
     mt, cust_covar_list = load_custom_pheno_with_covariates(**kwargs)
 
     basic_covars = BASE_NONPC_COVARS if include_base_covars else []
