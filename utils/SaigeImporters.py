@@ -370,6 +370,8 @@ def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
 
     curdate = date.today().strftime("%y%m%d")
 
+    suffix = suffix + ('_drccovar' if drc_tf else '')
+
     kwargs = {'data_path': phenotype_flat_file,
               'trait_type': trait_type,
               'modifier': modifier,
