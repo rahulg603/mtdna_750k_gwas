@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hail as hl
 import os, re
+from datetime import date
 
 
 ######### CONSTANTS ##########
@@ -359,6 +360,50 @@ def summarize_data(pheno_folder, suffix, overwrite):
     ht = ht.key_by('pop', *PHENO_KEY_FIELDS)
     ht = ht.checkpoint(get_custom_phenotype_summary_path(pheno_folder, suffix), overwrite=overwrite, _read_if_exists=not overwrite)
     ht.flatten().export(get_custom_phenotype_summary_path(pheno_folder, suffix, 'tsv'))
+
+
+def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
+                            pheno_path, covar_path, num_pcs,
+                            sample_col='s', include_base_covars=True, 
+                            addl_cov=None, drc_tf=True,
+                            overwrite=False, append=False):
+
+    curdate = date.today().strftime("%y%m%d")
+
+    kwargs = {'data_path': phenotype_flat_file,
+              'trait_type': trait_type,
+              'modifier': modifier,
+              'cov_folder': covar_path,
+              'custom': addl_cov,
+              'sample_col': sample_col,
+              'drc': drc_tf}
+    mt, cust_covar_list = load_custom_pheno_with_covariates(**kwargs)
+
+    basic_covars = BASE_NONPC_COVARS if include_base_covars else []
+    covariates = ','.join(basic_covars + cust_covar_list + [f'PC{x}' for x in range(1, ~{num_pcs} + 1)])
+
+    mt_path = get_custom_ukb_pheno_mt_path(pheno_path, suffix)
+
+    if not hl.hadoop_exists(f'{mt_path}/_SUCCESS') or (overwrite or append):
+        mt_this = mt.group_rows_by('pop').aggregate(
+            n_cases=hl.agg.count_where(mt.both_sexes == 1.0),
+            n_controls=hl.agg.count_where(mt.both_sexes == 0.0),
+            n_defined=hl.agg.count_where(hl.is_defined(mt.both_sexes))
+        ).entries()
+        mt_this.drop(*[x for x in PHENO_COLUMN_FIELDS if x != 'description' and x in mt_this.row]).show(100, width=180)
+        
+        # save table
+        if append and hl.hadoop_exists(f'{mt_path}/_SUCCESS'):
+            original_mt = hl.read_matrix_table(mt_path)
+            original_mt = original_mt.checkpoint(get_custom_ukb_pheno_mt_path(pheno_path, f'{suffix}_before_{curdate}'), overwrite=overwrite)
+            original_mt.cols().export(get_custom_phenotype_summary_backup_path(pheno_path, suffix, curdate))
+            original_mt.union_cols(mt, row_join_type='outer').write(mt_path, overwrite=overwrite)
+        else:
+            mt.write(mt_path, overwrite=overwrite)
+        
+        summarize_data(pheno_path, suffix, overwrite=overwrite)
+    
+    return covariates
 
 
 def get_cases_controls_from_logs(log_list):
