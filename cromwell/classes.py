@@ -664,7 +664,7 @@ class CromwellWorkflow:
                 json.dump(self.options, out)
 
             # submit job
-            cmd_arg_list = ['cromshell', '-t', str(timeout), '--no_turtle', '--machine_processable', 'submit', wdl, local_json, options_json]
+            cmd_arg_list = ['cromshell', '-t', str(timeout), '--no_turtle', '--machine_processable', '--options-json', options_json, 'submit', wdl, local_json]
             batch_submission_cmd_uri = os.path.join(self.batch_root, 'batch_submission_cmd.txt')
             with cloud_fs.open(batch_submission_cmd_uri, 'w') as out:
                 out.write(' '.join(cmd_arg_list) + '\n')
