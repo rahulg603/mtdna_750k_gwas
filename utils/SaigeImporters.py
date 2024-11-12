@@ -381,7 +381,7 @@ def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
     mt, cust_covar_list = load_custom_pheno_with_covariates(**kwargs)
 
     basic_covars = BASE_NONPC_COVARS if include_base_covars else []
-    covariates = ','.join(basic_covars + cust_covar_list + [f'PC{x}' for x in range(1, ~{num_pcs} + 1)])
+    covariates = ','.join(basic_covars + cust_covar_list + [f'PC{x}' for x in range(1, num_pcs + 1)])
 
     mt_path = get_custom_ukb_pheno_mt_path(pheno_path, suffix)
 
