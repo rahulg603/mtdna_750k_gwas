@@ -7,6 +7,7 @@ workflow saige_manager {
 
     input {
 
+        String pop = 'eur'
         String suffix
         String trait_type
         String sex = 'both_sexes'
@@ -16,8 +17,6 @@ workflow saige_manager {
         String sample_col = 's'
         File? additional_covariates
         String covariate_list
-
-        String pop = 'eur'
 
         # files and parameters for test
         Float test_min_mac = 0.5

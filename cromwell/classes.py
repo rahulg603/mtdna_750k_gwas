@@ -31,7 +31,8 @@ class CromwellManager:
     def __init__(self, run_name, inputs_file, json_template_path, wdl_path, save_specific_outputs=[],
                  batch=None, limit=None, n_parallel_workflows=N_PARALLEL_WORKFLOWS,
                  add_requester_pays_parameter=True, restart=False, batches_precomputed=False,
-                 submission_sleep=30, check_freq=120, quiet=False, _bypass_output_parsing=False):
+                 submission_sleep=30, check_freq=120, quiet=False, disable_cache=False, 
+                 _bypass_output_parsing=False):
         """
         Initialize a Cromwell manager.
 
@@ -71,6 +72,7 @@ class CromwellManager:
         self.submission_sleep = submission_sleep
         self.check_frequency = check_freq
         self.quiet = quiet
+        self.disable_cache = disable_cache
 
         # preliminary run statistics
         self.n_pending = 0
@@ -341,7 +343,8 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
-                                            n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet)
+                                            n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet,
+                                            disable_cache=self.disable_cache)
 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -402,7 +405,8 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=this_batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
-                                            n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet)
+                                            n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet,
+                                            disable_cache=self.disable_cache)
                 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -436,7 +440,8 @@ class CromwellManager:
                 workflow = CromwellWorkflow(run_specific_json, batch_root=this_batch_root, wdl=self.wdl_path,
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=None,
-                                            n_retries=None, batch_id=this_batch, id=this_id, status='Running', quiet=self.quiet)
+                                            n_retries=None, batch_id=this_batch, id=this_id, status='Running', quiet=self.quiet,
+                                            disable_cache=self.disable_cache)
                 
                 self.add_running_workflow(workflow)
             self.update_run_statistics()
@@ -624,11 +629,15 @@ class CromwellWorkflow:
     def __init__(self, param_json, batch_root, wdl,
                  manager_url, manager_token, cloud_fs,
                  timeout, n_retries, batch_id,
-                 id=None, status=None, quiet=False):                 
+                 id=None, status=None, quiet=False, disable_cache=False):                 
         self.json = param_json
         self.batch_root = batch_root
         self.token = manager_token
         self.batch_id = batch_id
+        self.options = {}
+
+        if disable_cache:
+            self.options.update({"write_to_cache": False, "read_from_cache": False})
 
         if id is not None or status is not None:
             # if ID is supplied, this implies that this was a running workflow
@@ -650,8 +659,12 @@ class CromwellWorkflow:
             with open(local_json, 'w') as out:
                 json.dump(self.json, out)
 
+            options_json = './options.json'
+            with open(options_json, 'w') as out:
+                json.dump(self.options, out)
+
             # submit job
-            cmd_arg_list = ['cromshell', '-t', str(timeout), '--no_turtle', '--machine_processable', 'submit', wdl, local_json]
+            cmd_arg_list = ['cromshell', '-t', str(timeout), '--no_turtle', '--machine_processable', 'submit', wdl, local_json, options_json]
             batch_submission_cmd_uri = os.path.join(self.batch_root, 'batch_submission_cmd.txt')
             with cloud_fs.open(batch_submission_cmd_uri, 'w') as out:
                 out.write(' '.join(cmd_arg_list) + '\n')
