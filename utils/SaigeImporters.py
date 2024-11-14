@@ -196,12 +196,12 @@ def parse_drc_custom_inputs(use_drc_pop, use_custom_pcs):
 
 
 def get_base_covariates_path(cov_folder, use_drc_pop, use_custom_pcs):
-    drc_string, pcs = _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)    
+    drc_string, pcs = parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)    
     return os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}{pcs}.ht')
 
 
 def get_demographics_path(cov_folder, use_drc_pop, use_custom_pcs):
-    drc_string, pcs = _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
+    drc_string, pcs = parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
     return os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}{pcs}.ht')
 
 
@@ -383,7 +383,7 @@ def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
 
     curdate = date.today().strftime("%y%m%d")
 
-    _, custom_suff = _parse_drc_custom_inputs(use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs)
+    _, custom_suff = parse_drc_custom_inputs(use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs)
 
     if use_drc_pop:
         suffix = suffix + '_drcpop'
