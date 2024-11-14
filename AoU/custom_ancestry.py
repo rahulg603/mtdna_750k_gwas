@@ -145,37 +145,103 @@ def verify_custom_has_same_samples_as_drc():
     # have custom PCs defined as the raw DRC-based covariates.
     # We will test post-sample QC data ONLY.
 
+    ## array data
     # import drc stuff
     data_used_for_geno_files = get_filtered_genotype_mt('variant', pop='all',
-                                                        filter_samples=False, filter_variants=False,
+                                                        filter_samples=True, filter_variants=False,
                                                         use_array_for_variant=True, use_custom_pcs=None,
                                                         use_drc_pop=True, remove_related=False).cols()
     data_used_for_geno_files = data_used_for_geno_files.filter(hl.literal(POPS).contains(data_used_for_geno_files.pop)).select('pop')
 
     # import custom stuff
     custom_pcs = get_filtered_genotype_mt('variant', pop='all',
-                                          filter_samples=False, filter_variants=False,
+                                          filter_samples=True, filter_variants=False,
                                           use_array_for_variant=True, use_custom_pcs='custom',
                                           use_drc_pop=True, remove_related=False).cols()
     custom_pcs = custom_pcs.filter(hl.literal(POPS).contains(custom_pcs.pop)).select('pop')
 
     # compare these two files
     if data_used_for_geno_files.anti_join(custom_pcs).count() == 0:
-        print('All samples in array data using custom PCs (post-QC) are found in the DRC-based PC files.')
+        print(f'All samples {str(data_used_for_geno_files.count())} in array data using custom PCs (post-QC) are found in the DRC-based PC files.')
     else:
         raise ValueError('ERROR: samples were lost in custom PC construction versus DRC data.')
     if custom_pcs.anti_join(data_used_for_geno_files).count() == 0:
-        print('All samples in array data using DRC data (post-QC) are found in the custom computed PC files.')
+        print(f'All samples {str(custom_pcs.count())} in array data using DRC data (post-QC) are found in the custom computed PC files.')
     else:
         raise ValueError('ERROR: samples were somehow gained in custom PC construction versus DRC data.')
 
     # compare pop assignments
-    custom_pcs = custom_pcs.annotate(drc_pop = data_used_for_geno_files[custom_pcs.col_key].pop)
+    custom_pcs = custom_pcs.annotate(drc_pop = data_used_for_geno_files[custom_pcs.key].pop)
     if custom_pcs.filter(custom_pcs.drc_pop != custom_pcs.pop).count() == 0:
         print('Ancestry assignments are identical.')
     else:
-        raise ValueError('ERROR: ancestry assignments not identical between custom PCs and DRC-assigned PCs.')
+        raise ValueError('ERROR: ancestry assignments not identical between custom PCs and DRC-assigned PCs for genotypes.')
+    
 
+    ## genome data
+    # import drc stuff
+    data_used_for_geno_files = get_filtered_genotype_mt('variant', pop='all',
+                                                        filter_samples=True, filter_variants=False,
+                                                        use_array_for_variant=False, use_custom_pcs=None,
+                                                        use_drc_pop=True, remove_related=False).cols()
+    data_used_for_geno_files = data_used_for_geno_files.filter(hl.literal(POPS).contains(data_used_for_geno_files.pop)).select('pop')
+
+    # import custom stuff
+    custom_pcs = get_filtered_genotype_mt('variant', pop='all',
+                                          filter_samples=True, filter_variants=False,
+                                          use_array_for_variant=False, use_custom_pcs='custom',
+                                          use_drc_pop=True, remove_related=False).cols()
+    custom_pcs = custom_pcs.filter(hl.literal(POPS).contains(custom_pcs.pop)).select('pop')
+
+    # compare these two files
+    if data_used_for_geno_files.anti_join(custom_pcs).count() == 0:
+        print(f'All samples {str(data_used_for_geno_files.count())} in WGS data using custom PCs (post-QC) are found in the DRC-based PC files.')
+    else:
+        raise ValueError('ERROR: samples were lost in custom PC construction versus DRC data.')
+    if custom_pcs.anti_join(data_used_for_geno_files).count() == 0:
+        print(f'All samples {str(custom_pcs.count())} in WGS data using DRC data (post-QC) are found in the custom computed PC files.')
+    else:
+        raise ValueError('ERROR: samples were somehow gained in custom PC construction versus DRC data.')
+
+    # compare pop assignments
+    custom_pcs = custom_pcs.annotate(drc_pop = data_used_for_geno_files[custom_pcs.key].pop)
+    if custom_pcs.filter(custom_pcs.drc_pop != custom_pcs.pop).count() == 0:
+        print('Ancestry assignments are identical.')
+    else:
+        raise ValueError('ERROR: ancestry assignments not identical between custom PCs and DRC-assigned PCs for WGS.')
+    
+
+    ## exome data
+    # import drc stuff
+    data_used_for_geno_files = get_filtered_genotype_mt('gene', pop='all',
+                                                        filter_samples=True, filter_variants=False,
+                                                        use_custom_pcs=None,
+                                                        use_drc_pop=True, remove_related=False).cols()
+    data_used_for_geno_files = data_used_for_geno_files.filter(hl.literal(POPS).contains(data_used_for_geno_files.pop)).select('pop')
+
+    # import custom stuff
+    custom_pcs = get_filtered_genotype_mt('gene', pop='all',
+                                          filter_samples=True, filter_variants=False,
+                                          use_custom_pcs='custom',
+                                          use_drc_pop=True, remove_related=False).cols()
+    custom_pcs = custom_pcs.filter(hl.literal(POPS).contains(custom_pcs.pop)).select('pop')
+
+    # compare these two files
+    if data_used_for_geno_files.anti_join(custom_pcs).count() == 0:
+        print(f'All samples {str(data_used_for_geno_files.count())} in WES data using custom PCs (post-QC) are found in the DRC-based PC files.')
+    else:
+        raise ValueError('ERROR: samples were lost in custom PC construction versus DRC data.')
+    if custom_pcs.anti_join(data_used_for_geno_files).count() == 0:
+        print(f'All samples {str(custom_pcs.count())} in WES data using DRC data (post-QC) are found in the custom computed PC files.')
+    else:
+        raise ValueError('ERROR: samples were somehow gained in custom PC construction versus DRC data.')
+
+    # compare pop assignments
+    custom_pcs = custom_pcs.annotate(drc_pop = data_used_for_geno_files[custom_pcs.key].pop)
+    if custom_pcs.filter(custom_pcs.drc_pop != custom_pcs.pop).count() == 0:
+        print('Ancestry assignments are identical.')
+    else:
+        raise ValueError('ERROR: ancestry assignments not identical between custom PCs and DRC-assigned PCs for WES.')
 
 
 def main(k=20, global_overwrite=False, iteration=0):

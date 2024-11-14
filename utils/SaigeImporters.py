@@ -196,13 +196,17 @@ def parse_drc_custom_inputs(use_drc_pop, use_custom_pcs):
 
 
 def get_base_covariates_path(cov_folder, use_drc_pop, use_custom_pcs):
-    drc_string, pcs = parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)    
-    return os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}{pcs}.ht')
+    drc_string, pcs = parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
+    path_out = os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}{pcs}.ht')
+    print(f'Accessing {path_out}...')
+    return path_out
 
 
 def get_demographics_path(cov_folder, use_drc_pop, use_custom_pcs):
     drc_string, pcs = parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
-    return os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}{pcs}.ht')
+    path_out = os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}{pcs}.ht')
+    print(f'Accessing {path_out}...')
+    return path_out
 
 
 def get_custom_pc_path(cov_folder, iteration):
