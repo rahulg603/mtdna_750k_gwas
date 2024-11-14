@@ -21,7 +21,7 @@ workflow saige_sparse_grm {
 
         # options
         Boolean use_plink
-        Boolean use_drc_ancestry_data = true
+        Boolean use_drc_pop = true
         Float min_af = 0.01
         Boolean sample_qc = true
         Int n_cpu = 64
@@ -41,7 +41,7 @@ workflow saige_sparse_grm {
             relatedness_cutoff = relatednessCutoff,
 
             min_af = min_af,
-            use_drc_ancestry_data = use_drc_ancestry_data,
+            use_drc_pop = use_drc_pop,
             sample_qc = sample_qc,
             use_plink = use_plink,
 
@@ -105,7 +105,7 @@ task get_sparse_grm_paths {
         Float relatedness_cutoff
 
         Float min_af
-        Boolean use_drc_ancestry_data
+        Boolean use_drc_pop
         Boolean sample_qc
         Boolean use_plink
 
@@ -114,7 +114,7 @@ task get_sparse_grm_paths {
 
     }
 
-    String drc = if use_drc_ancestry_data then 'drc' else 'custom'
+    String drc = if use_drc_pop then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
     String plink = if use_plink then 'plink' else 'no_plink'
 
@@ -158,10 +158,10 @@ task get_sparse_grm_paths {
                                           relatedness=~{relatedness_cutoff},
                                           sample_qc=sample_qc_tf,
                                           af_cutoff=~{min_af},
-                                          use_drc_ancestry_data=drc_tf,
+                                          use_drc_pop=drc_tf,
                                           use_plink=plink_tf)
         pref = get_ld_pruned_array_data_path(gs_genotype_path, pop=pop, sample_qc=sample_qc_tf,
-                                             use_drc_ancestry_data=drc_tf,
+                                             use_drc_pop=drc_tf,
                                              use_plink=plink_tf,
                                              af_cutoff=~{min_af}, extension='')
         bed.append(f'{pref}bed')

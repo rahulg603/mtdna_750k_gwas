@@ -108,7 +108,7 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, phen
     this_suffix = lambda pop: f'241031_{pop}_{naming_insert}_mtdna_variant_qc_hl_case_only{irntsuff}'
 
     # Run per-population GWAS
-    n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=True, use_array_for_variant=False, use_drc_ancestry_data=True)
+    n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=True, use_array_for_variant=False, use_drc_pop=True)
     
     mts = []
     for pop in ANALYSIS_POP:
@@ -118,12 +118,12 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, phen
         mt_a = get_filtered_genotype_mt('variant', pop,
                                         filter_samples=True, filter_variants=True,
                                         use_array_for_variant=False,
-                                        use_drc_ancestry_data=True,
+                                        use_drc_pop=True,
                                         remove_related=True)
         
         # filter table by call rate
         ht = get_call_stats_ht(pop=pop, sample_qc=True, analysis_type='variant',
-                               use_drc_ancestry_data=True, 
+                               use_drc_pop=True, 
                                use_array_for_variant=False,
                                overwrite=False)
         ht = ht.filter(
@@ -169,7 +169,7 @@ def run_full_gwas(sample_covariates, ht_pheno, num_PC, naming_insert, fold, phen
 
 
 # Import covariates
-gwas_covariates = get_gwas_covariates(overwrite=False, use_drc_ancestry_data=False, use_custom_data=True)
+gwas_covariates = get_gwas_covariates(overwrite=False, use_drc_pop=True, use_custom_pcs='custom')
 hap_covariates = get_hap_covariates('v6andv7', 'wide')
 covariates = gwas_covariates.annotate(**hap_covariates[gwas_covariates.key])
 

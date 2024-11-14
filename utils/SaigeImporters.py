@@ -42,41 +42,41 @@ def get_aou_util_path(util):
 # Genotypes
 def get_plink_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
                             n_common, n_maf, n_mac,
-                            use_drc_ancestry_data=False, use_array_for_variant=False):
+                            use_drc_pop=False, use_array_for_variant=False):
     # recall, we always produce this with array data
     path_finder = lambda x: get_sites_for_null_path(geno_folder=geno_folder,
                                                     pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
                                                     ld_pruned=ld_pruned, n_common=n_common,
                                                     n_mac=n_mac, n_maf=n_maf,
-                                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                                    use_drc_pop=use_drc_pop,
                                                     use_array_for_variant=use_array_for_variant,
                                                     extension=x)
     return path_finder('bed'), path_finder('bim'), path_finder('fam')
 
 
-def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_plink, use_drc_ancestry_data=False, af_cutoff=0.01):
+def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_plink, use_drc_pop=False, af_cutoff=0.01):
     af = f'_maf{str(af_cutoff)}'
     related = f'_rel{str(relatedness)}'
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     plink = '_plink' if use_plink else ''
     prefix = os.path.join(geno_folder, f'sparse_grm/aou_ld_pruned_{pop}{qc}{drc_string}{af}{plink}_{str(n_markers)}markers{related}')
     return f'{prefix}.mtx', f'{prefix}.mtx.sampleIDs.txt'
 
 
-def get_call_stats_ht_path(geno_folder, pop, sample_qc, analysis_type, use_drc_ancestry_data=False, use_array_for_variant=False):
+def get_call_stats_ht_path(geno_folder, pop, sample_qc, analysis_type, use_drc_pop=False, use_array_for_variant=False):
     if analysis_type == 'variant':
         source_str = '_array' if use_array_for_variant else '_wgs'
     else:
         source_str = '_exome'
     prune_str = '_sample_qc' if sample_qc else ''
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     return os.path.join(geno_folder, f'call_stats/call_stats{source_str}_{pop}{prune_str}{drc_string}.ht')
 
 
 def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
                             n_common, n_maf, n_mac, extension,
-                            use_drc_ancestry_data=False, use_array_for_variant=False):
+                            use_drc_pop=False, use_array_for_variant=False):
     if analysis_type == 'variant':
         source_str = '_array' if use_array_for_variant else '_wgs'
     elif analysis_type == 'gene':
@@ -84,22 +84,22 @@ def get_sites_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_prune
     elif analysis_type == 'both':
         source_str = '_array_and_exome' if use_array_for_variant else '_wgs_and_exome'
     prune_str = '_ldpruned' if ld_pruned else ''
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     varct = f'_N{str(n_common)}_{str(n_maf)}_{str(n_mac)}'
     return os.path.join(geno_folder, f'subsampled/sites_for_grm{source_str}{prune_str}_{pop}{qc}{drc_string}{varct}.{extension}')
 
 
-def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, use_plink, use_drc_ancestry_data=False, window='1e7', af_cutoff=0.01):
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+def get_ld_pruned_array_data_path(geno_folder, pop, extension, sample_qc, use_plink, use_drc_pop=False, window='1e7', af_cutoff=0.01):
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     af = f'_af{str(af_cutoff)}'
     plink = '_plink' if use_plink else ''
     return os.path.join(geno_folder, f'ld_prune/ld_pruned_sites_array_{pop}{qc}{drc_string}{af}{plink}_window{window}.{extension}')
 
 
-def get_plink_inputs_ld_prune(geno_folder, pop, chr, extension, sample_qc, pruned=None, use_drc_ancestry_data=False, af_cutoff=0.01):
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+def get_plink_inputs_ld_prune(geno_folder, pop, chr, extension, sample_qc, pruned=None, use_drc_pop=False, af_cutoff=0.01):
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     af = f'_af{str(af_cutoff)}'
     prun = f'_pruned{pruned}' if pruned is not None else ''
@@ -113,19 +113,19 @@ def get_wildcard_path_genotype_bgen(analysis_type):
 
 
 # Samples
-def get_n_samples_per_pop_path(geno_folder, sample_qc, analysis_type, use_drc_ancestry_data=False, use_array_for_variant=False):
+def get_n_samples_per_pop_path(geno_folder, sample_qc, analysis_type, use_drc_pop=False, use_array_for_variant=False):
     if analysis_type == 'variant':
         source_str = '_array' if use_array_for_variant else '_wgs'
     else:
         source_str = '_exome'
     prune_str = '_sample_qc' if sample_qc else ''
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     return os.path.join(geno_folder, f'sample_counts/counts_by_pop{source_str}{prune_str}{drc_string}.tsv') 
 
 
-def get_aou_samples_file_path(geno_folder, pop, sample_qc, use_plink=True, use_drc_ancestry_data=False):
+def get_aou_samples_file_path(geno_folder, pop, sample_qc, use_plink=True, use_drc_pop=False):
     qc = '_sample_qc' if sample_qc else ''
-    drc_string = '_drc' if use_drc_ancestry_data else '_axaou'
+    drc_string = '_drc' if use_drc_pop else '_axaou'
     plink = '_plink' if use_plink else ''
     return os.path.join(geno_folder, f'sample_counts/sample_list_{pop}{qc}{drc_string}{plink}.tsv') 
 
@@ -174,24 +174,35 @@ def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.ts
 
 
 # Covariates
-def get_base_covariates_path(cov_folder, drc, custom):
-    if drc:
+def _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs):
+    if use_custom_pcs not in ['custom', 'axaou', None]:
+        raise NotImplementedError('ERROR: use_custom_pcs must be custom, axaou, or None (drc stock PCs).')
+    if not use_drc_pop and (use_custom_pcs == 'custom'):
+        raise NotImplementedError('ERROR: both custom PCs and axaou population definitions is not implemented.')
+
+    if use_drc_pop:
         drc_string = '_drc'
-    elif custom:
-        drc_string = '_custom'
     else:
         drc_string = '_axaou'
-    return os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}.ht')
+    
+    if use_custom_pcs == 'custom':
+        pcs = '_custompcs'
+    elif use_custom_pcs == 'axaou':
+        pcs = '_axaoupcs'
+    elif use_custom_pcs is None:
+        pcs = ''
+
+    return drc_string, pcs
 
 
-def get_demographics_path(cov_folder, drc, custom):
-    if drc:
-        drc_string = '_drc'
-    elif custom:
-        drc_string = '_custom'
-    else:
-        drc_string = '_axaou'
-    return os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}.ht')
+def get_base_covariates_path(cov_folder, use_drc_pop, use_custom_pcs):
+    drc_string, pcs = _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)    
+    return os.path.join(cov_folder, f'base/ht/baseline_covariates{drc_string}{pcs}.ht')
+
+
+def get_demographics_path(cov_folder, use_drc_pop, use_custom_pcs):
+    drc_string, pcs = _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
+    return os.path.join(cov_folder, f'base/ht/all_covariates{drc_string}{pcs}.ht')
 
 
 def get_custom_pc_path(cov_folder, iteration):
@@ -249,8 +260,8 @@ def parse_bucket(gs_bucket):
         return f'gs://{gs_bucket}'
 
 
-def get_covariates_with_custom(cov_folder, custom=None, drc=False, custom_pcs=False):
-    new_covariates = hl.read_table(get_base_covariates_path(cov_folder, drc=drc, custom=custom_pcs))
+def get_covariates_with_custom(cov_folder, custom=None, use_drc_pop=False, use_custom_pcs=None):
+    new_covariates = hl.read_table(get_base_covariates_path(cov_folder, use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs))
     if custom is None:
         return new_covariates, []
     else:
@@ -302,7 +313,7 @@ def format_entries(field, sex_field):
 
 
 def load_custom_pheno_with_covariates(data_path, trait_type, modifier, 
-                                      cov_folder, custom=None, drc=False, custom_pcs=True,
+                                      cov_folder, custom=None, use_drc_pop=True, use_custom_pcs='custom',
                                       sex: str = 'both_sexes', sample_col='s'):
     print(f'Loading {data_path}...')
     extension = os.path.splitext(data_path)[1]
@@ -324,7 +335,7 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     mt.describe()
 
     print(f'Now loading covariate table...')
-    cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom, drc=drc, custom_pcs=custom_pcs)
+    cov_ht, cust_covar_list = get_covariates_with_custom(cov_folder, custom, use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs)
     cov_ht = cov_ht.persist()
     
     mt_this = mt.select_rows(**cov_ht[mt.row_key])
@@ -338,9 +349,11 @@ def load_custom_pheno_with_covariates(data_path, trait_type, modifier,
     return full_mt, cust_covar_list
 
 
-def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all', drc = False, custom_pcs=True):
+def get_custom_ukb_pheno_mt(pheno_folder, cov_folder, custom_covariates, suffix, pop: str = 'all', 
+                            use_drc_pop=True, use_custom_pcs='custom'):
     mt = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(pheno_folder, suffix))
-    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates, drc=drc, custom_pcs=custom_pcs)
+    covars, _ = get_covariates_with_custom(cov_folder=cov_folder, custom=custom_covariates, 
+                                           use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs)
     mt = mt.annotate_rows(**covars[mt.row_key])
     mt = mt.annotate_rows(**{k: hl.int(v)  for k, v in mt.row.items() if v.dtype == hl.tbool})
     if pop != 'all':
@@ -363,14 +376,18 @@ def summarize_data(pheno_folder, suffix, overwrite):
 
 
 def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
-                            pheno_path, covar_path, num_pcs, custom_pcs=True,
+                            pheno_path, covar_path, num_pcs,
                             sample_col='s', include_base_covars=True, 
-                            addl_cov=None, drc_tf=True,
+                            addl_cov=None, use_drc_pop=True, use_custom_pcs='custom',
                             overwrite=False, append=False):
 
     curdate = date.today().strftime("%y%m%d")
 
-    suffix = suffix + ('_drccovar' if drc_tf else '')
+    _, custom_suff = _parse_drc_custom_inputs(use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs)
+
+    if use_drc_pop:
+        suffix = suffix + '_drcpop'
+    suffix = suffix + custom_suff
 
     kwargs = {'data_path': phenotype_flat_file,
               'trait_type': trait_type,
@@ -378,8 +395,8 @@ def process_phenotype_table(phenotype_flat_file, trait_type, modifier, suffix,
               'cov_folder': covar_path,
               'custom': addl_cov,
               'sample_col': sample_col,
-              'drc': drc_tf,
-              'custom_pcs': custom_pcs}
+              'use_drc_pop': use_drc_pop,
+              'use_custom_pcs': use_custom_pcs}
     mt, cust_covar_list = load_custom_pheno_with_covariates(**kwargs)
 
     basic_covars = BASE_NONPC_COVARS if include_base_covars else []

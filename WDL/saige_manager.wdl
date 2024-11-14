@@ -57,8 +57,8 @@ workflow saige_manager {
         Boolean force_inverse_normalize # force inverse normalization. Intended for continuous traits only
         Boolean disable_loco # disables leave-one-chromosome-out
 
-        Boolean use_drc_ancestry_data = true
-        Boolean use_custom_pcs = true
+        Boolean use_drc_pop = true
+        String use_custom_pcs = 'custom' # can be custom, axaou, or none
         Boolean sample_qc = true
 
         Boolean include_base_covariates
@@ -81,7 +81,7 @@ workflow saige_manager {
 
     }
 
-    String suffix_this = suffix + if use_drc_ancestry_data then '_drccovar' else ''
+    String suffix_this = suffix + (if use_drc_pop then '_drcpop' else '') + (if use_custom_pcs == 'custom' then '_custompcs' else (if use_custom_pcs == 'axaou' then '_axaoupcs' else ''))
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
     call get_tasks_to_run as tasks {
@@ -101,7 +101,7 @@ workflow saige_manager {
             min_cases = min_cases,
             sex_stratified = sex_stratified,
             rvas_mode = rvas_mode,
-            use_drc_ancestry_data = use_drc_ancestry_data,
+            use_drc_pop = use_drc_pop,
             sample_qc = sample_qc,
 
             sparse_n_markers = sparse_n_markers,
@@ -156,7 +156,7 @@ workflow saige_manager {
                     pop = pop,
                     suffix = suffix_this,
                     additional_covariates = additional_covariates,
-                    use_drc_ancestry_data = use_drc_ancestry_data,
+                    use_drc_pop = use_drc_pop,
                     use_custom_pcs = use_custom_pcs,
                     
                     gs_bucket = gs_bucket,
@@ -299,125 +299,6 @@ workflow saige_manager {
 }
 
 
-task process_phenotype_table {
-
-    input {
-        File phenotype_flat_file
-        File? additional_covariates
-
-        String sample_col
-        String suffix
-        String trait_type
-        String modifier
-
-        String gs_bucket
-        String gs_phenotype_path
-        String gs_covariate_path
-
-        Boolean include_base_covariates
-        Boolean use_drc_ancestry_data
-        Int num_pcs
-        Boolean append_pheno
-        Boolean overwrite_pheno
-
-        File SaigeImporters
-        String HailDocker
-    }
-
-    String addl_cov_file = select_first([additional_covariates, ''])
-    String include_base_covar = if include_base_covariates then 'base' else 'no_base'
-    String append = if append_pheno then 'append' else 'no_append'
-    String overwrite = if overwrite_pheno then 'overwrite' else 'no_overwrite'
-    String drc = if use_drc_ancestry_data then 'drc' else 'custom'
-
-    command <<<
-        set -e
-
-        python3.8 <<CODE
-    import hail as hl
-    import importlib
-    import os, sys
-    from datetime import date
-
-    curdate = date.today().strftime("%y%m%d")
-
-    this_temp_path = '/cromwell_root/tmp/'
-    hl.init(log='log.log', tmp_dir=this_temp_path)
-
-    # import relevant objects
-    flpath = os.path.dirname('~{SaigeImporters}')
-    scriptname = os.path.basename('~{SaigeImporters}')
-    sys.path.append(flpath)
-    load_module = importlib.import_module(os.path.splitext(scriptname)[0])
-    globals().update(vars(load_module))
-
-    gs_prefix = parse_bucket('~{gs_bucket}')
-    gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
-    gs_covariate_path = os.path.join(gs_prefix, '~{gs_covariate_path}'.lstrip('/'))
-
-    addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
-    drc_tf = '~{drc}' == 'drc'
-
-    kwargs = {'data_path': '~{phenotype_flat_file}',
-              'trait_type': '~{trait_type}',
-              'modifier': '~{modifier}',
-              'cov_folder': gs_covariate_path,
-              'custom': addl_cov,
-              'sample_col': '~{sample_col}',
-              'drc': drc_tf}
-    mt, cust_covar_list = load_custom_pheno_with_covariates(**kwargs)
-
-    if '~{include_base_covar}' == 'base':
-        basic_covars = BASE_NONPC_COVARS
-    else:
-        basic_covars = []
-    covariates = ','.join(basic_covars + cust_covar_list + [f'PC{x}' for x in range(1, ~{num_pcs} + 1)])
-
-    # write string listing the covariates
-    with open('this_covar.txt', 'w') as f:
-        f.write(str(covariates))
-
-    suffix = '~{suffix}'
-    mt_path = get_custom_ukb_pheno_mt_path(gs_phenotype_path, suffix)
-    overwrite_tf = '~{overwrite}' == 'overwrite'
-    append_tf = '~{append}' == 'append'
-
-    if not hl.hadoop_exists(f'{mt_path}/_SUCCESS') or (overwrite_tf or append_tf):
-        mt_this = mt.group_rows_by('pop').aggregate(
-            n_cases=hl.agg.count_where(mt.both_sexes == 1.0),
-            n_controls=hl.agg.count_where(mt.both_sexes == 0.0),
-            n_defined=hl.agg.count_where(hl.is_defined(mt.both_sexes))
-        ).entries()
-        mt_this.drop(*[x for x in PHENO_COLUMN_FIELDS if x != 'description' and x in mt_this.row]).show(100, width=180)
-        
-        # save table
-        if append_tf and hl.hadoop_exists(f'{mt_path}/_SUCCESS'):
-            original_mt = hl.read_matrix_table(mt_path)
-            original_mt = original_mt.checkpoint(get_custom_ukb_pheno_mt_path(gs_phenotype_path, f'{suffix}_before_{curdate}'), overwrite=overwrite_tf)
-            original_mt.cols().export(get_custom_phenotype_summary_backup_path(gs_phenotype_path, suffix, curdate))
-            original_mt.union_cols(mt, row_join_type='outer').write(mt_path, overwrite=overwrite_tf)
-        else:
-            mt.write(mt_path, overwrite=overwrite_tf)
-        
-        summarize_data(gs_phenotype_path, suffix, overwrite=overwrite_tf)
-
-    CODE
-
-    >>>
-    
-    runtime {
-        docker: HailDocker
-        memory: '12 GB'
-        cpu: '4'
-    }
-
-    output {
-        String covariate_list = read_string("this_covar.txt")
-        Boolean task_complete = true
-    }
-}
-
-
 task get_tasks_to_run {
     
     input {
@@ -448,7 +329,7 @@ task get_tasks_to_run {
         Int n_markers_rare_mac
 
         Boolean rvas_mode
-        Boolean use_drc_ancestry_data
+        Boolean use_drc_pop
         Boolean sample_qc
         Boolean use_plink
 
@@ -462,7 +343,7 @@ task get_tasks_to_run {
     String overwrite_h = if overwrite_hail_results then 'overwrite' else 'no_overwrite'
     String specific_phenos_sel = select_first([specific_phenos, ''])
     String analysis_type = if rvas_mode then 'gene' else 'variant'
-    String drc = if use_drc_ancestry_data then 'drc' else 'custom'
+    String drc = if use_drc_pop then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
     String plink = if use_plink then 'plink' else 'no_plink'
 
@@ -617,7 +498,7 @@ task get_tasks_to_run {
                                             n_common=~{n_markers_common},
                                             n_maf=~{n_markers_rare_maf},
                                             n_mac=~{n_markers_rare_mac},
-                                            use_drc_ancestry_data=drc_tf, 
+                                            use_drc_pop=drc_tf, 
                                             use_array_for_variant=False)
     mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
                                   pop='~{pop}', 
@@ -625,7 +506,7 @@ task get_tasks_to_run {
                                   relatedness=~{relatedness}, 
                                   sample_qc=sample_qc_tf, 
                                   use_plink=plink_tf,
-                                  use_drc_ancestry_data=drc_tf, 
+                                  use_drc_pop=drc_tf, 
                                   af_cutoff=~{min_maf})
 
     with open('bed.txt', 'w') as f:
@@ -655,7 +536,7 @@ task get_tasks_to_run {
                                           pop='~{pop}',
                                           sample_qc=sample_qc_tf,
                                           use_plink=plink_tf,
-                                          use_drc_ancestry_data=drc_tf)
+                                          use_drc_pop=drc_tf)
     
     with open('samp.txt', 'w') as f:
         f.write(sample_id)
@@ -701,16 +582,15 @@ task export_phenotype_files {
         String gs_phenotype_path
         String gs_covariate_path
         File? additional_covariates
-        Boolean use_drc_ancestry_data
-        Boolean use_custom_pcs
+        Boolean use_drc_pop
+        String use_custom_pcs
 
         File SaigeImporters
         String HailDocker
     }
 
     String addl_cov_file = select_first([additional_covariates, ''])
-    String drc = if use_drc_ancestry_data then 'drc' else 'aou'
-    String custom_pcs = if use_custom_pcs then 'pc' else 'stock'
+    String use_drc_pop = if use_drc_pop then 'drc' else 'aou'
 
     command <<<
         set -e
@@ -740,12 +620,11 @@ task export_phenotype_files {
 
     addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
     drc_tf = '~{drc}' == 'drc'
-    custom_pcs_tf = '~{custom_pcs}' == 'pc'
 
     binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
 
     suffix = '~{suffix}'
-    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", drc=drc_tf, custom_pcs=custom_pcs_tf)
+    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", drc=drc_tf, custom_pcs="~{use_custom_pcs}")
     mt = mt.filter_cols(hl.all(lambda x: x, [mt[k] == pheno_dct[k] for k in PHENO_KEY_FIELDS if k != 'pheno_sex']))
     pheno_sex_mt = mt.filter_cols(mt.pheno_sex == pheno_dct['pheno_sex'])
     if pheno_sex_mt.count_cols() == 1:

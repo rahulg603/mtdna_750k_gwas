@@ -73,17 +73,17 @@ def annotate_adj(
     )
 
 
-def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, use_drc_ancestry_data=False):
+def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, use_drc_pop=False):
     vec_path = get_n_samples_per_pop_path(GENO_PATH, analysis_type=analysis_type, sample_qc=sample_qc, 
                                           use_array_for_variant=use_array_for_variant,
-                                          use_drc_ancestry_data=use_drc_ancestry_data)
+                                          use_drc_pop=use_drc_pop)
     if not hl.hadoop_exists(vec_path):
         mt = get_filtered_genotype_mt(analysis_type=analysis_type,
                                       pop='all',
                                       filter_samples=sample_qc,
                                       filter_variants=False,
                                       use_array_for_variant=use_array_for_variant,
-                                      use_drc_ancestry_data=use_drc_ancestry_data)
+                                      use_drc_pop=use_drc_pop)
         ht = mt.cols()
         ht_ct = ht.group_by(ht.pop).aggregate(N = hl.agg.count())
         df_ct = ht_ct.to_pandas()
@@ -96,8 +96,8 @@ def get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant, u
 
 def get_filtered_genotype_mt(analysis_type, pop,
                              filter_samples=True, filter_variants=True,
-                             use_array_for_variant=False, use_custom_pcs=True,
-                             use_drc_ancestry_data=False, remove_related=False):
+                             use_array_for_variant=False, use_custom_pcs=None,
+                             use_drc_pop=True, remove_related=False):
     if analysis_type == 'gene':
         mt_path = EXOME_PATH
     elif analysis_type == 'variant':
@@ -112,7 +112,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
     else:
         mt = hl.read_matrix_table(mt_path, _n_partitions=15000)
     
-    meta_ht = get_all_demographics(use_drc_ancestry_data=use_drc_ancestry_data, use_custom_data=use_custom_pcs)
+    meta_ht = get_all_demographics(use_drc_pop=use_drc_pop, use_custom_pcs=use_custom_pcs)
     mt = mt.annotate_cols(**meta_ht[mt.col_key])
     mt = mt.annotate_cols(pop = mt.ancestry.pop)
 
@@ -138,7 +138,7 @@ def get_filtered_genotype_mt(analysis_type, pop,
 
 
 def generate_call_stats_ht(sample_qc, analysis_type, overwrite, checkpoint=False,
-                           use_drc_ancestry_data=False, use_array_for_variant=False):
+                           use_drc_pop=False, use_array_for_variant=False):
     # TODO add or remove VEP as an option
 
     n_partitions = 1000 if analysis_type=='variant' and use_array_for_variant else 10000
@@ -149,14 +149,14 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite, checkpoint=False
     for pop in pops:
         path = get_call_stats_ht_path(GENO_PATH, pop=pop, sample_qc=sample_qc, 
                                       analysis_type=analysis_type, 
-                                      use_drc_ancestry_data=use_drc_ancestry_data,
+                                      use_drc_pop=use_drc_pop,
                                       use_array_for_variant=use_array_for_variant)
         if not hl.hadoop_exists(os.path.join(path, '_SUCCESS')) or overwrite:
             print(f'Generating call stats for {analysis_type}, pop {pop}...')
             mt = get_filtered_genotype_mt(analysis_type=analysis_type, pop=pop, 
                                           filter_variants=True, filter_samples=sample_qc,
                                           use_array_for_variant=use_array_for_variant,
-                                          use_drc_ancestry_data=use_drc_ancestry_data)
+                                          use_drc_pop=use_drc_pop)
             if checkpoint:
                 # NOTE: this may be a giant MatrixTable!
                 # NOTE: you probably never want to enable this!
@@ -184,14 +184,14 @@ def generate_call_stats_ht(sample_qc, analysis_type, overwrite, checkpoint=False
     #         ht.naive_coalesce(1000).checkpoint(full_path, overwrite=args.overwrite)
 
 
-def get_call_stats_ht(pop, sample_qc, analysis_type, use_drc_ancestry_data, use_array_for_variant, overwrite):
+def get_call_stats_ht(pop, sample_qc, analysis_type, use_drc_pop, use_array_for_variant, overwrite):
     path = get_call_stats_ht_path(GENO_PATH, pop=pop, sample_qc=sample_qc, 
                                   analysis_type=analysis_type, 
-                                  use_drc_ancestry_data=use_drc_ancestry_data, 
+                                  use_drc_pop=use_drc_pop, 
                                   use_array_for_variant=use_array_for_variant)
     if not hl.hadoop_exists(os.path.join(path, '_SUCCESS')) or overwrite:
         _ = generate_call_stats_ht(sample_qc=sample_qc, analysis_type=analysis_type, 
-                                   use_drc_ancestry_data=use_drc_ancestry_data,
+                                   use_drc_pop=use_drc_pop,
                                    use_array_for_variant=use_array_for_variant,
                                    overwrite=overwrite)
     ht = hl.read_table(path)
@@ -211,13 +211,13 @@ def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_co
 
 
 def filter_common_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
-                                    use_drc_ancestry_data=False, overwrite=False,
+                                    use_drc_pop=False, overwrite=False,
                                     n_common_variants_to_keep=50000, # 100000 for per pop
                                     min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants=0.01):
     
     ht_sites_path = get_sites_for_null_path(GENO_PATH, extension='common.ht',
                                             pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
-                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_drc_pop=use_drc_pop,
                                             use_array_for_variant=use_array_for_variant,
                                             ld_pruned=False,
                                             n_common=n_common_variants_to_keep, 
@@ -227,9 +227,9 @@ def filter_common_variants_for_null(pop, analysis_type, use_array_for_variant, s
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
         print(f'Number of common variants to sample: {n_common_variants_to_keep}')
         n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                              use_drc_ancestry_data=use_drc_ancestry_data)
+                                              use_drc_pop=use_drc_pop)
         ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
-                               use_drc_ancestry_data=use_drc_ancestry_data, 
+                               use_drc_pop=use_drc_pop, 
                                use_array_for_variant=use_array_for_variant, overwrite=overwrite)
         ht = ht.filter(
             (ht.locus.in_autosome())
@@ -259,13 +259,13 @@ def filter_common_variants_for_null(pop, analysis_type, use_array_for_variant, s
 
 
 def filter_rare_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
-                                  use_drc_ancestry_data=False, overwrite=False,
+                                  use_drc_pop=False, overwrite=False,
                                   min_call_rate=CALLRATE_CUTOFF, min_maf_common_variants = 0.01,
                                   variants_per_mac_category=2000, variants_per_maf_category=10000):
     
     ht_sites_path = get_sites_for_null_path(GENO_PATH, extension='rare.ht',
                                             pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
-                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_drc_pop=use_drc_pop,
                                             use_array_for_variant=use_array_for_variant,
                                             ld_pruned=False,
                                             n_common=0,
@@ -275,9 +275,9 @@ def filter_rare_variants_for_null(pop, analysis_type, use_array_for_variant, sam
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
 
         n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                              use_drc_ancestry_data=use_drc_ancestry_data)
+                                              use_drc_pop=use_drc_pop)
         ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
-                               use_drc_ancestry_data=use_drc_ancestry_data, 
+                               use_drc_pop=use_drc_pop, 
                                use_array_for_variant=use_array_for_variant, overwrite=overwrite)
         ht = ht.filter(
             (ht.locus.in_autosome())
@@ -331,7 +331,7 @@ def filter_rare_variants_for_null(pop, analysis_type, use_array_for_variant, sam
     return ht
 
 
-def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwrite,
+def generate_plink_files_for_null(pop, sample_qc, use_drc_pop, overwrite,
                                   n_common_variants_to_keep=50000, min_maf_common_variants=0.01,
                                   variants_per_mac_category=2000, variants_per_maf_category=10000,
                                   min_call_rate=CALLRATE_CUTOFF):
@@ -340,7 +340,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
     ht_common = filter_common_variants_for_null(pop=pop, analysis_type='variant',
                                                 use_array_for_variant=False,
                                                 sample_qc=sample_qc, 
-                                                use_drc_ancestry_data=use_drc_ancestry_data,
+                                                use_drc_pop=use_drc_pop,
                                                 overwrite=overwrite, 
                                                 n_common_variants_to_keep=n_common_variants_to_keep,
                                                 min_call_rate=min_call_rate, 
@@ -348,7 +348,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
     ht_rare = filter_rare_variants_for_null(pop=pop, analysis_type='gene',
                                             use_array_for_variant=False,
                                             sample_qc=sample_qc, 
-                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_drc_pop=use_drc_pop,
                                             overwrite=overwrite, 
                                             min_call_rate=min_call_rate, 
                                             min_maf_common_variants=min_maf_common_variants,
@@ -359,7 +359,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
     mt_sites_path = get_sites_for_null_path(GENO_PATH, extension='mt',
                                             pop=pop, analysis_type='both',
                                             sample_qc=sample_qc,
-                                            use_drc_ancestry_data=use_drc_ancestry_data,
+                                            use_drc_pop=use_drc_pop,
                                             use_array_for_variant=False,
                                             ld_pruned=False,
                                             n_common=n_common_variants_to_keep,
@@ -372,7 +372,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                               filter_samples=sample_qc, 
                                               filter_variants=True,
                                               use_array_for_variant=False, 
-                                              use_drc_ancestry_data=use_drc_ancestry_data)
+                                              use_drc_pop=use_drc_pop)
         mt_variant = mt_variant.semi_join_rows(ht_common)
         mt_variant = mt_variant.naive_coalesce(30000).checkpoint(f'{TEMP_PATH}/tmp_mt_genotypes_wgs_subsample_{pop}.mt', overwrite=True)
 
@@ -380,7 +380,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                            filter_samples=sample_qc, 
                                            filter_variants=True,
                                            use_array_for_variant=False, 
-                                           use_drc_ancestry_data=use_drc_ancestry_data)
+                                           use_drc_pop=use_drc_pop)
         mt_gene = mt_gene.semi_join_rows(ht_rare)
         mt_gene = mt_gene.naive_coalesce(30000).checkpoint(f'{TEMP_PATH}/tmp_mt_genotypes_exome_subsample_{pop}.mt', overwrite=True)
 
@@ -396,7 +396,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
     ht_pruned_path = get_sites_for_null_path(GENO_PATH, extension='ht',
                                              pop=pop, analysis_type='both',
                                              sample_qc=sample_qc,
-                                             use_drc_ancestry_data=use_drc_ancestry_data,
+                                             use_drc_pop=use_drc_pop,
                                              use_array_for_variant=False,
                                              ld_pruned=True,
                                              n_common=n_common_variants_to_keep,
@@ -419,7 +419,7 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
                                              sample_qc=sample_qc,
                                              analysis_type='both',
                                              ld_pruned=True,
-                                             use_drc_ancestry_data=use_drc_ancestry_data,
+                                             use_drc_pop=use_drc_pop,
                                              use_array_for_variant=False,
                                              n_common=n_common_variants_to_keep,
                                              n_maf=variants_per_maf_category,
@@ -433,12 +433,12 @@ def generate_plink_files_for_null(pop, sample_qc, use_drc_ancestry_data, overwri
 
 def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.01,
                                       min_call_rate=CALLRATE_CUTOFF,
-                                      use_drc_ancestry_data=False, overwrite=False):
+                                      use_drc_pop=False, overwrite=False):
     n_samples = get_n_samples_per_pop_vec(analysis_type='variant', sample_qc=sample_qc, 
                                             use_array_for_variant=True,
-                                            use_drc_ancestry_data=use_drc_ancestry_data)
+                                            use_drc_pop=use_drc_pop)
     ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type='variant',
-                            use_drc_ancestry_data=use_drc_ancestry_data, 
+                            use_drc_pop=use_drc_pop, 
                             use_array_for_variant=True,
                             overwrite=overwrite)
     
@@ -459,7 +459,7 @@ def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.01,
     ht = ht.checkpoint(f'{TEMP_PATH}/tmp_ht_call_stats_for_pruning_{pop}.ht', overwrite=True)
 
     geno_mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
-                                        use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+                                        use_array_for_variant=True, use_drc_pop=use_drc_pop)
     geno_mt = geno_mt.semi_join_rows(ht)
     geno_mt = geno_mt.unfilter_entries()
     return geno_mt
@@ -467,7 +467,7 @@ def get_filtered_array_mt_for_pruning(pop, sample_qc, min_af=0.01,
 
 def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
                        min_call_rate=CALLRATE_CUTOFF, 
-                       use_drc_ancestry_data=False, 
+                       use_drc_pop=False, 
                        overwrite=False):
 
     baseline = {'ld_prune.step_size': 1,
@@ -481,7 +481,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
 
     for pop in POPS:
         ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
-                                                          use_drc_ancestry_data=use_drc_ancestry_data,
+                                                          use_drc_pop=use_drc_pop,
                                                           af_cutoff=min_af, extension='ht', 
                                                           window='1e7',
                                                           use_plink=True)
@@ -490,17 +490,17 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
 
             geno_mt = get_filtered_array_mt_for_pruning(pop=pop, sample_qc=sample_qc, min_af=min_af,
                                                         min_call_rate=min_call_rate, 
-                                                        use_drc_ancestry_data=use_drc_ancestry_data, 
+                                                        use_drc_pop=use_drc_pop, 
                                                         overwrite=overwrite)
             
             for chr in AUTOSOMES:
                 plink_path = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                       use_drc_ancestry_data=use_drc_ancestry_data,
+                                                       use_drc_pop=use_drc_pop,
                                                        af_cutoff=min_af, pruned=None, extension='bed')
                 plink_root = os.path.splitext(plink_path)[0]
 
                 plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                                     use_drc_pop=use_drc_pop,
                                                      af_cutoff=min_af, pruned='1e7', extension='txt')
                 output_root = os.path.splitext(plink_out)[0]
                 
@@ -541,10 +541,10 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
     for pop in POPS:
 
         ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
-                                                            use_drc_ancestry_data=use_drc_ancestry_data,
-                                                            af_cutoff=min_af, extension='ht', 
-                                                            window='1e7',
-                                                            use_plink=True)
+                                                          use_drc_pop=use_drc_pop,
+                                                          af_cutoff=min_af, extension='ht', 
+                                                          window='1e7',
+                                                          use_plink=True)
 
         if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
 
@@ -552,8 +552,8 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
 
             for chr in AUTOSOMES:
                 plink_out = get_plink_inputs_ld_prune(GENO_PATH, pop=pop, chr=chr, sample_qc=sample_qc,
-                                                    use_drc_ancestry_data=use_drc_ancestry_data,
-                                                    af_cutoff=min_af, pruned='1e7', extension='txt')
+                                                      use_drc_pop=use_drc_pop,
+                                                      af_cutoff=min_af, pruned='1e7', extension='txt')
                 ht = hl.import_table(plink_out, no_header=True, types={'f0':'str'})
                 ht = ht.annotate(locus = hl.locus(contig = ht.f0.split(':')[0],
                                                     pos = hl.int(ht.f0.split(':')[1]),
@@ -569,7 +569,7 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
         print(f'After pruning using PLINK for {pop}, there are {str(ht_prune.count())} variants.')
 
         mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
-                                      use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+                                      use_array_for_variant=True, use_drc_pop=use_drc_pop)
         mt = mt.semi_join_rows(ht_prune)
         mt_dict.update({pop: mt})
     
@@ -578,17 +578,17 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
 
 def hail_ld_pruned_mt(pop, sample_qc, min_af=0.01,
                       min_call_rate=CALLRATE_CUTOFF, 
-                      use_drc_ancestry_data=False, 
+                      use_drc_pop=False, 
                       overwrite=False):
     ld_pruned_ht_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
-                                                      use_drc_ancestry_data=use_drc_ancestry_data,
+                                                      use_drc_pop=use_drc_pop,
                                                       af_cutoff=min_af, window='1e7',
                                                       extension='ht', use_plink=False)
     
     if overwrite or not hl.hadoop_exists(os.path.join(ld_pruned_ht_path, '_SUCCESS')):
         geno_mt = get_filtered_array_mt_for_pruning(pop=pop, sample_qc=sample_qc, min_af=min_af,
                                                     min_call_rate=min_call_rate, 
-                                                    use_drc_ancestry_data=use_drc_ancestry_data, 
+                                                    use_drc_pop=use_drc_pop, 
                                                     overwrite=overwrite)
         mt_staging_path = f'{TEMP_PATH}/tmp_mt_genotypes_for_pruning_{pop}.mt'
         geno_mt.write(mt_staging_path, overwrite=True)
@@ -604,17 +604,17 @@ def hail_ld_pruned_mt(pop, sample_qc, min_af=0.01,
     
     print(f'After pruning using Hail for pop {pop}, there are {str(ht_prune.count())} variants.')
     mt = get_filtered_genotype_mt(analysis_type='variant', pop=pop, filter_samples=sample_qc, filter_variants=True,
-                                  use_array_for_variant=True, use_drc_ancestry_data=use_drc_ancestry_data)
+                                  use_array_for_variant=True, use_drc_pop=use_drc_pop)
     mt = mt.semi_join_rows(ht_prune)
     return mt
 
 
 def generate_plink_files_for_grm(mt_dict, sample_qc, min_af=0.01,
-                                 use_drc_ancestry_data=False, 
+                                 use_drc_pop=False, 
                                  overwrite=False, use_plink=False):
     for pop, mt in mt_dict.items():
         plink_path = get_ld_pruned_array_data_path(GENO_PATH, pop=pop, sample_qc=sample_qc,
-                                                   use_drc_ancestry_data=use_drc_ancestry_data,
+                                                   use_drc_pop=use_drc_pop,
                                                    af_cutoff=min_af, extension='bed', 
                                                    window='1e7',
                                                    use_plink=use_plink)
@@ -635,7 +635,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                     relatedness=0.125,
                                     no_wait=False,
                                     n_cpu_sparse=32,
-                                    use_drc_ancestry_data=False,
+                                    use_drc_pop=False,
                                     overwrite=False,
                                     use_plink=True):
     """
@@ -649,7 +649,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                      relatedness=relatedness,
                                      sample_qc=sample_qc,
                                      af_cutoff=af_cutoff,
-                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                     use_drc_pop=use_drc_pop,
                                      use_plink=use_plink)
         if overwrite or not hl.hadoop_exists(mtx):
             pops_to_queue.append(pop)
@@ -669,7 +669,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                     'saige_sparse_grm.gs_bucket': BUCKET,
                     'saige_sparse_grm.gs_genotype_path': remove_bucket(GENO_PATH),
                     'saige_sparse_grm.SaigeImporters': saige_importers_path,
-                    'saige_sparse_grm.use_drc_ancestry_data': use_drc_ancestry_data,
+                    'saige_sparse_grm.use_drc_pop': use_drc_pop,
                     'saige_sparse_grm.use_plink': use_plink,
                     'saige_sparse_grm.sample_qc': sample_qc,
                     'saige_sparse_grm.n_cpu': n_cpu_sparse}
@@ -695,7 +695,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
 def main():
     sample_qc = True
     min_af = 0.01
-    use_drc_ancestry_data=True
+    use_drc_pop=True
     overwrite=False
     no_wait=False
 
@@ -717,7 +717,7 @@ def main():
                                      saige_importers_path=saige_importers_path,
                                      wdl_path=plink_wdl_path,
                                      min_af=min_af,
-                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                     use_drc_pop=use_drc_pop,
                                      overwrite=overwrite)
 
     else:
@@ -727,19 +727,19 @@ def main():
             mt = hail_ld_pruned_mt(pop=pop,
                                    sample_qc=sample_qc,
                                    min_af=min_af,
-                                   use_drc_ancestry_data=use_drc_ancestry_data,
+                                   use_drc_pop=use_drc_pop,
                                    overwrite=overwrite)
             mt_dict.update({pop: mt})
 
     for pop in POPS:
         with hl.hadoop_open(get_aou_samples_file_path(GENO_PATH, pop, sample_qc=sample_qc, use_plink=use_plink,
-                                                      use_drc_ancestry_data=use_drc_ancestry_data), 'w') as f:
+                                                      use_drc_pop=use_drc_pop), 'w') as f:
             f.write('\n'.join(mt.s.collect()) + '\n')
 
         # produce downsampled plink files
         # note this will include a bunch of markers from the rare spectrum using WGS for common variants and WES for rare variants
         _ = generate_plink_files_for_null(pop, sample_qc=sample_qc,
-                                          use_drc_ancestry_data=use_drc_ancestry_data,
+                                          use_drc_pop=use_drc_pop,
                                           overwrite=overwrite,
                                           n_common_variants_to_keep=n_common,
                                           min_maf_common_variants=min_maf_common,
@@ -750,7 +750,7 @@ def main():
     _ = generate_plink_files_for_grm(mt_dict,
                                      sample_qc=sample_qc,
                                      min_af=min_af,
-                                     use_drc_ancestry_data=use_drc_ancestry_data,
+                                     use_drc_pop=use_drc_pop,
                                      overwrite=overwrite,
                                      use_plink=use_plink)
     
@@ -762,7 +762,7 @@ def main():
                                     no_wait=no_wait,
                                     saige_importers_path=saige_importers_path,
                                     wdl_path=sparse_wdl_path,
-                                    use_drc_ancestry_data=use_drc_ancestry_data,
+                                    use_drc_pop=use_drc_pop,
                                     overwrite=overwrite,
                                     use_plink=use_plink)
 

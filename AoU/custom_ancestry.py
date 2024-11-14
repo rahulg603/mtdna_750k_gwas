@@ -2,6 +2,7 @@
 from paths import *
 from utils.SaigeImporters import *
 from covariates import *
+from munge_genotypes import get_filtered_genotype_mt
 import hail as hl
 import os
 
@@ -119,7 +120,7 @@ def import_aou_gt_for_pca(overwrite=False):
 
         # filter full MT and add ancestry information
         print('Appending demographics and relatedness data to WGS MatrixTable...')
-        demodata = get_all_demographics()
+        demodata = get_all_demographics(use_drc_pop=True, use_custom_pcs=None)
         related_samples = hl.import_table(get_aou_related_samples(), key='sample_id')
         mt = mt.filter_cols(demodata[mt.col_key].pass_qc) # remove flagged samples
         mt = mt.annotate_cols(pop = demodata[mt.col_key].ancestry.pop, 
@@ -137,6 +138,44 @@ def add_pcs(ht, k, goal=20):
         ht = ht.annotate(**{f'PC{i}': 0 for i in range(1, goal+1) if f'PC{i}' not in ht.row})
     ht = ht.select(*[f'PC{i}' for i in range(1, goal+1)])
     return ht
+
+
+def verify_custom_has_same_samples_as_drc():
+    # The goal of this function is to make sure that the SAME EXACT samples and ancestry mappings
+    # have custom PCs defined as the raw DRC-based covariates.
+    # We will test post-sample QC data ONLY.
+
+    # import drc stuff
+    data_used_for_geno_files = get_filtered_genotype_mt('variant', pop='all',
+                                                        filter_samples=False, filter_variants=False,
+                                                        use_array_for_variant=True, use_custom_pcs=None,
+                                                        use_drc_pop=True, remove_related=False).cols()
+    data_used_for_geno_files = data_used_for_geno_files.filter(hl.literal(POPS).contains(data_used_for_geno_files.pop)).select('pop')
+
+    # import custom stuff
+    custom_pcs = get_filtered_genotype_mt('variant', pop='all',
+                                          filter_samples=False, filter_variants=False,
+                                          use_array_for_variant=True, use_custom_pcs='custom',
+                                          use_drc_pop=True, remove_related=False).cols()
+    custom_pcs = custom_pcs.filter(hl.literal(POPS).contains(custom_pcs.pop)).select('pop')
+
+    # compare these two files
+    if data_used_for_geno_files.anti_join(custom_pcs).count() == 0:
+        print('All samples in array data using custom PCs (post-QC) are found in the DRC-based PC files.')
+    else:
+        raise ValueError('ERROR: samples were lost in custom PC construction versus DRC data.')
+    if custom_pcs.anti_join(data_used_for_geno_files).count() == 0:
+        print('All samples in array data using DRC data (post-QC) are found in the custom computed PC files.')
+    else:
+        raise ValueError('ERROR: samples were somehow gained in custom PC construction versus DRC data.')
+
+    # compare pop assignments
+    custom_pcs = custom_pcs.annotate(drc_pop = data_used_for_geno_files[custom_pcs.col_key].pop)
+    if custom_pcs.filter(custom_pcs.drc_pop != custom_pcs.pop).count() == 0:
+        print('Ancestry assignments are identical.')
+    else:
+        raise ValueError('ERROR: ancestry assignments not identical between custom PCs and DRC-assigned PCs.')
+
 
 
 def main(k=20, global_overwrite=False, iteration=0):
