@@ -24,7 +24,7 @@ def load_ancestry_data(use_drc_pop=True, use_custom_pcs=None):
     # if use_drc_data is True, will use pop info from DRC. Otherwise will use AoU info.
     # if use_custom_pcs is True, will return custom PCs generated for DRC data. Such data doesn't exist for allxallofus
 
-    _, _ = _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
+    _, _ = parse_drc_custom_inputs(use_drc_pop, use_custom_pcs)
 
     if use_drc_pop:
         if use_custom_pcs is None:

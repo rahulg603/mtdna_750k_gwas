@@ -174,7 +174,7 @@ def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.ts
 
 
 # Covariates
-def _parse_drc_custom_inputs(use_drc_pop, use_custom_pcs):
+def parse_drc_custom_inputs(use_drc_pop, use_custom_pcs):
     if use_custom_pcs not in ['custom', 'axaou', None]:
         raise NotImplementedError('ERROR: use_custom_pcs must be custom, axaou, or None (drc stock PCs).')
     if not use_drc_pop and (use_custom_pcs == 'custom'):
