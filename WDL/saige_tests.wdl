@@ -119,16 +119,14 @@ workflow saige_tests {
 
         File single_test_output = select_first([run_test.single_test, this_chr[1]])
         File test_log = select_first([run_test.log, this_chr[3]])
-        if (analysis_type == 'gene') {
-            File gene_test_output = select_first([run_test.gene_test, this_chr[2]])
-        }
+        File gene_test_output = select_first([run_test.gene_test, this_chr[2]])
 
     }
 
     output {
         Array[File] single_variant = single_test_output
         Array[File] test_logs = test_log
-        Array[File?] gene_test = gene_test_output
+        Array[File] gene_test = gene_test_output
     }
 
 }

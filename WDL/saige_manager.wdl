@@ -817,7 +817,7 @@ task merge {
         File null_log
         Array[File] test_logs
         Array[File] single_test
-        Array[File?] gene_test
+        Array[File] gene_test
         
         String gs_bucket
         String gs_output_path
