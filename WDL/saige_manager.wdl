@@ -843,7 +843,7 @@ task merge {
     curdate = date.today().strftime("%y%m%d")
 
     this_temp_path = '/cromwell_root/tmp/'
-    hl.init(master=f'local[str(~{n_cpu_merge})]',
+    hl.init(master=f'local[~{n_cpu_merge}]',
             log='load_results.log', tmp_dir=this_temp_path)
 
     # import relevant objects
