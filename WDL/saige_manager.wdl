@@ -78,7 +78,8 @@ workflow saige_manager {
 
         Int n_cpu_null
         Int n_cpu_test
-        Int n_cpu_merge = 16
+        Int n_cpu_merge = 32
+        Int mem_merge = 96
 
     }
 
@@ -277,7 +278,8 @@ workflow saige_manager {
                     SaigeImporters = SaigeImporters,
                     HailDocker = HailDocker,
 
-                    n_cpu_merge = n_cpu_merge
+                    n_cpu_merge = n_cpu_merge,
+                    mem = mem_merge
             }
 
             call saige_tools.upload as u2 {
@@ -829,6 +831,7 @@ task merge {
         String HailDocker
 
         Int n_cpu_merge
+        Int mem
     }
 
     Int disk = ceil((size(single_test, 'G') + size(gene_test, 'G')) * 2)
@@ -847,7 +850,8 @@ task merge {
 
     this_temp_path = '/cromwell_root/tmp/'
     hl.init(master=f'local[~{n_cpu_merge}]',
-            log='load_results.log', tmp_dir=this_temp_path)
+            log='load_results.log', tmp_dir=this_temp_path,
+            spark_conf={'spark.driver.memory': '~{mem}g'})
 
     # import relevant objects
     flpath = os.path.dirname('~{SaigeImporters}')
@@ -903,7 +907,7 @@ task merge {
 
     runtime {
         docker: HailDocker
-        memory: '16 GB'
+        memory: mem + ' GB'
         cpu: n_cpu_merge
         disks: 'local-disk ' + disk + ' SSD'
     }
