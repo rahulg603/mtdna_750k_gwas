@@ -590,7 +590,7 @@ task export_phenotype_files {
     }
 
     String addl_cov_file = select_first([additional_covariates, ''])
-    String use_drc_pop = if use_drc_pop then 'drc' else 'aou'
+    String use_drc_pop_str = if use_drc_pop then 'drc' else 'aou'
 
     command <<<
         set -e
@@ -619,7 +619,7 @@ task export_phenotype_files {
     pheno_export_path = get_pheno_output_path(pheno_export_dir, pheno_dct)
 
     addl_cov = None if '~{addl_cov_file}' == '' else '~{addl_cov_file}'
-    drc_tf = '~{use_drc_pop}' == 'drc'
+    drc_tf = '~{use_drc_pop_str}' == 'drc'
 
     binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
 
