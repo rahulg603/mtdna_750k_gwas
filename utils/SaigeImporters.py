@@ -516,8 +516,9 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
     inv_normalized = get_inverse_normalize_status(null_log)
     saige_version = get_saige_version_from_log(null_log)
 
-    ht = hl.import_table(paths, delimiter='\t', impute=True, min_partitions=300).checkpoint(temp_path)
     print(f'Loading variant data...')
+    ht = hl.import_table(paths, delimiter='\t', impute=True, min_partitions=300).checkpoint(temp_path, overwrite=True)
+   
     print(f'Case/control counts: {str(n_cases)} cases, {str(n_controls)} controls.')
     print(f'Heritability: {str(heritability)}.')
     print(f'Inverse normalized: {str(inv_normalized)}.')
