@@ -516,7 +516,7 @@ def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
     inv_normalized = get_inverse_normalize_status(null_log)
     saige_version = get_saige_version_from_log(null_log)
 
-    ht = hl.import_table(paths, delimiter='\t', impute=True, min_partitions=8)
+    ht = hl.import_table(paths, delimiter='\t', impute=True, min_partitions=300)
     print(f'Loading variant data...')
     print(f'Case/control counts: {str(n_cases)} cases, {str(n_controls)} controls.')
     print(f'Heritability: {str(heritability)}.')
