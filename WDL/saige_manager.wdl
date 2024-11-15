@@ -300,9 +300,9 @@ workflow saige_manager {
                 pheno = per_pheno_data.right,
                 suffix = suffix_this,
 
-                p_col = Pvalue,
-                af_col = AF_Allele2,
-                conf_col = low_confidence,
+                p_col = 'Pvalue',
+                af_col = 'AF_Allele2',
+                conf_col = 'low_confidence',
 
                 keep_x = true,
                 exponentiate_p = false,
