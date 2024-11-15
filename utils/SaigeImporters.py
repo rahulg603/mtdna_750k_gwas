@@ -516,7 +516,7 @@ def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
     inv_normalized = get_inverse_normalize_status(null_log)
     saige_version = get_saige_version_from_log(null_log)
 
-    ht = hl.import_table(paths, delimiter='\t', impute=True)
+    ht = hl.import_table(paths, delimiter='\t', impute=True, min_partitions=8)
     print(f'Loading variant data...')
     print(f'Case/control counts: {str(n_cases)} cases, {str(n_controls)} controls.')
     print(f'Heritability: {str(heritability)}.')
@@ -535,7 +535,7 @@ def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
                                   pos=hl.int32(ht[marker_id_col].split(':')[1]),
                                   reference_genome='GRCh38'), 
                    alleles=alleles,
-                   **pheno_dict).distinct().repartition(150)
+                   **pheno_dict).distinct().naive_coalesce(150)
     
     if marker_id_col == 'MarkerID':
         ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
