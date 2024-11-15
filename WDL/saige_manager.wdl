@@ -607,8 +607,6 @@ task get_tasks_to_run {
         String sample_ids = read_string('samp.txt')
 
         String bgen_prefix = read_string('bgen.txt')
-
-        String results_folder = read_string('res.txt')
     }
 }
 
