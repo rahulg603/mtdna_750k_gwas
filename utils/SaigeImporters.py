@@ -518,6 +518,11 @@ def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
 
     ht = hl.import_table(paths, delimiter='\t', impute=True)
     print(f'Loading variant data...')
+    print(f'Case/control counts: {str(n_cases)} cases, {str(n_controls)} controls.')
+    print(f'Heritability: {str(heritability)}.')
+    print(f'Inverse normalized: {str(inv_normalized)}.')
+    print(f'Saige version: {str(saige_version)}.')
+
     marker_id_col = 'markerID' if extension == 'single.txt' else 'MarkerID'
     locus_alleles = ht[marker_id_col].split('_')
     if n_cases == -1: n_cases = hl.null(hl.tint)
@@ -528,6 +533,8 @@ def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
 
     ht = ht.key_by(locus=hl.parse_locus(locus_alleles[0]), alleles=locus_alleles[1].split('/'),
                    **pheno_dict).distinct().naive_coalesce(100)
+    ht.show()
+    
     if marker_id_col == 'MarkerID':
         ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
     ht = ht.transmute(Pvalue=ht['p.value']).annotate_globals(
