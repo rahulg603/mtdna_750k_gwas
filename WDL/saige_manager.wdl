@@ -293,7 +293,7 @@ workflow saige_manager {
         }
         
         File sumstats = select_first([merge.single_variant_flat_file, per_pheno_data.left.left.left.left[1]])
-        
+
         call ManhattanPlotter.ManhattanPlotter as manhattan {
             input:
                 sumstats = sumstats,
@@ -311,10 +311,19 @@ workflow saige_manager {
 
                 wid = 1300, 
                 hei = 640, 
-                cex = 1.3, 
+                cex = 1.1, 
                 point_size = 18,
 
                 mem = 80
+        }
+
+        String results_prefix = per_pheno_data.left.left.left.left[2]
+
+        call saige_tools.upload as u3 {
+            input:
+                paths = [results_prefix + 'manhattan.png', results_prefix + 'qq.png', results_prefix + 'suggestive.tsv', results_prefix + 'suggestive_genes.tsv'],
+                files = [manhattan.manhattan_plot, manhattan.qq_plot, manhattan.sugg_table, manhattan.sugg_gene_table],
+                HailDocker = HailDocker
         }
 
     }
@@ -491,13 +500,14 @@ task get_tasks_to_run {
         # merged hail table
         merged_ht_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
         merged_flat_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
+        results_path = os.path.dirname(merged_flat_path) + '/'
         overwrite_hail_tf = ('~{overwrite_h}' == 'overwrite')
         if overwrite_test_tf or overwrite_hail_tf or \
                 merged_ht_path not in results_already_created or \
                 not hl.hadoop_exists(f'{merged_ht_path}/_SUCCESS'):
-            run_hail_merge.append(['',''])
+            run_hail_merge.append(['', '', results_path])
         else:
-            run_hail_merge.append([merged_ht_path, merged_flat_path])
+            run_hail_merge.append([merged_ht_path, merged_flat_path, results_path])
 
     # phenotype names
     with open('pheno.json', 'w') as f:
@@ -597,6 +607,8 @@ task get_tasks_to_run {
         String sample_ids = read_string('samp.txt')
 
         String bgen_prefix = read_string('bgen.txt')
+
+        String results_folder = read_string('res.txt')
     }
 }
 
