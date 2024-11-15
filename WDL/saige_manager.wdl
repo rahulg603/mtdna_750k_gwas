@@ -319,10 +319,10 @@ workflow saige_manager {
     }
 
     output {
-        File manhattan_plot = manhattan.manhattan
-        File qq_plot = manhattan.qq
-        File sugg_table = manhattan.sugg
-        File sugg_gene_table = manhattan.sugg_gene
+        Array[File] manhattan_plot = manhattan.manhattan
+        Array[File] qq_plot = manhattan.qq
+        Array[File] sugg_table = manhattan.sugg
+        Array[File] sugg_gene_table = manhattan.sugg_gene
     }
 
 }
