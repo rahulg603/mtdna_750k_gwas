@@ -449,13 +449,13 @@ task get_tasks_to_run {
                 if overwrite_test_tf or not res_found:
                     this_pheno_result_holder.append([chr, '', ''])
                 else:
-                    this_pheno_result_holder.append([chr, results_files[0], ''])
+                    this_pheno_result_holder.append([chr, results_files[0], '', results_files[2]])
             else:
                 res_found = (results_files[0] in results_already_created) and (results_files[1] in results_already_created)
                 if overwrite_test_tf or not res_found:
                     this_pheno_result_holder.append([chr, '', ''])
                 else:
-                    this_pheno_result_holder.append([chr, results_files[0], results_files[1]])
+                    this_pheno_result_holder.append([chr, results_files[0], results_files[1], results_files[2]])
         run_tests.append(this_pheno_result_holder)
         
         # merged hail table
