@@ -294,25 +294,26 @@ workflow saige_manager {
         File sumstats = select_first([merge.single_variant_flat_file, per_pheno_data.left.left.left.left[1]])
         
         call ManhattanPlotter.ManhattanPlotter as manhattan {
-            sumstats = sumstats,
-            pop = pop,
-            pheno = per_pheno_data.right,
-            suffix = suffix_this,
+            input:
+                sumstats = sumstats,
+                pop = pop,
+                pheno = per_pheno_data.right,
+                suffix = suffix_this,
 
-            p_col = Pvalue,
-            af_col = AF_Allele2,
-            conf_col = low_confidence,
+                p_col = Pvalue,
+                af_col = AF_Allele2,
+                conf_col = low_confidence,
 
-            keep_x = true,
-            exponentiate_p = false,
-            var_as_rsid = true,
+                keep_x = true,
+                exponentiate_p = false,
+                var_as_rsid = true,
 
-            wid = 1300, 
-            hei = 640, 
-            cex = 1.3, 
-            point_size = 18,
+                wid = 1300, 
+                hei = 640, 
+                cex = 1.3, 
+                point_size = 18,
 
-            mem = 80
+                mem = 80
         }
 
     }
