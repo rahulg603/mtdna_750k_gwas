@@ -142,7 +142,7 @@ workflow saige_manager {
         File sparse_grm = tasks.mtx
         File sparse_grm_ids = tasks.ix
     }
-    
+
     File bedfile_vr_markers = tasks.bed
     File bimfile_vr_markers = tasks.bim
     File famfile_vr_markers = tasks.fam
@@ -860,7 +860,7 @@ task merge {
         Int mem
     }
 
-    Int disk = ceil((size(single_test, 'G') + size(gene_test, 'G')) * 4)
+    Int disk = ceil((size(single_test, 'G') + size(gene_test, 'G')) * 6)
     String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
 
     command <<<
@@ -913,7 +913,7 @@ task merge {
                           chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
                           low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20))
     ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
-    ht_flat.export('/cromwell_root/~{output_prefix + ".tsv.bgz"}')
+    ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
     single_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
     with open('flat_path.txt', 'w') as f:
