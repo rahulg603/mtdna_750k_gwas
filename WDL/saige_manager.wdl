@@ -322,7 +322,7 @@ workflow saige_manager {
         call saige_tools.upload as u3 {
             input:
                 paths = [results_prefix + 'manhattan.png', results_prefix + 'qq.png', results_prefix + 'suggestive.tsv', results_prefix + 'suggestive_genes.tsv'],
-                files = [manhattan.manhattan_plot, manhattan.qq_plot, manhattan.sugg_table, manhattan.sugg_gene_table],
+                files = [manhattan.manhattan, manhattan.qq, manhattan.sugg, manhattan.sugg_gene],
                 HailDocker = HailDocker
         }
 
