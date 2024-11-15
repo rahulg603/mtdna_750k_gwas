@@ -39,6 +39,7 @@ workflow saige_manager {
         String gs_genotype_path
         String gs_phenotype_path
         String gs_covariate_path
+        String gs_temp_path
         String gs_output_path
         String? google_project_req_pays
 
@@ -271,6 +272,7 @@ workflow saige_manager {
 
                     gs_bucket = gs_bucket, 
                     gs_output_path = gs_output_path, 
+                    gs_temp_path = gs_temp_path,
                     
                     SaigeImporters = SaigeImporters,
                     HailDocker = HailDocker,
@@ -821,6 +823,7 @@ task merge {
         
         String gs_bucket
         String gs_output_path
+        String gs_temp_path
 
         File SaigeImporters
         String HailDocker
@@ -855,6 +858,7 @@ task merge {
 
     gs_prefix = parse_bucket('~{gs_bucket}')
     gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
+    gs_temp_path = os.path.join(gs_prefix, '~{gs_temp_path}'.lstrip('/'))
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
@@ -864,8 +868,10 @@ task merge {
     results_files = get_results_files(results_prefix, '~{analysis_type}')
 
     variant_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
+    variant_ht_tmp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct)
 
     ht = load_variant_data(output_ht_path=variant_ht,
+                           temp_path=variant_ht_tmp,
                            paths='~{sep="," single_test}'.split(','),
                            extension='',
                            trait_type=trait_type,
