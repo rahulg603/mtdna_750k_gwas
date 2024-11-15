@@ -2,6 +2,7 @@ version 1.0
 
 import "https://personal.broadinstitute.org/rahul/saige/saige_sparse_grm.wdl" as saige_tools
 import "https://personal.broadinstitute.org/rahul/saige/saige_tests.wdl" as saige_tests
+import "https://personal.broadinstitute.org/rahul/saige/ManhattanPlotter.wdl" as ManhattanPlotter
 
 workflow saige_manager {
 
@@ -292,12 +293,35 @@ workflow saige_manager {
         
         File sumstats = select_first([merge.single_variant_flat_file, per_pheno_data.left.left.left.left[1]])
         
-        # call manhattan {
-        # }
+        call ManhattanPlotter.ManhattanPlotter as manhattan {
+            sumstats = sumstats,
+            pop = pop,
+            pheno = per_pheno_data.right,
+            suffix = suffix_this,
+
+            p_col = Pvalue,
+            af_col = AF_Allele2,
+            conf_col = low_confidence,
+
+            keep_x = true,
+            exponentiate_p = false,
+            var_as_rsid = true,
+
+            wid = 1300, 
+            hei = 640, 
+            cex = 1.3, 
+            point_size = 18,
+
+            mem = 80
+        }
 
     }
 
     output {
+        manhattan_plot = manhattan.manhattan
+        qq_plot = manhattan.qq
+        sugg_table = manhattan.sugg
+        sugg_gene_table = manhattan.sugg_gene
     }
 
 }
@@ -883,6 +907,11 @@ task merge {
                            null_log='~{null_log}',
                            test_logs='~{sep="," test_logs}'.split(','))
 
+    ht_flat = ht.annotate(variant = ht.locus.contig + ':' + hl.str(ht.locus.position) + ':' + hl.str(':').join(ht.alleles),
+                          chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
+                          low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Alleles2) < 20))
+    ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
+    ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
     gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, gene_analysis=True)
     if "~{analysis_type}" == "gene":
@@ -893,8 +922,6 @@ task merge {
                        pheno_dict=pheno_dct,
                        null_log='~{null_log}',
                        test_logs='~{sep="," test_logs}'.split(','))
-
-    ht.export('~{output_prefix + ".tsv.bgz"}')
 
     single_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
 
