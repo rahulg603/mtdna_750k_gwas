@@ -910,7 +910,7 @@ task merge {
 
     ht_flat = ht.annotate(variant = ht.locus.contig + ':' + hl.str(ht.locus.position) + ':' + hl.str(':').join(ht.alleles),
                           chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
-                          low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Alleles2) < 20))
+                          low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20))
     ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
     ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
