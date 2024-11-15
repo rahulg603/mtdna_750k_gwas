@@ -624,7 +624,7 @@ task export_phenotype_files {
     binary_trait = SAIGE_PHENO_TYPES[pheno_dct['trait_type']] != 'quantitative'
 
     suffix = '~{suffix}'
-    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", drc=drc_tf, custom_pcs="~{use_custom_pcs}")
+    mt = get_custom_ukb_pheno_mt(gs_phenotype_path, gs_covariate_path, addl_cov, suffix, "~{pop}", use_drc_pop=drc_tf, custom_pcs="~{use_custom_pcs}")
     mt = mt.filter_cols(hl.all(lambda x: x, [mt[k] == pheno_dct[k] for k in PHENO_KEY_FIELDS if k != 'pheno_sex']))
     pheno_sex_mt = mt.filter_cols(mt.pheno_sex == pheno_dct['pheno_sex'])
     if pheno_sex_mt.count_cols() == 1:
