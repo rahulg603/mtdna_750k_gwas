@@ -535,8 +535,7 @@ def load_variant_data(output_ht_path, paths, extension, trait_type, pheno_dict,
                                   pos=hl.int32(ht[marker_id_col].split(':')[1]),
                                   reference_genome='GRCh38'), 
                    alleles=alleles,
-                   **pheno_dict).distinct().naive_coalesce(100)
-    ht.show()
+                   **pheno_dict).distinct().repartition(150)
     
     if marker_id_col == 'MarkerID':
         ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
