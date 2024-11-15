@@ -321,7 +321,7 @@ workflow saige_manager {
 
         call saige_tools.upload as u3 {
             input:
-                paths = [results_prefix + 'manhattan.png', results_prefix + 'qq.png', results_prefix + 'suggestive.tsv', results_prefix + 'suggestive_genes.tsv'],
+                paths = [results_prefix + '.manhattan.png', results_prefix + '.qq.png', results_prefix + '.suggestive.tsv', results_prefix + '.suggestive_genes.tsv'],
                 files = [manhattan.manhattan, manhattan.qq, manhattan.sugg, manhattan.sugg_gene],
                 HailDocker = HailDocker
         }
@@ -500,7 +500,8 @@ task get_tasks_to_run {
         # merged hail table
         merged_ht_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
         merged_flat_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
-        results_path = os.path.dirname(merged_flat_path) + '/'
+        results_path = f'{get_pheno_output_path(result_dir, pheno_dct, "")}/{get_pheno_output_suffix(pheno_dct)}.' + '~{pop}' + '.' + '~{suffix}'
+
         overwrite_hail_tf = ('~{overwrite_h}' == 'overwrite')
         if overwrite_test_tf or overwrite_hail_tf or \
                 merged_ht_path not in results_already_created or \

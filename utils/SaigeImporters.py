@@ -168,9 +168,13 @@ def pheno_str_to_dict(str):
     return dict(zip(PHENO_KEY_FIELDS, split_str))
 
 
-def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.tsv'):
+def get_pheno_output_suffix(pheno_coding_trait):
     extended_suffix = f'{pheno_coding_trait["pheno_sex"]}-{pheno_coding_trait["modifier"]}'
-    return os.path.join(pheno_export_dir, f'{pheno_coding_trait["trait_type"]}-{format_pheno_dir(pheno_coding_trait["phenocode"])}-{extended_suffix}{extension}')
+    return f'{pheno_coding_trait["trait_type"]}-{format_pheno_dir(pheno_coding_trait["phenocode"])}-{extended_suffix}'
+
+
+def get_pheno_output_path(pheno_export_dir, pheno_coding_trait, extension = '.tsv'):
+    return os.path.join(pheno_export_dir, f'{get_pheno_output_suffix(pheno_coding_trait)}{extension}')
 
 
 # Covariates
