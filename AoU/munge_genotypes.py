@@ -210,6 +210,24 @@ def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_co
     )
 
 
+def get_call_rate_filtered_variants(pop, analysis_type, sample_qc, use_array_for_variant, use_drc_pop, 
+                                    min_call_rate=CALLRATE_CUTOFF, only_autosomes=False, overwrite=False):
+    n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
+                                            use_drc_pop=use_drc_pop)
+    ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
+                            use_drc_pop=use_drc_pop, 
+                            use_array_for_variant=use_array_for_variant, overwrite=overwrite)
+    ht = ht.filter(
+        (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
+        & (ht.call_stats.AC[1] > 0)
+    )
+
+    if only_autosomes:
+        ht = ht.filter(ht.locus.in_autosome())
+    
+    return ht
+
+
 def filter_common_variants_for_null(pop, analysis_type, use_array_for_variant, sample_qc, 
                                     use_drc_pop=False, overwrite=False,
                                     n_common_variants_to_keep=50000, # 100000 for per pop
@@ -226,16 +244,9 @@ def filter_common_variants_for_null(pop, analysis_type, use_array_for_variant, s
     
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
         print(f'Number of common variants to sample: {n_common_variants_to_keep}')
-        n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                              use_drc_pop=use_drc_pop)
-        ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
-                               use_drc_pop=use_drc_pop, 
-                               use_array_for_variant=use_array_for_variant, overwrite=overwrite)
-        ht = ht.filter(
-            (ht.locus.in_autosome())
-            & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
-            & (ht.call_stats.AC[1] > 0)
-        )
+        ht = get_call_rate_filtered_variants(pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                             use_array_for_variant=use_array_for_variant, use_drc_pop=use_drc_pop,
+                                             min_call_rate=min_call_rate, only_autosomes=True)
 
         sampled_common_variants = ht.aggregate(
             hl.agg.filter(
@@ -274,16 +285,9 @@ def filter_rare_variants_for_null(pop, analysis_type, use_array_for_variant, sam
     
     if overwrite or not hl.hadoop_exists(os.path.join(ht_sites_path, '_SUCCESS')):
 
-        n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                              use_drc_pop=use_drc_pop)
-        ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
-                               use_drc_pop=use_drc_pop, 
-                               use_array_for_variant=use_array_for_variant, overwrite=overwrite)
-        ht = ht.filter(
-            (ht.locus.in_autosome())
-            & (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
-            & (ht.call_stats.AC[1] > 0)
-        )
+        ht = get_call_rate_filtered_variants(pop=pop, analysis_type=analysis_type, sample_qc=sample_qc,
+                                             use_array_for_variant=use_array_for_variant, use_drc_pop=use_drc_pop,
+                                             min_call_rate=min_call_rate, only_autosomes=True)
 
         ht = ht.annotate(
             mac_category=mac_category_case_builder(ht.call_stats.AC[1], ht.call_stats.AF[1], min_maf_common_variants)

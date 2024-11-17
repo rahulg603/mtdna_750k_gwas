@@ -156,6 +156,18 @@ def get_hail_sumstats_path(model, fold):
     return os.path.join(HAIL_GWAS_PATH, f'sumstats/{model}/{fold}')
 
 
+def saige_merge_raw_sumstats():
+    return None
+
+
+def saige_append_merged_sumstats():
+    return None
+
+
+def saige_combine_per_pop_sumstats_mt():
+    return None
+
+
 def make_manhattan_plots(wdl_path, 
                          sumstat_paths: list, phenotypes: list, pops: list,
                          suffix, p_col, af_col, conf_col=None,
