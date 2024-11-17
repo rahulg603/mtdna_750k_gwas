@@ -292,7 +292,7 @@ task run_test {
 
     runtime {
         docker: SaigeDocker
-        memory: '16 GB'
+        memory: '12 GB'
         cpu: n_cpu_test
         disks: 'local-disk ' + disk + ' SSD'
     }
