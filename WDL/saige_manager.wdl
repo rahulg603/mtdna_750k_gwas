@@ -589,6 +589,7 @@ task get_tasks_to_run {
     runtime {
         docker: HailDocker
         memory: '4 GB'
+        preemptible: 5
     }
 
     output {
@@ -688,6 +689,7 @@ task export_phenotype_files {
     runtime {
         docker: HailDocker
         memory: '4 GB'
+        preemptible: 5
     }
 
     output {
@@ -834,6 +836,7 @@ task null {
         docker: SaigeDocker
         memory: '64 GB'
         cpu: n_cpu_null
+        preemptible: 5
     }
 
     output {
@@ -951,6 +954,7 @@ task merge {
         memory: mem + ' GB'
         cpu: n_cpu_merge
         disks: 'local-disk ' + disk + ' SSD'
+        preemptible: 5
     }
 
     output {

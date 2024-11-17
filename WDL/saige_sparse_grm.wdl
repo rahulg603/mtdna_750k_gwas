@@ -194,6 +194,7 @@ task get_sparse_grm_paths {
         docker: HailDocker
         memory: '4 GB'
         cpu: '2'
+        preemptible: 5
     }
 
     output {

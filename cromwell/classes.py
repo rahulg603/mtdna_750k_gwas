@@ -19,6 +19,7 @@ import cromwell.initialize as ini
 import cromwell.preprocess_run as pre
 from cromwell.constants import *
 import cromwell.run_monitor as crm
+import cromwell.cost as cost
 
 from datetime import datetime
 import dateutil
@@ -738,6 +739,22 @@ class CromwellWorkflow:
 
     def assemble_status_url(self, manager_url):
         return f'{manager_url}/api/workflows/v1/{self.id}/status'
+
+
+    def get_this_workflow_cost(self):
+        price = get_workflow_cost(self.batch_id)
+        print('$%.2f' % price)
+        return price
+
+
+def get_workflow_cost(id):
+    run_meta_resp = subprocess.run(['cromshell', '-t', '60', '--no_turtle', '--machine_processable', 'metadata', 
+                                    '--dont-expand-subworkflows', id], 
+                                    check=True, capture_output=True)        
+    run_meta = json.loads(run_meta_resp.stdout.decode())
+    pricelist = cost.get_pricelist()
+    price = cost.get_price(run_meta, pricelist, price=0)
+    return price
 
 
 def isolate_failed_shards(samples_df_uri, failed_workflows_list, cromwell_run_prefix='cromwell-execution'):
