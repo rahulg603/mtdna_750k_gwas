@@ -316,7 +316,7 @@ def get_snv_indel_count_phenotype(version, overwrite=False):
 
 
 def get_snv_count_by_class(version, overwrite=False):
-    if hl.hadoop_exists(f"{get_final_munged_snvcount_path(version)}/_SUCCESS") and not overwrite:
+    if hl.hadoop_exists(f"{get_final_munged_snvcount_byclass_path(version)}/_SUCCESS") and not overwrite:
         ht_wide_snv_count = hl.read_table(get_final_munged_snvcount_byclass_path(version))
     
     else:
