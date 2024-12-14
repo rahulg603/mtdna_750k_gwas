@@ -288,7 +288,7 @@ def get_snv_indel_count_phenotype(version, overwrite=False):
         ht_snv_count = hl.read_table(get_final_munged_snvcount_path(version))
     
     else:
-        mt = get_final_annotated_variant_mt_path(version)
+        mt = hl.read_matrix_table(get_final_annotated_variant_mt_path(version))
         mt_snv = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
         mt_snv = mt_snv.annotate_cols(snv_count = hl.agg.count_where(hl.is_defined(mt_snv.HL) & (mt_snv.HL < 0.95) & (mt_snv.HL >= 0.05)))
         ht_snv_count = mt_snv.cols()
@@ -320,7 +320,7 @@ def get_snv_count_by_class(version, overwrite=False):
         ht_wide_snv_count = hl.read_table(get_final_munged_snvcount_byclass_path(version))
     
     else:
-        mt = get_final_annotated_variant_mt_path(version)
+        mt = hl.read_matrix_table(get_final_annotated_variant_mt_path(version))
         mt_snv_class = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
         mt_snv_class = mt_snv_class.annotate_rows(allele_string = hl.str('_').join(mt_snv_class.alleles))
         mt_snv_count_by_class = mt_snv_class.group_rows_by(mt_snv_class.allele_string).aggregate(snv_count = hl.agg.count_where(hl.is_defined(mt_snv_class.HL) & (mt_snv_class.HL < 0.95) & (mt_snv_class.HL >= 0.05))).select_globals()
