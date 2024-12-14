@@ -696,6 +696,80 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
     print('Generation of all sparse GRMs completed.')
 
 
+def get_variant_intervals(pop, overwrite):
+    this_chunk_size = CHUNK_SIZE[pop]
+    variant_interval_path = get_saige_interval_path(GENO_PATH, 'variant', pop=pop)
+    if not hl.hadoop_exists(variant_interval_path) or overwrite:
+        print(f'Generating interval file for SAIGE (chunk size: {this_chunk_size})...')
+        chr = []
+        start = []
+        end = []
+        for chrom in CHROMOSOMES:
+            chromosome = f"chr{chrom}"
+            CHROMOSOME_LEN = hl.get_reference('GRCh38').lengths
+            chrom_length = CHROMOSOME_LEN[chromosome]
+            for start_pos in range(1, chrom_length, this_chunk_size):
+                end_pos = (
+                    chrom_length
+                    if start_pos + this_chunk_size > chrom_length
+                    else (start_pos + this_chunk_size)
+                )
+                chr.append(chromosome)
+                start.append(start_pos)
+                end.append(end_pos)
+
+        df = pd.DataFrame({'chrom': chr, 'start': start, 'end': end})
+        df.to_csv(variant_interval_path, sep='\t', index=False)
+    
+    df = pd.read_csv(variant_interval_path, sep='\t')
+    print(df.head(5))
+    return(df)
+
+
+def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True):
+    interval_list = get_variant_intervals(pop=pop, overwrite=False)
+    bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop)
+    
+    dct = {'chr': [],
+          'start': [],
+          'end': [],
+          'bgen_prefix': []}
+    
+    for row in interval_list.iterrows():
+        this_bgen_prefix = bgen_prefix.replace('@', row['chr']).replace('#', str(row['start'])).replace('?', str(row['end']))
+        if not hl.hadoop_exists(this_bgen_prefix + '.bgen') or not hl.hadoop_exists(this_bgen_prefix + '.bgen.bgi'):
+            dct['chr'].append(row['chr'])
+            dct['start'].append(row['start'])
+            dct['end'].append(row['end'])
+            dct['bgen_prefix'].append(this_bgen_prefix)
+
+    df = pd.DataFrame(dct)
+    df.to_csv(os.path.abspath(f'./this_{pop}_run.tsv'), index=False, sep='\t')
+
+    baseline = {'split_bgen_intervals.pop': pop,
+                'split_bgen_intervals.sample_qc': True,
+                'split_bgen_intervals.variant_qc': True,
+                'split_bgen_intervals.use_drc_pop': use_drc_pop,
+                'split_bgen_intervals.call_rate_filter': CALLRATE_CUTOFF,
+                'split_bgen_intervals.n_cpu': 8}
+    with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
+        json.dump(baseline, j)
+
+    # run sparse GRM analysis
+    print('NOW COMMENCING GENERATION OF BGENs.')
+    print('This stage will use Cromwell.')
+    manager = CromwellManager(run_name=f'saige_aou_split_bgen_{pop}',
+                              inputs_file=df,
+                              json_template_path=os.path.abspath(f'./saige_template_{pop}.json'),
+                              wdl_path=wdl_path,
+                              limit=500, n_parallel_workflows=500, 
+                              add_requester_pays_parameter=False,
+                              restart=False, batches_precomputed=False, 
+                              submission_sleep=0, check_freq=120, quiet=False)
+    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
+    return manager
+
+
 def main():
     sample_qc = True
     min_af = 0.01

@@ -22,6 +22,7 @@ workflow saige_manager {
         # files and parameters for test
         Float test_min_mac = 0.5
         Float test_min_maf = 0
+        Int test_markers_per_chunk = 10000
         File? group_file
         File? groups
         Float? max_maf_for_group
@@ -243,6 +244,7 @@ workflow saige_manager {
 
                 min_mac = test_min_mac,
                 min_maf = test_min_maf,
+                markers_per_chunk = test_markers_per_chunk,
 
                 gs_bucket = gs_bucket, 
                 gs_genotype_path = gs_genotype_path, 
@@ -953,7 +955,7 @@ task merge {
         docker: HailDocker
         memory: mem + ' GB'
         cpu: n_cpu_merge
-        disks: 'local-disk ' + disk + ' SSD'
+        disks: 'local-disk ' + disk + ' HDD'
         preemptible: 5
     }
 

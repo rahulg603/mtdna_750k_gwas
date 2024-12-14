@@ -12,6 +12,17 @@ def get_final_annotated_variant_path(version):
         return os.path.join('gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/vcf/221012_filt_annotated/annotated_combined_processed_flat.tsv.bgz')
     if version == 'v7':
         return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/annotated/annotated_combined_processed_flat.tsv.bgz')
+    if version == 'v6andv7':
+        raise NotImplementedError('It is VERY MUCH not recommended to use the combined callset for v6 + v7.')
+
+
+def get_final_annotated_variant_mt_path(version):
+    if version == 'v6':
+        return os.path.join('gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/vcf/221012_filt_annotated/annotated_combined.mt')
+    if version == 'v7':
+        return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/filt_annotated2/annotated_combined.mt')
+    if version == 'v6andv7':
+        return os.path.join(BUCKET, 'full_250k_callset/vcf/241128_filt_annotated/annotated_combined.mt')
 
 
 def get_final_munged_case_only_hl_path(num_to_keep, type, version):
@@ -22,9 +33,14 @@ def get_final_munged_case_only_hl_path(num_to_keep, type, version):
         return base_path + f'case_only_calls_low_hl_fullqc_long_format_N_{str(num_to_keep)}.tsv'
 
 
-def get_final_munged_snvcount_path(version):
+def get_final_munged_snvcount_path(version, extension='ht'):
     base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
-    return base_path + f'heteroplasmic_snv_count_fullqc.ht'
+    return base_path + f'heteroplasmic_snv_indel_count_fullqc.{extension}'
+
+
+def get_final_munged_snvcount_byclass_path(version, extension='ht'):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
+    return base_path + f'heteroplasmic_snv_count_by_class_fullqc.{extension}'
 
 
 def get_final_sample_stats_flat_path(version):
@@ -32,12 +48,14 @@ def get_final_sample_stats_flat_path(version):
         return 'gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/221012_filtered_aou_tab_per_sample_stats.tsv'
     if version == 'v7':
         return os.path.join(BUCKET, 'final_v7_merged_callset/total_stats.merge.csv')
+    if version == 'v6andv7':
+        return os.path.join(BUCKET, 'full_250k_callset/241025_filtered_aou_total_stats.tsv')
 
 
-def get_hap_ht_path(version, format):
+def get_hap_ht_path(version, format, cutoff):
     base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
     if format == 'wide':
-        return base_path + f'haplogroup_wide.ht'
+        return base_path + f'haplogroup_wide_N_{str(cutoff)}.ht'
     else:
         return base_path + f'haplogroup_tall.ht'
 
@@ -265,46 +283,55 @@ def get_case_only_mtdna_callset(version, num_to_keep=310, overwrite=False):
     return ht
 
 
-def get_snv_count_phenotype(version, overwrite=False):
+def get_snv_indel_count_phenotype(version, overwrite=False):
     if hl.hadoop_exists(f"{get_final_munged_snvcount_path(version)}/_SUCCESS") and not overwrite:
         ht_snv_count = hl.read_table(get_final_munged_snvcount_path(version))
     
     else:
-        type_dict = {'locus': hl.tstr, 'alleles': hl.tstr, 's': hl.tstr,
-                                    'rsid': hl.tstr, 'variant':hl.tstr, 'batch':hl.tstr,
-                                    'common_low_heteroplasmy': hl.tbool,
-                                    'hap_defining_variant': hl.tbool,
-                                    'region': hl.tstr,
-                                    'variant_context': hl.tstr,
-                                    'dp_mean': hl.tfloat64,
-                                    'mq_mean': hl.tfloat64, 'tlod_mean': hl.tfloat64,
-                                    'AF_hom': hl.tfloat64, 'AF_het': hl.tfloat64,
-                                    'AC_hom': hl.tint64, 'AC_het': hl.tint64,
-                                    'max_hl': hl.tfloat64, 'dp_mean': hl.tfloat64,
-                                    'major_haplogroup':hl.tstr, 'hap':hl.tstr, 
-                                    'wgs_median_coverage':hl.tfloat64, 'mt_mean_coverage':hl.tfloat64,
-                                    'mito_cn':hl.tfloat64, 'age':hl.tfloat64, 'pop':hl.tstr,
-                                    'DP':hl.tfloat64, 'AD_ref':hl.tfloat64,'AD_alt':hl.tfloat64,
-                                    'MQ':hl.tfloat64,'TLOD':hl.tfloat64, 'GT':hl.tstr, 'HL':hl.tfloat64,
-                                    'OriginalSelfRefAlleles':hl.tstr, 'SwappedFieldIDs':hl.tstr, 'FT':hl.tstr, 'FT_LIFT':hl.tstr,
-                                    'artifact_prone':hl.tbool, 'lifted':hl.tbool, 'fail_gt':hl.tbool, 'missing_call':hl.tbool}
-        if version == 'v6andv7':
-            ht6 = hl.import_table(get_final_annotated_variant_path('v6'),
-                                types=type_dict, min_partitions=50)
-            ht7 = hl.import_table(get_final_annotated_variant_path('v7'),
-                                types=type_dict, min_partitions=50)
-            ht = ht6.union(ht7, unify=True)
-        else:
-            ht = hl.import_table(get_final_annotated_variant_path(version),
-                                types=type_dict, min_partitions=50)
-        all_s_table = ht.select('s').key_by('s').distinct()
-        ht_heteroplasmies = ht.filter(hl.is_defined(ht.HL) & (ht.HL < 0.95)).repartition(40)
-        ht_heteroplasmies = ht_heteroplasmies.annotate(alleles = ht_heteroplasmies.alleles.split(','))
-        ht_heteroplasmies = ht_heteroplasmies.filter(~hl.is_indel(ht_heteroplasmies.alleles[0], ht_heteroplasmies.alleles[1]))
-        ht_snv_count = ht_heteroplasmies.group_by(ht_heteroplasmies.s).aggregate(N = hl.agg.count())
-        s_not_found = all_s_table.anti_join(ht_snv_count).annotate(N = hl.int64(hl.literal(0)))
-        ht_snv_count = hl.Table.union(ht_snv_count, s_not_found)
-        ht_snv_count = ht_snv_count.rename({'N':'snv_count_qcpass'})
-        ht_snv_count = ht_snv_count.checkpoint(get_final_munged_snvcount_path(version))
+        mt = get_final_annotated_variant_mt_path(version)
+        mt_snv = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
+        mt_snv = mt_snv.annotate_cols(snv_count = hl.agg.count_where(hl.is_defined(mt_snv.HL) & (mt_snv.HL < 0.95) & (mt_snv.HL >= 0.05)))
+        ht_snv_count = mt_snv.cols()
+
+        mt_indel = mt.filter_rows(hl.is_indel(mt.alleles[0], mt.alleles[1])).select_cols()
+        mt_indel = mt_indel.annotate_cols(indel_count = hl.agg.count_where(hl.is_defined(mt_indel.HL) & (mt_indel.HL < 0.95) & (mt_indel.HL >= 0.05)))
+        ht_count = mt_indel.cols()
+        ht_count = ht_count.annotate(snv_count = ht_snv_count[ht_count.key].snv_count)
+
+        common_indel_sites = [302, 310, 513, 567, 955, 5894, 8270, 16182, 16183, 16189, 16192]
+        mt_indel_uncommon = mt.filter_rows(hl.is_indel(mt.alleles[0], mt.alleles[1])).select_cols()
+        mt_indel_uncommon = mt_indel_uncommon.filter_rows(~hl.literal(common_indel_sites).contains(mt_indel_uncommon.locus.position))
+        mt_indel_uncommon = mt_indel_uncommon.annotate_cols(indel_count = hl.agg.count_where(hl.is_defined(mt_indel_uncommon.HL) & (mt_indel_uncommon.HL < 0.95) & (mt_indel_uncommon.HL >= 0.05)))
+        ht_count = ht_count.annotate(indel_count_uncommon = mt_indel_uncommon.cols()[ht_count.key].indel_count)
+
+        mt_indel_common = mt.filter_rows(hl.is_indel(mt.alleles[0], mt.alleles[1])).select_cols()
+        mt_indel_common = mt_indel_common.filter_rows(hl.literal(common_indel_sites).contains(mt_indel_common.locus.position))
+        mt_indel_common = mt_indel_common.annotate_cols(indel_count = hl.agg.count_where(hl.is_defined(mt_indel_common.HL) & (mt_indel_common.HL < 0.95) & (mt_indel_common.HL >= 0.05)))
+        ht_count = ht_count.annotate(indel_count_common = mt_indel_common.cols()[ht_count.key].indel_count)
+
+        ht_snv_count = ht_count.select_globals().checkpoint(get_final_munged_snvcount_path(version), overwrite=True)
+        ht_snv_count.export(get_final_munged_snvcount_path(version, extension='tsv'))
     
     return ht_snv_count
+
+
+def get_snv_count_by_class(version, overwrite=False):
+    if hl.hadoop_exists(f"{get_final_munged_snvcount_path(version)}/_SUCCESS") and not overwrite:
+        ht_wide_snv_count = hl.read_table(get_final_munged_snvcount_byclass_path(version))
+    
+    else:
+        mt = get_final_annotated_variant_mt_path(version)
+        mt_snv_class = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
+        mt_snv_class = mt_snv_class.annotate_rows(allele_string = hl.str('_').join(mt_snv_class.alleles))
+        mt_snv_count_by_class = mt_snv_class.group_rows_by(mt_snv_class.allele_string).aggregate(snv_count = hl.agg.count_where(hl.is_defined(mt_snv_class.HL) & (mt_snv_class.HL < 0.95) & (mt_snv_class.HL >= 0.05))).select_globals()
+
+        ht_snv_count_by_class = mt_snv_count_by_class.entries()
+        ht_snv_count_by_class = ht_snv_count_by_class.checkpoint(TEMP_PATH + '/snv_count_by_class_long_intermediate.ht', overwrite=True)
+        all_classes = list(ht_snv_count_by_class.aggregate(hl.agg.collect_as_set(ht_snv_count_by_class.allele_string)))
+        this_ht_snv_count_by_class = ht_snv_count_by_class.key_by('s')
+        ht_wide_snv_count = mt_snv_count_by_class.cols().select()
+        ht_wide_snv_count = ht_wide_snv_count.annotate(**{f'snv_count_{x}': this_ht_snv_count_by_class.filter(this_ht_snv_count_by_class.allele_string == x)[ht_wide_snv_count.key].snv_count for x in all_classes})
+        ht_wide_snv_count = ht_wide_snv_count.checkpoint(get_final_munged_snvcount_byclass_path(version), overwrite=True)
+        ht_wide_snv_count.export(get_final_munged_snvcount_byclass_path(version, 'tsv'))
+    
+    return ht_wide_snv_count

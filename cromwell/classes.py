@@ -748,8 +748,7 @@ class CromwellWorkflow:
 
 
 def get_workflow_cost(id):
-    run_meta_resp = subprocess.run(['cromshell', '-t', '60', '--no_turtle', '--machine_processable', 'metadata', 
-                                    '--dont-expand-subworkflows', id], 
+    run_meta_resp = subprocess.run(['cromshell', '-t', '60', '--no_turtle', '--machine_processable', 'metadata', id], 
                                     check=True, capture_output=True)        
     run_meta = json.loads(run_meta_resp.stdout.decode())
     pricelist = cost.get_pricelist()

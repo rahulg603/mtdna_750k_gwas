@@ -22,6 +22,7 @@ workflow saige_tests {
 
         Float min_mac
         Float min_maf
+        Int markers_per_chunk
 
         String bgen_prefix
 
@@ -90,6 +91,7 @@ workflow saige_tests {
 
                     min_maf = min_maf,
                     min_mac = min_mac,
+                    markers_per_chunk = markers_per_chunk,
 
                     SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker,
@@ -161,6 +163,7 @@ task run_test {
 
         Float min_maf
         Float min_mac
+        Int markers_per_chunk
 
         Boolean disable_loco
         Boolean always_use_sparse_grm
@@ -218,7 +221,8 @@ task run_test {
                     '--GMMATmodelFile=~{null_rda}',
                     '--varianceRatioFile=~{null_var_ratio}',
                     '--AlleleOrder=ref-first',
-                    '--SAIGEOutputFile=~{output_prefix + ".result.txt"}']
+                    '--SAIGEOutputFile=~{output_prefix + ".result.txt"}',
+                    '--markers_per_chunk=~{markers_per_chunk}']
 
     if "~{analysis_type}" == "variant":
         if ("~{tf_defined_spGRM}" == 'defined') and ("~{always_spGRM}" == "sp"):
@@ -294,7 +298,7 @@ task run_test {
         docker: SaigeDocker
         memory: '4 GB'
         cpu: n_cpu_test
-        disks: 'local-disk ' + disk + ' SSD'
+        disks: 'local-disk ' + disk + ' HDD'
         preemptible: 5
     }
 

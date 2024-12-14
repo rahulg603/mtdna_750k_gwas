@@ -9,6 +9,7 @@ from utils.SaigeImporters import *
 from AoU.phenotypes import *
 
 HAP_CUTOFF = 30
+BASELINE_HAP = 'H'
 
 
 def generate_indicator(ht, col, baseline_item):
@@ -195,27 +196,28 @@ def get_gwas_covariates(overwrite=False, use_drc_pop=True, use_custom_pcs='custo
     return baseline_covar
 
 
-def hap_to_dummy(ht, field_name='hap', count_cutoff=HAP_CUTOFF):
+def hap_to_dummy(ht, baseline_item=BASELINE_HAP, field_name='hap', count_cutoff=HAP_CUTOFF):
     counts = ht.aggregate(hl.agg.counter(ht[field_name]))
     haps_to_keep = [hap for hap, ct in counts.items() if ct > count_cutoff]
+    if baseline_item not in haps_to_keep:
+        raise ValueError("ERROR: baseline_item should be in the set of haps found in ht.")
+    
     ht = ht.filter(hl.literal(haps_to_keep).contains(ht[field_name]))
     unique_haps = list(ht.aggregate(hl.agg.collect_as_set(ht[field_name])))
-    ht = ht.annotate(**{f'{field_name}_{hap}': hl.if_else(ht[field_name] == hap, 1, 0) for hap in unique_haps})
+    ht = ht.annotate(**{f'{field_name}_{hap}': hl.if_else(ht[field_name] == hap, 1, 0) for hap in unique_haps if hap != baseline_item})
     return ht.drop(field_name)
 
 
 def get_hap_covariates(version, format, overwrite=False, hap_cutoff=HAP_CUTOFF):
     
-    path = get_hap_ht_path(version, format)
+    path = get_hap_ht_path(version, format, hap_cutoff)
 
     if overwrite or not hl.hadoop_exists(os.path.join(path, '_SUCCESS')):
         
-        path_tall = get_hap_ht_path(version, format='tall')
+        path_tall = get_hap_ht_path(version, format='tall', cutoff=hap_cutoff)
         if overwrite or not hl.hadoop_exists(os.path.join(path_tall, '_SUCCESS')):
             if version == 'v6andv7':
-                v6ht = get_hap_covariates('v6', 'tall', overwrite=overwrite, hap_cutoff=hap_cutoff)
-                v7ht = get_hap_covariates('v7', 'tall', overwrite=overwrite, hap_cutoff=hap_cutoff)
-                ht = v6ht.union(v7ht)
+                ht = hl.import_table(get_final_sample_stats_flat_path('v6andv7'), key='s', min_partitions=10).select('hap')
 
             if version == 'v6':
                 ht = hl.import_table(get_final_sample_stats_flat_path('v6'), key='s', min_partitions=10).select('hap')
@@ -232,16 +234,22 @@ def get_hap_covariates(version, format, overwrite=False, hap_cutoff=HAP_CUTOFF):
                     )
                 )
             
-            ht = ht.checkpoint(get_hap_ht_path(version, format='tall'), overwrite=overwrite)
+            ht = ht.checkpoint(get_hap_ht_path(version, format='tall', cutoff=hap_cutoff), overwrite=overwrite)
         else:
             ht = hl.read_table(path_tall)
 
         if format == 'wide':
             ht = hap_to_dummy(ht, count_cutoff=hap_cutoff)
-            ht = ht.checkpoint(get_hap_ht_path(version, format='wide'), overwrite=overwrite)
+            ht = ht.checkpoint(get_hap_ht_path(version, format='wide', cutoff=hap_cutoff), overwrite=overwrite)
 
     else:
         ht = hl.read_table(path)
     
     return ht
-        
+
+
+def get_counts_hap_covariates(version, hap_cutoff, field_name='hap', overwrite=False):
+    ht = get_hap_covariates(version=version, format='tall', overwrite=overwrite, hap_cutoff=hap_cutoff)
+    grouped = ht.group_by(field_name).aggregate(N = hl.agg.count_where(hl.is_defined(ht[field_name])))
+    grouped = grouped.filter(grouped.N >= hap_cutoff)
+    return grouped
