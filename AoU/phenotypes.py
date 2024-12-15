@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hail as hl
 import pandas as pd
+import numpy as np
 import subprocess
 import os, re
 
@@ -222,65 +223,44 @@ def get_fancy_positive_control_phenotypes(sample_covariates, overwrite=False):
     return ht_pheno_out, ht_covar_out, phenotypes
 
 
-def get_case_only_mtdna_callset(version, num_to_keep=310, overwrite=False):
+def get_case_only_mtdna_callset(version, num_to_keep=500, overwrite=False):
     """ Here we implement the munging pipeline in Python and Pandas.
     """
     if hl.hadoop_exists(f"{get_final_munged_case_only_hl_path(num_to_keep, 'ht', version)}/_SUCCESS") and not overwrite:
-        ht = hl.read_table(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version))
+        ht_wide_hl_all = hl.read_table(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version))
     
     else:
-        type_dict = {'locus': 'str', 'alleles': 'str', 's': 'str',
-                                    'rsid': 'str', 'variant':'str', 'batch':'str',
-                                    'common_low_heteroplasmy': 'boolean',
-                                    'hap_defining_variant': 'boolean',
-                                    'region': 'str',
-                                    'variant_context': 'str',
-                                    'dp_mean': 'float64',
-                                    'mq_mean': 'float64', 'tlod_mean': 'float64',
-                                    'AF_hom': 'float64', 'AF_het': 'float64',
-                                    'AC_hom': 'int64', 'AC_het': 'int64',
-                                    'max_hl': 'float64', 'dp_mean': 'float64',
-                                    'major_haplogroup':'str', 'hap':'str', 
-                                    'wgs_median_coverage':'float64', 'mt_mean_coverage':'float64',
-                                    'mito_cn':'float64', 'age':'float64', 'pop':'str',
-                                    'DP':'float64', 'AD_ref':'float64','AD_alt':'float64',
-                                    'MQ':'float64','TLOD':'float64', 'GT':'str',
-                                    'OriginalSelfRefAlleles':'str', 'SwappedFieldIDs':'str', 'FT':'str', 'FT_LIFT':'str',
-                                    'artifact_prone':'boolean', 'lifted':'boolean', 'fail_gt':'boolean', 'missing_call':'boolean'}
-        if version == 'v6andv7':
-            df6 = pd.read_csv(get_final_annotated_variant_path('v6'), sep='\t', 
-                            compression='gzip',
-                            dtype=type_dict)
-            df7 = pd.read_csv(get_final_annotated_variant_path('v7'), sep='\t', 
-                            compression='gzip',
-                            dtype=type_dict)
-            df = pd.concat([df6, df7])
-        else:
-            df = pd.read_csv(get_final_annotated_variant_path(version), sep='\t', 
-                            compression='gzip',
-                            dtype=type_dict)
-        df_for_enumeration = df[(~df['HL'].isna()) & (df['HL'] < 0.95) & (df['common_low_heteroplasmy'])]
-        counted_variants = df_for_enumeration.groupby('variant')['HL'].count().sort_values(ascending=False)
-        variants_to_extract = list(counted_variants[counted_variants > num_to_keep].index)
-
-        variants_to_analyze = df[df['variant'].isin(variants_to_extract) & (~df['HL'].isna()) & (df['HL'] < 0.95)]
-        variants_to_analyze.to_csv(get_final_munged_case_only_hl_path(num_to_keep, 'tsv', version), sep='\t', index=False)
-        
-        pivoted_vars = variants_to_analyze.pivot(index='s', columns='variant',values='HL').reset_index()
-        alls = pd.DataFrame({'s': list(set(df['s']))})
-        data_HL = pd.merge(pivoted_vars, alls, on='s', how='right')
-        backbone = data_HL[['s']].copy()
-        for vari in variants_to_extract:
-            this_name = re.sub('[:,]','_', vari)
-            backbone.loc[:,this_name] = data_HL[vari]
-
-        backbone.to_csv(f'{TEMP_PATH}pivoted_flat_file_lowHLqc.tsv', sep='\t', index=False)
-
-        ht = hl.import_table(f'{TEMP_PATH}pivoted_flat_file_lowHLqc.tsv', impute=True, missing='')
-        ht = ht.annotate(s = hl.str(ht.s)).key_by('s')
-        ht = ht.repartition(50).checkpoint(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version))
+        mt = hl.read_matrix_table(get_final_annotated_variant_mt_path(version))
+        ht_N_filt = hl.import_table(f'{BUCKET}reference_files/heteroplasmic_variants_ukb_aou_{str(num_to_keep)}.tsv',
+                                    types={'locus': hl.tlocus(reference_genome='GRCh38'),
+                                           'alleles': hl.tarray('str')}, impute=True)
+        ht_N_filt = ht_N_filt.key_by('locus','alleles')
+        mt_variants_hl = mt.semi_join_rows(ht_N_filt).select_rows().select_cols().select_globals()
+        mt_variants_hl = mt_variants_hl.annotate_entries(HL = hl.case().when((mt_variants_hl.HL >= 0.05) & (mt_variants_hl.HL < 0.95) & (hl.is_defined(mt_variants_hl.HL)), mt_variants_hl.HL
+                                                                    ).or_missing())
+        ht_variants_hl = mt_variants_hl.select_entries('HL').entries()
+        ht_variants_hl = ht_variants_hl.annotate(variant = ht_variants_hl.locus.contig + '_' + hl.str(ht_variants_hl.locus.position) + '_' + hl.str('_').join(ht_variants_hl.alleles))
+        ht_variants_hl = ht_variants_hl.key_by('s').select('variant', 'HL').checkpoint(f'{TEMP_PATH}/variants_entries_for_low_HL.ht', overwrite=True)
+        variants = ht_variants_hl.aggregate(hl.agg.collect_as_set(ht_variants_hl.variant))
+        variants = list(np.array(list(variants))[np.argsort([int(x.split('_')[1]) for x in variants])])
+        iter_size = 10
+        hl_list = []
+        for idx, start in enumerate(range(0, len(variants), iter_size)):
+            end = start + iter_size if start + iter_size < len(variants) else len(variants)
+            these_vars = variants[start:end]
+            print('Making the following variants wide:')
+            print(these_vars)
+            ht_wide_hl = mt_variants_hl.cols().select()
+            ht_wide_hl = ht_wide_hl.annotate(**{x: ht_variants_hl.filter(ht_variants_hl.variant == x)[ht_wide_hl.key].HL for x in these_vars})
+            ht_wide_hl = ht_wide_hl.checkpoint(f'{TEMP_PATH}/variants_hl_temp_{str(idx)}.ht', overwrite=True)
+            hl_list.append(ht_wide_hl)
+        ht_wide_hl_all = hl_list[0]
+        for this_ht in hl_list[1:len(hl_list)]:
+            ht_wide_hl_all = ht_wide_hl_all.join(this_ht, how='outer')
+        ht_wide_hl_all = ht_wide_hl_all.checkpoint(get_final_munged_case_only_hl_path(num_to_keep, 'ht', version), overwrite=True)
+        ht_wide_hl_all.export(get_final_munged_case_only_hl_path(num_to_keep, 'tsv', version))
     
-    return ht
+    return ht_wide_hl_all
 
 
 def get_snv_indel_count_phenotype(version, overwrite=False):
@@ -335,3 +315,29 @@ def get_snv_count_by_class(version, overwrite=False):
         ht_wide_snv_count.export(get_final_munged_snvcount_byclass_path(version, 'tsv'))
     
     return ht_wide_snv_count
+
+
+def extract_single_mtdna_variant(position, ref, alt, version):
+    mt = hl.read_matrix_table(get_final_annotated_variant_mt_path(version))
+    mtf = mt.filter_rows((mt.locus.position == position) & (mt.alleles == [ref, alt]))
+
+    mtf = mtf.select_globals().select_cols()
+    mtf = mtf.key_rows_by(variant = mtf.locus.contig + ':' + hl.str(mtf.locus.position) + ':' + hl.str(':').join(mtf.alleles)).select_rows('filters')
+    ht = mtf.entries()
+    ht = ht.annotate(AD_ref = ht.AD[0], AD_alt = ht.AD[1], FT = ht.FT.union(ht.filters)).drop('AD','filters')
+    ht = ht.annotate(OriginalSelfRefAlleles = hl.str(',').join(ht.OriginalSelfRefAlleles))
+    if 'F1R2' in ht.row and 'F2R1' in ht.row:
+        ht = ht.annotate(F2R1_ref = ht.F2R1[0], F2R1_alt = ht.F2R1[1], F1R2_ref = ht.F1R2[0], F1R2_alt = ht.F1R2[1]).drop('F2R1','F1R2')
+    if 'RPA' in ht.row:
+        ht = ht.annotate(RPA_ref = ht.RPA[0], RPA_alt = ht.RPA[1]).drop('RPA')
+    if 'AS_SB_TABLE' in ht.row:
+        ht = ht.annotate(AS_SB_SPLIT = ht.AS_SB_TABLE.split('\\|'))
+        ht = ht.annotate(FWD_SB_ref = hl.if_else(hl.is_defined(ht.AS_SB_TABLE), hl.int32(ht.AS_SB_SPLIT[0].split(',')[0]), hl.missing(hl.tint32)),
+                            FWD_SB_alt = hl.if_else(hl.is_defined(ht.AS_SB_TABLE), hl.int32(ht.AS_SB_SPLIT[1].split(',')[0]), hl.missing(hl.tint32)),
+                            REV_SB_ref = hl.if_else(hl.is_defined(ht.AS_SB_TABLE), hl.int32(ht.AS_SB_SPLIT[0].split(',')[1]), hl.missing(hl.tint32)),
+                            REV_SB_alt = hl.if_else(hl.is_defined(ht.AS_SB_TABLE), hl.int32(ht.AS_SB_SPLIT[1].split(',')[1]), hl.missing(hl.tint32)))
+        ht = ht.drop('AS_SB_TABLE', 'AS_SB_SPLIT')
+    ht = ht.annotate(FT = hl.literal(',').join(ht.FT.difference({'PASS'})), 
+                    FT_LIFT = hl.literal(',').join(ht.FT_LIFT.difference({'PASS'}))).drop('GT')
+
+    return ht
