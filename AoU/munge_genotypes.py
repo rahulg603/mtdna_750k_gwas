@@ -726,9 +726,9 @@ def get_variant_intervals(pop, overwrite):
     return(df)
 
 
-def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True):
+def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True, encoding='additive'):
     interval_list = get_variant_intervals(pop=pop, overwrite=False)
-    bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop)
+    bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
     
     dct = {'chr': [],
           'start': [],
@@ -751,6 +751,7 @@ def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True):
                 'split_bgen_intervals.variant_qc': True,
                 'split_bgen_intervals.use_drc_pop': use_drc_pop,
                 'split_bgen_intervals.call_rate_filter': CALLRATE_CUTOFF,
+                'split_bgen_intervals.encoding': encoding,
                 'split_bgen_intervals.n_cpu': 8}
     with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
         json.dump(baseline, j)

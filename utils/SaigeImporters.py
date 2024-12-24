@@ -113,9 +113,9 @@ def get_wildcard_path_genotype_bgen(analysis_type):
     return os.path.join(SHORT_READ_ROOT,f'{data_type}/bgen/{file}.@')
 
 
-def get_wildcard_path_intervals_bgen(geno_folder, pop, use_drc_pop):
+def get_wildcard_path_intervals_bgen(geno_folder, pop, use_drc_pop, encoding='additive'):
     drc_string = '_drc' if use_drc_pop else '_axaou'
-    return os.path.join(geno_folder, f'split_acaf_bgen/aou_wgs_acaf_qc{drc_string}_{pop}.@.#.?')
+    return os.path.join(geno_folder, f'split_acaf_bgen/aou_wgs_acaf_qc{drc_string}_{pop}.@.#.?_{encoding}')
 
 
 def get_saige_interval_path(geno_folder, pop, analysis_type):
