@@ -765,6 +765,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                 'split_bgen_intervals.analysis_type': 'variant',
                 'split_bgen_intervals.encoding': encoding,
                 'split_bgen_intervals.repo_tarball': repo_tarball,
+                'split_bgen_intervals.tar_folder_path': git_path,
                 'split_bgen_intervals.n_cpu': n_cpu}
     with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
         json.dump(baseline, j)

@@ -24,6 +24,7 @@ workflow split_bgen_intervals {
         String encoding = 'additive'
 
         File repo_tarball
+        String tar_folder_path
 
         Int n_cpu
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
@@ -49,6 +50,7 @@ workflow split_bgen_intervals {
             analysis_type = analysis_type,
             encoding = encoding,
             repo_tarball = repo_tarball,
+            tar_folder_path = tar_folder_path,
 
             n_cpu = n_cpu,
             HailDocker = HailDocker
@@ -101,6 +103,7 @@ task split_bgen {
         String encoding
 
         File repo_tarball
+        String tar_folder_path
 
         Int n_cpu
         String HailDocker
@@ -114,11 +117,9 @@ task split_bgen {
 
     command <<<
         set -e
-        ls -lh
         tar -xzf ~{repo_tarball}
-        echo $PWD
+        cd ~{tar_folder_path}
         ls -lh
-        cd ./saige_aou_wdl
 
         python3.8 <<CODE
     import hail as hl
