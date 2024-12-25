@@ -728,8 +728,9 @@ def get_variant_intervals(pop, overwrite):
     return(df)
 
 
-def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac, 
-                                        mean_impute_missing=True, use_drc_pop=True, encoding='additive', limit=5000):
+def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac,
+                                        mean_impute_missing=True, use_drc_pop=True, encoding='additive', 
+                                        limit=5000, n_cpu=8):
     interval_list = get_variant_intervals(pop=pop, overwrite=False)
     bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
     
@@ -750,6 +751,9 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
     df.to_csv(os.path.abspath(f'./this_{pop}_run.tsv'), index=False, sep='\t')
 
     subprocess.run(['tar', '-czf', './saige_wdl.tar.gz', git_path])
+    repo_tarball = os.path.join(BUCKET,'scripts/saige_wdl.tar.gz')
+    _ = subprocess.run(['gsutil','cp','./saige_wdl.tar.gz',repo_tarball])
+
 
     baseline = {'split_bgen_intervals.pop': pop,
                 'split_bgen_intervals.sample_qc': True,
@@ -760,8 +764,8 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                 'split_bgen_intervals.min_ac': min_ac,
                 'split_bgen_intervals.analysis_type': 'variant',
                 'split_bgen_intervals.encoding': encoding,
-                'split_bgen_intervals.repo_tarball': './saige_wdl.tar.gz',
-                'split_bgen_intervals.n_cpu': 8}
+                'split_bgen_intervals.repo_tarball': repo_tarball,
+                'split_bgen_intervals.n_cpu': n_cpu}
     with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
         json.dump(baseline, j)
 
@@ -775,7 +779,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                               limit=limit, n_parallel_workflows=500, 
                               add_requester_pays_parameter=False,
                               restart=False, batches_precomputed=False, 
-                              submission_sleep=0, check_freq=120, quiet=False, _bypass_output_parsing=True)
+                              submission_sleep=0, check_freq=120, quiet=False)
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
     return manager
 
