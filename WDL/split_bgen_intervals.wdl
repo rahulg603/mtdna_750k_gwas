@@ -114,8 +114,11 @@ task split_bgen {
 
     command <<<
         set -e
+        ls -lh
         tar -xzf ~{repo_tarball}
-        cd saige_aou_wdl
+        echo $PWD
+        ls -lh
+        cd ./saige_aou_wdl
 
         python3.8 <<CODE
     import hail as hl
