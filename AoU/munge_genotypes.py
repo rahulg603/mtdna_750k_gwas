@@ -775,7 +775,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                               limit=limit, n_parallel_workflows=500, 
                               add_requester_pays_parameter=False,
                               restart=False, batches_precomputed=False, 
-                              submission_sleep=0, check_freq=120, quiet=False)
+                              submission_sleep=0, check_freq=120, quiet=False, _bypass_output_parsing=True)
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
     return manager
 

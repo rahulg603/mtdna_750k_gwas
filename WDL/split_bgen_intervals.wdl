@@ -72,8 +72,8 @@ workflow split_bgen_intervals {
     }
 
     output {
-        Array[String] bgen = split_bgen.bgen
-        Array[String] bgi = split_bgen.bgi_path
+        String bgen = split_bgen.bgen
+        String bgi = split_bgen.bgi_path
     }
 
 }
