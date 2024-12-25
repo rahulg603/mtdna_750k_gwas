@@ -217,15 +217,15 @@ task index_bgen {
         File bgen
     }
 
+    String output_prefix = basename(bgen)
+
     command <<<
         set -e
-        
-        bgenix -index -g ~{bgen}
-        echo ~{bgen}.bgi > fl.txt
 
-        echo $PWD
+        bgenix -index -g ~{bgen}
+        cp ~{bgen}.bgi .
+
         ls -lh
-        cat fl.txt
     >>>
 
     runtime {
@@ -235,7 +235,7 @@ task index_bgen {
     }
 
     output {
-        File bgi = read_string('fl.txt')
+        File bgi = output_prefix + '.bgi'
     }
 
 }
