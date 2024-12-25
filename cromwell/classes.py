@@ -219,6 +219,7 @@ class CromwellManager:
         while not self.exit_signal.is_set():
 
             with self.lock:
+                self.update_all_token()
                 self.update_all_status()
                 if not self.quiet:
                     self.print_status(flush=True)
@@ -576,7 +577,27 @@ class CromwellManager:
 
     def get_token(self):
         return self.env['token']
-     
+
+
+    def update_all_token(self):
+        updated_env = ini.get_env_vars()
+        self.env = updated_env
+
+        self.update_run_statistics()
+        if not self.quiet:
+            print(f'Updating tokens for {str(self.n_running)} workflow ids.', flush=True)
+        
+        for idx, (id, workflow) in enumerate(self.running_workflows.items()):
+            if (idx % 20) == 0 and idx > 0 and not self.quiet:
+                print(f'{idx} workflows updated.', flush=True)
+
+            if workflow.get_id() != id:
+                raise ValueError('ERROR: ID mismatch when updating workflow tokens.')
+            
+            workflow.update_token(updated_env['token'])
+        
+        self.update_run_statistics()
+
 
     def get_initial_parameters_json(self):
         # set pipeline submission parameter values
@@ -693,6 +714,10 @@ class CromwellWorkflow:
 
             if not quiet:
                 print(f'Batch {str(int(self.batch_id))} submitted ({self.get_id()}).')
+
+
+    def update_token(self, new_token):
+        self.token = new_token
 
 
     def update_status(self):

@@ -242,8 +242,8 @@ def get_null_model_file_paths(null_model_path, pheno_dict, analysis_type):
 
 
 # GWAS results
-def get_result_path(gs_output_path, suffix, pop):
-    return os.path.join(gs_output_path, f'result/{suffix}/{pop}')
+def get_result_path(gs_output_path, suffix, pop, encoding):
+    return os.path.join(gs_output_path, f'result/{suffix}/{encoding}/{pop}')
 
 
 def get_results_prefix(pheno_results_dir, pheno_key_dict, chromosome):
@@ -258,16 +258,16 @@ def get_results_files(results_pre, analysis_type):
         return f'{results_pre}.txt', f'{results_pre}.txt.singleAssoc.txt', f'{results_pre}.log'
 
 
-def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct, gene_analysis=False):
-    result_dir = get_result_path(gs_output_path, suffix, pop)
+def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct, encoding, gene_analysis=False):
+    result_dir = get_result_path(gs_output_path, suffix, pop, encoding)
     if gene_analysis:
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.ht'
     else:
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.ht'
 
 
-def get_merged_flat_path(gs_output_path, suffix, pop, pheno_dct, gene_analysis=False):
-    result_dir = get_result_path(gs_output_path, suffix, pop)
+def get_merged_flat_path(gs_output_path, suffix, pop, pheno_dct, encoding, gene_analysis=False):
+    result_dir = get_result_path(gs_output_path, suffix, pop, encoding)
     if gene_analysis:
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.tsv.bgz'
     else:

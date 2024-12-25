@@ -13,6 +13,7 @@ workflow saige_manager {
         String trait_type
         String sex = 'both_sexes'
         String modifier
+        String encoding = 'additive'
 
         File phenotype_flat_file
         String sample_col = 's'
@@ -100,6 +101,7 @@ workflow saige_manager {
         input:
             suffix = suffix_this,
             pop = pop,
+            encoding = encoding,
 
             specific_phenos = specific_phenos,
             min_cases = min_cases,
@@ -226,6 +228,7 @@ workflow saige_manager {
                 pheno = per_pheno_data.right,
                 suffix = suffix_this,
                 pop = pop,
+                encoding = encoding,
 
                 null_rda = null_rda_comb,
                 null_var_ratio = null_var_ratio_comb,
@@ -345,6 +348,7 @@ task get_tasks_to_run {
         String pop
         String suffix
         String? specific_phenos
+        String encoding
         
         String sex_stratified
         Int min_cases
@@ -447,7 +451,7 @@ task get_tasks_to_run {
     run_tests = []
     run_hail_merge = []
     null_model_dir = get_null_model_path(gs_output_path, '~{suffix}', '~{pop}')
-    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
+    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', "~{encoding}")
     for pheno_dct in pheno_key_dict:
         pheno_name = pheno_dict_to_str(pheno_dct)
         phenotypes.append(pheno_name)
@@ -509,8 +513,8 @@ task get_tasks_to_run {
         run_tests.append(this_pheno_result_holder)
         
         # merged hail table
-        merged_ht_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
-        merged_flat_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct)
+        merged_ht_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct, '~{encoding}')
+        merged_flat_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct, '~{encoding}')
         results_path = f'{get_pheno_output_path(result_dir, pheno_dct, "")}/{get_pheno_output_suffix(pheno_dct)}.' + '~{pop}' + '.' + '~{suffix}'
 
         overwrite_hail_tf = ('~{overwrite_h}' == 'overwrite')
@@ -909,13 +913,13 @@ task merge {
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
-    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
+    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', '~{encoding}')
     pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
     results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
     results_files = get_results_files(results_prefix, '~{analysis_type}')
 
-    variant_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
-    variant_ht_tmp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct)
+    variant_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}')
+    variant_ht_tmp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct, '~{encoding}')
 
     ht = load_variant_data(output_ht_path=variant_ht,
                            temp_path=variant_ht_tmp,
@@ -932,12 +936,12 @@ task merge {
     ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
     ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
-    single_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct)
+    single_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}')
     with open('flat_path.txt', 'w') as f:
         f.write(single_flat)
 
 
-    gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, gene_analysis=True)
+    gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=True)
     if "~{analysis_type}" == "gene":
         load_gene_data(output_ht_path=gene_ht,
                        paths='~{sep="," single_test}'.split(','),

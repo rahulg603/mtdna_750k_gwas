@@ -8,6 +8,7 @@ workflow saige_tests {
         String pheno
         String suffix
         String pop
+        String encoding
 
         File null_rda
         File null_var_ratio
@@ -65,6 +66,7 @@ workflow saige_tests {
                     pop = pop,
                     chr = this_chr[4],
                     suffix = suffix,
+                    encoding = encoding,
                     analysis_type = analysis_type,
 
                     bgen = this_bgen,
@@ -141,6 +143,7 @@ task run_test {
         String chr
         String suffix
         String pop
+        String encoding
 
         File bgen
         File bgi
@@ -204,7 +207,7 @@ task run_test {
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
-    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}')
+    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', '~{encoding}')
     pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
     results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, '~{chr}')
     results_files = get_results_files(results_prefix, '~{analysis_type}')
