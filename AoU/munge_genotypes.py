@@ -14,8 +14,6 @@ from AoU.paths import *
 from utils.SaigeImporters import *
 from AoU.covariates import get_all_demographics
 
-from cromwell.classes import CromwellManager
-
 from copy import deepcopy
 from typing import Union
 
@@ -475,6 +473,8 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
                        use_drc_pop=False, 
                        overwrite=False):
 
+    from cromwell.classes import CromwellManager
+
     baseline = {'ld_prune.step_size': 1,
                 'ld_prune.window_size': 10000,
                 'ld_prune.r2': 0.1,
@@ -646,6 +646,9 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
     """
     Uses cromwell to distribute across pops.
     """
+
+    from cromwell.classes import CromwellManager
+
     pops_to_queue = []
 
     for pop in pops:
@@ -731,6 +734,9 @@ def get_variant_intervals(pop, overwrite):
 def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac,
                                         mean_impute_missing=True, use_drc_pop=True, encoding='additive', 
                                         limit=5000, n_cpu=8):
+
+    from cromwell.classes import CromwellManager
+
     interval_list = get_variant_intervals(pop=pop, overwrite=False)
     bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
     
@@ -765,7 +771,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                 'split_bgen_intervals.analysis_type': 'variant',
                 'split_bgen_intervals.encoding': encoding,
                 'split_bgen_intervals.repo_tarball': repo_tarball,
-                'split_bgen_intervals.tar_folder_path': git_path,
+                'split_bgen_intervals.tar_folder_path': git_path.lstrip('/'),
                 'split_bgen_intervals.n_cpu': n_cpu}
     with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
         json.dump(baseline, j)
