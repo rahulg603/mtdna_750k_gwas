@@ -728,7 +728,7 @@ def get_variant_intervals(pop, overwrite):
     return(df)
 
 
-def create_variant_bgen_split_intervals(pop, wdl_path, callrate_filter, min_ac, 
+def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac, 
                                         mean_impute_missing=True, use_drc_pop=True, encoding='additive', limit=5000):
     interval_list = get_variant_intervals(pop=pop, overwrite=False)
     bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
@@ -749,7 +749,7 @@ def create_variant_bgen_split_intervals(pop, wdl_path, callrate_filter, min_ac,
     df = pd.DataFrame(dct)
     df.to_csv(os.path.abspath(f'./this_{pop}_run.tsv'), index=False, sep='\t')
 
-    subprocess.run(['tar', '-czf', './saige_wdl.tar.gz', './saige_aou_wdl'])
+    subprocess.run(['tar', '-czf', './saige_wdl.tar.gz', git_path])
 
     baseline = {'split_bgen_intervals.pop': pop,
                 'split_bgen_intervals.sample_qc': True,
