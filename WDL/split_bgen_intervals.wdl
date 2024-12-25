@@ -119,7 +119,6 @@ task split_bgen {
         set -e
         tar -xzf ~{repo_tarball}
         cd ~{tar_folder_path}
-        ls -lh
 
         python3.8 <<CODE
     import hail as hl

@@ -3,9 +3,12 @@ import hail as hl
 import os
 
 # AoU DRC paths
-ARRAY_PATH = os.getenv('MICROARRAY_HAIL_STORAGE_PATH')
-EXOME_PATH = os.getenv('WGS_EXOME_SPLIT_HAIL_PATH')
-WGS_PATH = os.getenv('WGS_ACAF_THRESHOLD_SPLIT_HAIL_PATH')
+#ARRAY_PATH = os.getenv('MICROARRAY_HAIL_STORAGE_PATH')
+#EXOME_PATH = os.getenv('WGS_EXOME_SPLIT_HAIL_PATH')
+#WGS_PATH = os.getenv('WGS_ACAF_THRESHOLD_SPLIT_HAIL_PATH')
+ARRAY_PATH = "gs://fc-aou-datasets-controlled/v7/microarray/hail.mt_v7.1"
+EXOME_PATH = "gs://fc-aou-datasets-controlled/v7/wgs/short_read/snpindel/exome_v7.1/splitMT/hail.mt"
+WGS_PATH = "gs://fc-aou-datasets-controlled/v7/wgs/short_read/snpindel/acaf_threshold_v7.1/splitMT/hail.mt"
 AUX_PATH = 'gs://fc-aou-datasets-controlled/v7/wgs/short_read/snpindel/aux'
 DATASET = os.getenv("WORKSPACE_CDR")
 
