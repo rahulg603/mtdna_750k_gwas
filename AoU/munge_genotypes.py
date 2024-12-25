@@ -784,7 +784,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                               json_template_path=os.path.abspath(f'./saige_template_{pop}.json'),
                               wdl_path=wdl_path,
                               limit=limit, n_parallel_workflows=500, 
-                              add_requester_pays_parameter=False,
+                              add_requester_pays_parameter=True,
                               restart=False, batches_precomputed=False, 
                               submission_sleep=0, check_freq=120, quiet=False)
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)

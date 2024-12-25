@@ -26,6 +26,8 @@ workflow split_bgen_intervals {
         File repo_tarball
         String tar_folder_path
 
+        String requester_pays_project
+
         Int n_cpu
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
@@ -51,6 +53,8 @@ workflow split_bgen_intervals {
             encoding = encoding,
             repo_tarball = repo_tarball,
             tar_folder_path = tar_folder_path,
+
+            requester_pays_project = requester_pays_project,
 
             n_cpu = n_cpu,
             HailDocker = HailDocker
@@ -105,6 +109,8 @@ task split_bgen {
         File repo_tarball
         String tar_folder_path
 
+        String requester_pays_project
+
         Int n_cpu
         String HailDocker
 
@@ -133,7 +139,12 @@ task split_bgen {
         driver_cores=~{n_cpu},
         worker_memory="highmem",
         default_reference="GRCh38",
-        log='log.log'
+        log='log.log',
+        spark_conf={
+            'spark.hadoop.fs.gs.requester.pays.mode': 'CUSTOM',
+            'spark.hadoop.fs.gs.requester.pays.buckets': 'fc-aou-datasets-controlled',
+            'spark.hadoop.fs.gs.requester.pays.project.id': ~{requester_pays_project}
+        }
     )
 
     pop = "~{pop}"
