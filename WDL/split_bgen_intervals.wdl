@@ -180,7 +180,8 @@ task split_bgen {
                                                     use_array_for_variant=False,
                                                     use_drc_pop=drc_tf,
                                                     min_call_rate=~{call_rate_filter},
-                                                    ac_filter_override=~{min_ac})
+                                                    ac_filter_override=~{min_ac},
+                                                    use_hail_nsamp=True)
     mt = mt.filter_rows(hl.is_defined(call_stats_ht[mt.row_key]))
 
     mt = mt.annotate_entries(
