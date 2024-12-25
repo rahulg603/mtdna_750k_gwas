@@ -143,7 +143,7 @@ task split_bgen {
         spark_conf={
             'spark.hadoop.fs.gs.requester.pays.mode': 'CUSTOM',
             'spark.hadoop.fs.gs.requester.pays.buckets': 'fc-aou-datasets-controlled',
-            'spark.hadoop.fs.gs.requester.pays.project.id': ~{requester_pays_project}
+            'spark.hadoop.fs.gs.requester.pays.project.id': "~{requester_pays_project}"
         }
     )
 
