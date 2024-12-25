@@ -8,6 +8,7 @@ import argparse
 import json
 import hail as hl
 import pandas as pd
+import subprocess
 
 from AoU.paths import *
 from utils.SaigeImporters import *
@@ -211,7 +212,7 @@ def mac_category_case_builder(call_stats_ac_expr, call_stats_af_expr, min_maf_co
 
 
 def get_call_rate_filtered_variants(pop, analysis_type, sample_qc, use_array_for_variant, use_drc_pop, 
-                                    min_call_rate=CALLRATE_CUTOFF, only_autosomes=False, overwrite=False):
+                                    min_call_rate=CALLRATE_CUTOFF, only_autosomes=False, overwrite=False, ac_filter_override=0):
     n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
                                             use_drc_pop=use_drc_pop)
     ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
@@ -219,7 +220,7 @@ def get_call_rate_filtered_variants(pop, analysis_type, sample_qc, use_array_for
                             use_array_for_variant=use_array_for_variant, overwrite=overwrite)
     ht = ht.filter(
         (ht.call_stats.AN >= (n_samples[pop] * 2 * min_call_rate))
-        & (ht.call_stats.AC[1] > 0)
+        & (ht.call_stats.AC[1] > ac_filter_override)
     )
 
     if only_autosomes:
@@ -697,24 +698,23 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
 
 
 def get_variant_intervals(pop, overwrite):
-    this_chunk_size = CHUNK_SIZE[pop]
-    variant_interval_path = get_saige_interval_path(GENO_PATH, 'variant', pop=pop)
+    this_chunk_size = int(CHUNK_SIZE[pop])
+    variant_interval_path = get_saige_interval_path(GENO_PATH, analysis_type='variant', pop=pop)
     if not hl.hadoop_exists(variant_interval_path) or overwrite:
         print(f'Generating interval file for SAIGE (chunk size: {this_chunk_size})...')
         chr = []
         start = []
         end = []
         for chrom in CHROMOSOMES:
-            chromosome = f"chr{chrom}"
             CHROMOSOME_LEN = hl.get_reference('GRCh38').lengths
-            chrom_length = CHROMOSOME_LEN[chromosome]
+            chrom_length = CHROMOSOME_LEN[chrom]
             for start_pos in range(1, chrom_length, this_chunk_size):
                 end_pos = (
-                    chrom_length
+                    chrom_length + 1
                     if start_pos + this_chunk_size > chrom_length
                     else (start_pos + this_chunk_size)
                 )
-                chr.append(chromosome)
+                chr.append(chrom)
                 start.append(start_pos)
                 end.append(end_pos)
 
@@ -722,23 +722,26 @@ def get_variant_intervals(pop, overwrite):
         df.to_csv(variant_interval_path, sep='\t', index=False)
     
     df = pd.read_csv(variant_interval_path, sep='\t')
+    print(pop)
     print(df.head(5))
+    print(df.shape)
     return(df)
 
 
-def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True, encoding='additive'):
+def create_variant_bgen_split_intervals(pop, wdl_path, callrate_filter, min_ac, 
+                                        mean_impute_missing=True, use_drc_pop=True, encoding='additive', limit=5000):
     interval_list = get_variant_intervals(pop=pop, overwrite=False)
     bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
     
     dct = {'chr': [],
-          'start': [],
-          'end': [],
-          'bgen_prefix': []}
+           'start': [],
+           'end': [],
+           'bgen_prefix': []}
     
-    for row in interval_list.iterrows():
-        this_bgen_prefix = bgen_prefix.replace('@', row['chr']).replace('#', str(row['start'])).replace('?', str(row['end']))
+    for _, row in interval_list.iterrows():
+        this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
         if not hl.hadoop_exists(this_bgen_prefix + '.bgen') or not hl.hadoop_exists(this_bgen_prefix + '.bgen.bgi'):
-            dct['chr'].append(row['chr'])
+            dct['chr'].append(row['chrom'])
             dct['start'].append(row['start'])
             dct['end'].append(row['end'])
             dct['bgen_prefix'].append(this_bgen_prefix)
@@ -746,12 +749,18 @@ def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True, encodin
     df = pd.DataFrame(dct)
     df.to_csv(os.path.abspath(f'./this_{pop}_run.tsv'), index=False, sep='\t')
 
+    subprocess.run(['tar', '-czf', './saige_wdl.tar.gz', './saige_aou_wdl'])
+
     baseline = {'split_bgen_intervals.pop': pop,
                 'split_bgen_intervals.sample_qc': True,
                 'split_bgen_intervals.variant_qc': True,
                 'split_bgen_intervals.use_drc_pop': use_drc_pop,
-                'split_bgen_intervals.call_rate_filter': CALLRATE_CUTOFF,
+                'split_bgen_intervals.mean_impute_missing': mean_impute_missing,
+                'split_bgen_intervals.call_rate_filter': callrate_filter,
+                'split_bgen_intervals.min_ac': min_ac,
+                'split_bgen_intervals.analysis_type': 'variant',
                 'split_bgen_intervals.encoding': encoding,
+                'split_bgen_intervals.repo_tarball': './saige_wdl.tar.gz',
                 'split_bgen_intervals.n_cpu': 8}
     with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
         json.dump(baseline, j)
@@ -763,12 +772,40 @@ def create_variant_bgen_split_intervals(pop, wdl_path, use_drc_pop=True, encodin
                               inputs_file=df,
                               json_template_path=os.path.abspath(f'./saige_template_{pop}.json'),
                               wdl_path=wdl_path,
-                              limit=500, n_parallel_workflows=500, 
+                              limit=limit, n_parallel_workflows=500, 
                               add_requester_pays_parameter=False,
                               restart=False, batches_precomputed=False, 
                               submission_sleep=0, check_freq=120, quiet=False)
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
     return manager
+
+
+def gt_to_gp(mt, location: str = "GP"):
+    return mt.annotate_entries(
+        **{
+            location: hl.or_missing(
+                hl.is_defined(mt.GT),
+                hl.map(
+                    lambda i: hl.if_else(
+                        mt.GT.unphased_diploid_gt_index() == i, 1.0, 0.0
+                    ),
+                    hl.range(0, hl.triangle(hl.len(mt.alleles))),
+                ), # makes calls into [0/1, 0/1, 0/1] vector where [1, 0, 0] is hom ref, etc
+            )
+        }
+    )
+
+
+def impute_missing_gp(mt, location: str = "GP", mean_impute: bool = True):
+    mt = mt.annotate_entries(_gp=mt[location])
+    if mean_impute:
+        mt = mt.annotate_rows(
+            _mean_gp=hl.agg.array_agg(lambda x: hl.agg.mean(x), mt._gp)
+        )
+        gp_expr = mt._mean_gp
+    else:
+        gp_expr = [1.0, 0.0, 0.0]
+    return mt.annotate_entries(**{location: hl.or_else(mt._gp, gp_expr)}).drop("_gp")
 
 
 def main():

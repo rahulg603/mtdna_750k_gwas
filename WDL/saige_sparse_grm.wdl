@@ -251,6 +251,7 @@ task create_sparse_grm {
     runtime {
         docker: SaigeDocker
         cpu: this_cpu
+        preemptible: 5
     }
 
     output {
@@ -298,6 +299,7 @@ task upload {
         docker: HailDocker
         memory: '4 GB'
         cpu: '2'
+        preemptible: 5
     }
 
     output {
