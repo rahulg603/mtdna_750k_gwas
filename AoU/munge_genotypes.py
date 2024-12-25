@@ -537,13 +537,13 @@ def plink_ld_pruned_mt(sample_qc, saige_importers_path, wdl_path, min_af=0.01,
 
         # run LD pruning using Cromwell
         manager = CromwellManager(run_name='ld_prune',
-                                inputs_file=df,
-                                json_template_path=os.path.abspath('./saige_template.json'),
-                                wdl_path=wdl_path,
-                                batch=None, limit=199, n_parallel_workflows=199, 
-                                add_requester_pays_parameter=False,
-                                restart=False, batches_precomputed=False, 
-                                submission_sleep=0, check_freq=60, quiet=True)
+                                  inputs_file=df,
+                                  json_template_path=os.path.abspath('./saige_template.json'),
+                                  wdl_path=wdl_path,
+                                  batch=None, limit=199, n_parallel_workflows=199, 
+                                  add_requester_pays_parameter=False,
+                                  restart=False, batches_precomputed=False, 
+                                  submission_sleep=0, check_freq=60, quiet=True)
         manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=False)
 
     mt_dict = {}
@@ -717,7 +717,7 @@ def get_variant_intervals(pop, overwrite):
             chrom_length = CHROMOSOME_LEN[chrom]
             for start_pos in range(1, chrom_length, this_chunk_size):
                 end_pos = (
-                    chrom_length + 1
+                    chrom_length
                     if start_pos + this_chunk_size > chrom_length
                     else (start_pos + this_chunk_size)
                 )
