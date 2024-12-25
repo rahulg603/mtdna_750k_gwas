@@ -234,8 +234,6 @@ workflow saige_manager {
                 sparse_grm = sparse_grm,
                 sparse_grm_ids = sparse_grm_ids,
 
-                bgen_prefix = tasks.bgen_prefix,
-
                 tests = per_pheno_data.left.left.left.right,
 
                 group_file = group_file,
@@ -393,6 +391,7 @@ task get_tasks_to_run {
 
         python3.8 <<CODE
     import hail as hl
+    import pandas as pd
     import importlib
     import os, sys
     import json
@@ -481,22 +480,32 @@ task get_tasks_to_run {
             results_already_created = {x['path'] for x in hl.hadoop_ls(pheno_results_dir)}
         else:
             results_already_created = {}
-        
-        for chr in CHROMOSOMES:
-            results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
+
+        interval_list = get_variant_intervals(pop="~{pop}", overwrite=False)
+        bgen_prefix = get_wildcard_path_intervals_bgen(gs_genotype_path, 
+                                                       pop="~{pop}", 
+                                                       use_drc_pop=drc_tf, 
+                                                       encoding="~{encoding}")
+
+        for _, row in interval_list.iterrows():
+            this_segment = stringify_interval(row['chrom'], row['start'], row['end'])
+            this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
+            results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, this_segment)
             results_files = get_results_files(results_prefix, '~{analysis_type}')
+
             if '~{analysis_type}' == 'variant':
                 res_found = results_files[0] in results_already_created
                 if overwrite_test_tf or not res_found:
-                    this_pheno_result_holder.append([chr, '', '', ''])
+                    this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix])
                 else:
-                    this_pheno_result_holder.append([chr, results_files[0], '', results_files[2]])
+                    this_pheno_result_holder.append([this_segment, results_files[0], '', results_files[2], row['chrom'], this_bgen_prefix])
             else:
                 res_found = (results_files[0] in results_already_created) and (results_files[1] in results_already_created)
                 if overwrite_test_tf or not res_found:
-                    this_pheno_result_holder.append([chr, '', '', ''])
+                    this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix])
                 else:
-                    this_pheno_result_holder.append([chr, results_files[0], results_files[1], results_files[2]])
+                    this_pheno_result_holder.append([this_segment, results_files[0], results_files[1], results_files[2], row['chrom'], this_bgen_prefix])
+
         run_tests.append(this_pheno_result_holder)
         
         # merged hail table
@@ -568,12 +577,6 @@ task get_tasks_to_run {
         f.write(ix)
 
 
-    #### Get BGEN prefix
-    bgen_prefix = get_wildcard_path_genotype_bgen("~{analysis_type}")
-    with open('bgen.txt', 'w') as f:
-        f.write(bgen_prefix)
-
-
     #### Get sample IDs file
     sample_id = get_aou_samples_file_path(geno_folder=gs_genotype_path,
                                           pop='~{pop}',
@@ -609,8 +612,6 @@ task get_tasks_to_run {
         String ix = read_string('ix.txt')
 
         String sample_ids = read_string('samp.txt')
-
-        String bgen_prefix = read_string('bgen.txt')
     }
 }
 

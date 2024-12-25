@@ -219,8 +219,13 @@ task index_bgen {
 
     command <<<
         set -e
+        
         bgenix -index -g ~{bgen}
-        echo ~{bgen} > fl.txt
+        echo ~{bgen}.bgi > fl.txt
+
+        echo $PWD
+        ls -lh
+        cat fl.txt
     >>>
 
     runtime {
@@ -230,7 +235,7 @@ task index_bgen {
     }
 
     output {
-        File bgi = read_string('fl.txt') + '.bgi'
+        File bgi = read_string('fl.txt')
     }
 
 }

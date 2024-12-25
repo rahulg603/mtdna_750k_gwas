@@ -24,8 +24,6 @@ workflow saige_tests {
         Float min_maf
         Int markers_per_chunk
 
-        String bgen_prefix
-
         # path to gs folders
         String gs_bucket
         String gs_genotype_path
@@ -56,16 +54,16 @@ workflow saige_tests {
 
         if (this_chr[1] == "") {
 
-            File this_bgen = sub(bgen_prefix, '@', chr) + '.bgen'
-            File this_bgi = sub(bgen_prefix, '@', chr) + '.bgen.bgi'
-            File this_bgen_sample = sub(bgen_prefix, '@', chr) + '.sample'
+            File this_bgen = this_chr[5] + '.bgen'
+            File this_bgi = this_chr[5] + '.bgen.bgi'
+            File this_bgen_sample = this_chr[5] + '.sample'
 
             call run_test {
                 # this function will read in a single phenotype flat file, munge them into a correct format, and output the phenotypes to process
                 input:
                     phenotype_id = pheno,
                     pop = pop,
-                    chr = chr,
+                    chr = this_chr[4],
                     suffix = suffix,
                     analysis_type = analysis_type,
 

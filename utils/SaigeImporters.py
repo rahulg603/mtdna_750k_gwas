@@ -122,6 +122,10 @@ def get_saige_interval_path(geno_folder, pop, analysis_type):
     return os.path.join(geno_folder, f'intervals/aou_{analysis_type}_{pop}.tsv')
 
 
+def stringify_interval(chr, start, end):
+    return f'{chr}.{str(start)}.{str(end)}'
+
+
 # Samples
 def get_n_samples_per_pop_path(geno_folder, sample_qc, analysis_type, use_drc_pop=False, use_array_for_variant=False):
     if analysis_type == 'variant':
