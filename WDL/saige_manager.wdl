@@ -270,6 +270,7 @@ workflow saige_manager {
                     suffix = suffix_this,
                     pop = pop,
                     analysis_type = analysis_type,
+                    encoding = encoding,
 
                     null_log = null_log_comb,
                     test_logs = test_runner.test_logs,
@@ -864,6 +865,7 @@ task merge {
         String suffix
         String pop
         String analysis_type
+        String encoding
 
         File null_log
         Array[File] test_logs
