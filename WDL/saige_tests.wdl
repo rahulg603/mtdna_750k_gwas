@@ -65,6 +65,7 @@ workflow saige_tests {
                     phenotype_id = pheno,
                     pop = pop,
                     chr = this_chr[4],
+                    segment = this_chr[5],
                     suffix = suffix,
                     encoding = encoding,
                     analysis_type = analysis_type,
@@ -141,6 +142,7 @@ task run_test {
     input {
         String phenotype_id
         String chr
+        String? segment
         String suffix
         String pop
         String encoding
@@ -181,7 +183,7 @@ task run_test {
     String always_spGRM = if always_use_sparse_grm then 'sp' else 'not'
     String loco = if disable_loco then "noloco" else "loco"
     String output_prefix = phenotype_id + "." + analysis_type + "." + chr + "." + pop + "." + suffix
-
+    String seg = select_first([segment, chr])
     Int disk = ceil(size(bgen, 'G') * 1.1)
 
     command <<<
@@ -209,7 +211,7 @@ task run_test {
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
     result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', '~{encoding}')
     pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
-    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, '~{chr}')
+    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, '~{seg}')
     results_files = get_results_files(results_prefix, '~{analysis_type}')
 
     saige_step_2 = ['Rscript', '/usr/local/bin/step2_SPAtests.R',
