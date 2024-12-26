@@ -553,7 +553,7 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
     print(f'Saige version: {str(saige_version)}.')
 
     marker_id_col = 'markerID' if extension == 'single.txt' else 'MarkerID'
-    alleles = ht[marker_id_col].split(':')[2:4]
+    alleles = (ht[marker_id_col].split('_')[1]).split('/')
     if n_cases == -1: n_cases = hl.null(hl.tint)
     if n_controls == -1: n_controls = hl.null(hl.tint)
     if heritability == -1.0: heritability = hl.null(hl.tfloat)
@@ -561,7 +561,7 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
     if inv_normalized == 'NA': inv_normalized = hl.null(hl.tstr)
 
     ht = ht.key_by(locus=hl.locus(contig=ht[marker_id_col].split(':')[0], 
-                                  pos=hl.int32(ht[marker_id_col].split(':')[1]),
+                                  pos=hl.int32((ht[marker_id_col].split(':')[1]).split('_')[0]),
                                   reference_genome='GRCh38'), 
                    alleles=alleles,
                    **pheno_dict).distinct().naive_coalesce(150)
