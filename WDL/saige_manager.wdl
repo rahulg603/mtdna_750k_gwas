@@ -28,6 +28,9 @@ workflow saige_manager {
         File? groups
         Float? max_maf_for_group
 
+        # QC parameters (for low_confidence filter)
+        Float min_call_rate
+
         # constants for pathing
         Int sparse_n_markers
         Float sparse_min_af
@@ -282,7 +285,7 @@ workflow saige_manager {
                     gs_output_path = gs_output_path, 
                     gs_temp_path = gs_temp_path,
                     
-
+                    min_call_rate = min_call_rate,
                     use_drc_pop = use_drc_pop,
                     sample_qc = sample_qc,
 
@@ -889,6 +892,7 @@ task merge {
         String gs_output_path
         String gs_temp_path
 
+        Float min_call_rate
         Boolean use_drc_pop
         Boolean sample_qc
 
