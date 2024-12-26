@@ -278,9 +278,14 @@ workflow saige_manager {
                     gene_test = test_runner.gene_test,
 
                     gs_bucket = gs_bucket, 
+                    gs_genotype_path = gs_genotype_path, 
                     gs_output_path = gs_output_path, 
                     gs_temp_path = gs_temp_path,
                     
+
+                    use_drc_pop = use_drc_pop,
+                    sample_qc = sample_qc,
+
                     SaigeImporters = SaigeImporters,
                     HailDocker = HailDocker,
 
