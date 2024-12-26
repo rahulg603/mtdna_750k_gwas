@@ -216,7 +216,7 @@ def get_call_rate_filtered_variants(pop, analysis_type, sample_qc, use_array_for
                                     min_call_rate=CALLRATE_CUTOFF, only_autosomes=False, overwrite=False, ac_filter_override=0,
                                     use_hail_nsamp=False):
     n_samples = get_n_samples_per_pop_vec(analysis_type, sample_qc, use_array_for_variant=use_array_for_variant,
-                                            use_drc_pop=use_drc_pop, use_hail=use_hail_nsamp)
+                                          use_drc_pop=use_drc_pop, use_hail=use_hail_nsamp)
     ht = get_call_stats_ht(pop=pop, sample_qc=sample_qc, analysis_type=analysis_type,
                             use_drc_pop=use_drc_pop, 
                             use_array_for_variant=use_array_for_variant, overwrite=overwrite)

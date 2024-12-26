@@ -454,13 +454,15 @@ task get_tasks_to_run {
     null_model_dir = get_null_model_path(gs_output_path, '~{suffix}', '~{pop}')
     result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', "~{encoding}")
     for pheno_dct in pheno_key_dict:
+        running_override = False
         pheno_name = pheno_dict_to_str(pheno_dct)
         phenotypes.append(pheno_name)
         
         # phenotype export
         pheno_export_path = get_pheno_output_path(pheno_export_dir, pheno_dct)
-        if ('~{overwrite_p}' == 'overwrite') or (pheno_export_path not in phenos_already_exported):
+        if ('~{overwrite_p}' == 'overwrite') or (pheno_export_path not in phenos_already_exported) or running_override:
             export_phenotype.append('')
+            running_override = True
         else:
             export_phenotype.append(pheno_export_path)
 
@@ -472,8 +474,9 @@ task get_tasks_to_run {
         else:
             null_models_existing = {}
         files_found = rda in null_models_existing and var_ratio in null_models_existing
-        if overwrite_null_tf or (not files_found):
+        if overwrite_null_tf or (not files_found) or running_override:
             null_model.append(['','', ''])
+            running_override = True
         else:
             null_model.append([rda, var_ratio, null_log])
 
@@ -492,6 +495,7 @@ task get_tasks_to_run {
                                                        use_drc_pop=drc_tf, 
                                                        encoding="~{encoding}")
 
+        any_test_run = False
         for _, row in interval_list.iterrows():
             this_segment = stringify_interval(row['chrom'], row['start'], row['end'])
             this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
@@ -500,17 +504,20 @@ task get_tasks_to_run {
 
             if '~{analysis_type}' == 'variant':
                 res_found = results_files[0] in results_already_created
-                if overwrite_test_tf or not res_found:
+                if overwrite_test_tf or not res_found or running_override:
                     this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix])
+                    any_test_run = True
                 else:
                     this_pheno_result_holder.append([this_segment, results_files[0], '', results_files[2], row['chrom'], this_bgen_prefix])
             else:
                 res_found = (results_files[0] in results_already_created) and (results_files[1] in results_already_created)
-                if overwrite_test_tf or not res_found:
+                if overwrite_test_tf or not res_found or running_override:
                     this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix])
+                    any_test_run = True
                 else:
                     this_pheno_result_holder.append([this_segment, results_files[0], results_files[1], results_files[2], row['chrom'], this_bgen_prefix])
 
+        running_override = True if any_test_run else running_override
         run_tests.append(this_pheno_result_holder)
         
         # merged hail table
@@ -521,7 +528,7 @@ task get_tasks_to_run {
         overwrite_hail_tf = ('~{overwrite_h}' == 'overwrite')
         if overwrite_test_tf or overwrite_hail_tf or \
                 merged_ht_path not in results_already_created or \
-                not hl.hadoop_exists(f'{merged_ht_path}/_SUCCESS'):
+                not hl.hadoop_exists(f'{merged_ht_path}/_SUCCESS') or running_override:
             run_hail_merge.append(['', '', results_path])
         else:
             run_hail_merge.append([merged_ht_path, merged_flat_path, results_path])
@@ -873,8 +880,12 @@ task merge {
         Array[File?] gene_test
         
         String gs_bucket
+        String gs_genotype_path
         String gs_output_path
         String gs_temp_path
+
+        Boolean use_drc_pop
+        Boolean sample_qc
 
         File SaigeImporters
         String HailDocker
@@ -885,6 +896,8 @@ task merge {
 
     Int disk = ceil((size(single_test, 'G') + size(gene_test, 'G')) * 6)
     String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
+    String drc = if use_drc_pop then 'drc' else 'custom'
+    String qc = if sample_qc then 'qc' else 'no_qc'
 
     command <<<
         set -e
@@ -910,8 +923,12 @@ task merge {
     globals().update(vars(load_module))
 
     gs_prefix = parse_bucket('~{gs_bucket}')
+    gs_genotype_path = os.path.join(gs_prefix, '~{gs_genotype_path}'.lstrip('/'))
     gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
     gs_temp_path = os.path.join(gs_prefix, '~{gs_temp_path}'.lstrip('/'))
+
+    drc_tf = '~{drc}' == 'drc'
+    sample_qc_tf = '~{qc}' == 'qc'
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
@@ -932,9 +949,24 @@ task merge {
                            null_log='~{null_log}',
                            test_logs='~{sep="," test_logs}'.split(','))
 
+    # now importing call stats
+    path_stats = get_call_stats_ht_path(gs_genotype_path, pop="~{pop}", 
+                                        analysis_type="~{analysis_type}", 
+                                        sample_qc=sample_qc_tf, 
+                                        use_drc_pop=drc_tf, 
+                                        use_array_for_variant=False)
+    ht_stats = hl.read_table(path_stats)
+    n_samp_vec_path = get_n_samples_per_pop_path(gs_genotype_path, 
+                                                 analysis_type="~{analysis_type}", 
+                                                 sample_qc=sample_qc_tf, 
+                                                 use_drc_pop=drc_tf,
+                                                 use_array_for_variant=False)
+    per_pop_N = {x['pop']: x.N for _, x in hl.import_table(n_samp_vec_path, impute=True).to_pandas().iterrows()}
+    ht = ht.annotate(AN = ht_stats[ht.row_key].call_stats.AN)
+
     ht_flat = ht.annotate(variant = ht.locus.contig + ':' + hl.str(ht.locus.position) + ':' + hl.str(':').join(ht.alleles),
                           chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
-                          low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20))
+                          low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20) | (ht.AN < (per_pop_N["~{pop}"] * 2 * ~{min_call_rate})))
     ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
     ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
