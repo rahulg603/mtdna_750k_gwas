@@ -122,6 +122,16 @@ def get_saige_interval_path(geno_folder, pop, analysis_type):
     return os.path.join(geno_folder, f'intervals/aou_{analysis_type}_{pop}.tsv')
 
 
+def read_variant_intervals(geno_folder, pop, analysis_type):
+    variant_interval_path = get_saige_interval_path(geno_folder, analysis_type=analysis_type, pop=pop)
+    df = hl.import_table(variant_interval_path, 
+                         types={'chrom': hl.tstr, 'start': hl.tint, 'end': hl.tint}).to_pandas()
+    print(pop)
+    print(df.head(5))
+    print(df.shape)
+    return(df)
+
+
 def stringify_interval(chr, start, end):
     return f'{chr}.{str(start)}.{str(end)}'
 

@@ -486,7 +486,7 @@ task get_tasks_to_run {
         else:
             results_already_created = {}
 
-        interval_list = get_variant_intervals(pop="~{pop}", overwrite=False)
+        interval_list = read_variant_intervals(gs_genotype_path, pop="~{pop}", analysis_type="~{analysis_type}")
         bgen_prefix = get_wildcard_path_intervals_bgen(gs_genotype_path, 
                                                        pop="~{pop}", 
                                                        use_drc_pop=drc_tf, 
