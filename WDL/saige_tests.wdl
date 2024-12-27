@@ -51,8 +51,6 @@ workflow saige_tests {
 
     scatter (this_chr in [tests[0]]) {
 
-        String chr = this_chr[0]
-
         if (this_chr[1] == "") {
 
             File this_bgen = this_chr[5] + '.bgen'
@@ -65,7 +63,7 @@ workflow saige_tests {
                     phenotype_id = pheno,
                     pop = pop,
                     chr = this_chr[4],
-                    segment = this_chr[5],
+                    segment = this_chr[0],
                     suffix = suffix,
                     encoding = encoding,
                     analysis_type = analysis_type,
@@ -182,8 +180,8 @@ task run_test {
     String tf_defined_spGRM = if defined(sparse_grm) then "defined" else "not"
     String always_spGRM = if always_use_sparse_grm then 'sp' else 'not'
     String loco = if disable_loco then "noloco" else "loco"
-    String output_prefix = phenotype_id + "." + analysis_type + "." + chr + "." + pop + "." + suffix
     String seg = select_first([segment, chr])
+    String output_prefix = phenotype_id + "." + analysis_type + "." + seg + "." + pop + "." + suffix
     Int disk = ceil(size(bgen, 'G') * 1.1)
 
     command <<<

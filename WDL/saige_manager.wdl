@@ -971,7 +971,7 @@ task merge {
                                                  use_drc_pop=drc_tf,
                                                  use_array_for_variant=False)
     per_pop_N = {x['pop']: x.N for _, x in hl.import_table(n_samp_vec_path, impute=True).to_pandas().iterrows()}
-    ht = ht.annotate(AN = ht_stats[ht.key].call_stats.AN)
+    ht = ht.annotate(AN = ht_stats[ht.locus, ht.alleles].call_stats.AN)
 
     ht_flat = ht.annotate(variant = ht.locus.contig + ':' + hl.str(ht.locus.position) + ':' + hl.str(':').join(ht.alleles),
                           chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
