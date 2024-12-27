@@ -271,6 +271,8 @@ task upload {
 
     }
 
+    Int disk = ceil(size(files, 'G') * 6)
+
     command <<<
         set -e
 
@@ -298,8 +300,9 @@ task upload {
     runtime {
         docker: HailDocker
         memory: '4 GB'
-        cpu: '2'
+        cpu: '1'
         preemptible: 5
+        disks: 'local-disk ' + disk + ' HDD'
     }
 
     output {
