@@ -49,7 +49,7 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    scatter (this_chr in [tests[0]]) {
+    scatter (this_chr in tests) {
 
         if (this_chr[1] == "") {
 
