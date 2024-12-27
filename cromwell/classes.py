@@ -33,7 +33,7 @@ class CromwellManager:
                  batch=None, limit=None, n_parallel_workflows=N_PARALLEL_WORKFLOWS,
                  add_requester_pays_parameter=True, restart=False, batches_precomputed=False,
                  submission_sleep=30, check_freq=120, quiet=False, disable_cache=False, 
-                 _bypass_output_parsing=False):
+                 continue_when_possible=False, _bypass_output_parsing=False):
         """
         Initialize a Cromwell manager.
 
@@ -74,6 +74,7 @@ class CromwellManager:
         self.check_frequency = check_freq
         self.quiet = quiet
         self.disable_cache = disable_cache
+        self.continue_when_possible = continue_when_possible
 
         # preliminary run statistics
         self.n_pending = 0
@@ -346,7 +347,8 @@ class CromwellManager:
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
                                             n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet,
-                                            disable_cache=self.disable_cache)
+                                            disable_cache=self.disable_cache,
+                                            continue_when_possible=self.continue_when_possible)
 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -408,7 +410,8 @@ class CromwellManager:
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=cromwell_timeout,
                                             n_retries=submission_retries, batch_id=this_batch, quiet=self.quiet,
-                                            disable_cache=self.disable_cache)
+                                            disable_cache=self.disable_cache,
+                                            continue_when_possible=self.continue_when_possible)
                 
                 # add workflow to running samples
                 self.add_running_workflow(workflow)
@@ -443,7 +446,8 @@ class CromwellManager:
                                             manager_url=self.get_url(), manager_token=self.get_token(),
                                             cloud_fs=self.cloud_fs, timeout=None,
                                             n_retries=None, batch_id=this_batch, id=this_id, status='Running', quiet=self.quiet,
-                                            disable_cache=self.disable_cache)
+                                            disable_cache=self.disable_cache,
+                                            continue_when_possible=self.continue_when_possible)
                 
                 self.add_running_workflow(workflow)
             self.update_run_statistics()
@@ -588,8 +592,6 @@ class CromwellManager:
             print(f'Updating tokens for {str(self.n_running)} workflow ids.', flush=True)
         
         for idx, (id, workflow) in enumerate(self.running_workflows.items()):
-            if (idx % 20) == 0 and idx > 0 and not self.quiet:
-                print(f'{idx} workflows updated.', flush=True)
 
             if workflow.get_id() != id:
                 raise ValueError('ERROR: ID mismatch when updating workflow tokens.')
@@ -651,7 +653,8 @@ class CromwellWorkflow:
     def __init__(self, param_json, batch_root, wdl,
                  manager_url, manager_token, cloud_fs,
                  timeout, n_retries, batch_id,
-                 id=None, status=None, quiet=False, disable_cache=False):                 
+                 id=None, status=None, quiet=False, disable_cache=False,
+                 continue_when_possible=False):                 
         self.json = param_json
         self.batch_root = batch_root
         self.token = manager_token
@@ -660,6 +663,11 @@ class CromwellWorkflow:
 
         if disable_cache:
             self.options.update({"write_to_cache": False, "read_from_cache": False})
+        
+        if continue_when_possible:
+            self.options.update({"workflow_failure_mode": "ContinueWhilePossible"})
+        else:
+            self.options.update({"workflow_failure_mode": "NoNewCalls"})
 
         if id is not None or status is not None:
             # if ID is supplied, this implies that this was a running workflow

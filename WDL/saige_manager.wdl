@@ -53,7 +53,7 @@ workflow saige_manager {
         File SaigeImporters
 
         # docker images
-        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.3.6'
+        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige_bgen:1.3.6'
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         # options

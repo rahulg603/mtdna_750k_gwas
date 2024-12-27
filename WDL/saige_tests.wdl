@@ -49,7 +49,7 @@ workflow saige_tests {
 
     String analysis_type = if rvas_mode then 'gene' else 'variant'
 
-    scatter (this_chr in tests) {
+    scatter (this_chr in [tests[13]]) {
 
         if (this_chr[1] == "") {
 
@@ -115,7 +115,6 @@ workflow saige_tests {
                         HailDocker = HailDocker
                 }
             }
-
         }
 
         File single_test_output = select_first([run_test.single_test, this_chr[1]])
@@ -190,11 +189,17 @@ task run_test {
 
         tail -n +3 ~{bgen_sample} | sed 's/ / /' | awk '{print $1}' > bgen_trunc.sample
 
+        /app/bgenix -g ~{bgen} -list | grep success | sed --expression='s/.*success,\stotal\s//g' | sed --expression='s/\svariants.//g' > /app/var_ct.txt
+        
+        echo "Number of variants in BGEN:"
+        cat /app/var_ct.txt
+        
         python3.8 <<CODE
     import importlib
     import os, sys
     import json
     import subprocess
+    import pandas as pd
 
     flpath = os.path.dirname('~{SaigeImporters}')
     scriptname = os.path.basename('~{SaigeImporters}')
@@ -254,11 +259,29 @@ task run_test {
                                            '--is_fastTest=TRUE',
                                            '--LOCO=FALSE']
 
-    with open('~{output_prefix}' + ".log", "wb") as f:
-        process = subprocess.Popen(saige_step_2, stdout=subprocess.PIPE)
-        for c in iter(lambda: process.stdout.read(1), b""):
-            sys.stdout.buffer.write(c)
-            f.write(c)
+    with open('/app/var_ct.txt') as f:
+        var_count = int(f.readline().strip())
+        print(f'Variant count in BGEN: {str(var_count)}')
+    
+    if var_count > 0:
+        with open('~{output_prefix}' + ".log", "wb") as f:
+            process = subprocess.Popen(saige_step_2, stdout=subprocess.PIPE)
+            for c in iter(lambda: process.stdout.read(1), b""):
+                sys.stdout.buffer.write(c)
+                f.write(c)
+    else:
+        with open('~{output_prefix}' + '.log', 'w') as f:
+            f.write('No variants identified in BGEN. Skipping SAIGE and generating empty files.\n')
+
+        headers = ['CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2', 'AC_Allele2',
+                   'AF_Allele2', 'MissingRate', 'BETA', 'SE', 'Tstat', 'var', 'p.value',
+                   'N']
+        df = pd.DataFrame({x: [] for x in headers})
+        df.to_csv('~{output_prefix}' + '.result.txt', sep='\t', index=None)
+
+        if results_files[1] is not None:
+            print('PLACEHOLDER: need to generate schema for geneAssoc file.')
+        
 
     with open('single_test.txt', 'w') as f:
         f.write(results_files[0])
