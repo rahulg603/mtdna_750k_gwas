@@ -10,6 +10,7 @@ from AoU.phenotypes import *
 
 HAP_CUTOFF = 30
 BASELINE_HAP = 'H'
+DROP_HAPS = ['P']
 
 
 def generate_indicator(ht, col, baseline_item):
@@ -234,6 +235,7 @@ def get_hap_covariates(version, format, overwrite=False, hap_cutoff=HAP_CUTOFF):
                     )
                 )
             
+            ht = ht.filter(~hl.literal(DROP_HAPS).contains(ht.hap))
             ht = ht.checkpoint(get_hap_ht_path(version, format='tall', cutoff=hap_cutoff), overwrite=overwrite)
         else:
             ht = hl.read_table(path_tall)
@@ -245,6 +247,10 @@ def get_hap_covariates(version, format, overwrite=False, hap_cutoff=HAP_CUTOFF):
     else:
         ht = hl.read_table(path)
     
+    flat_path = get_hap_flat_path(version, format, hap_cutoff)
+    if overwrite or not hl.hadoop_exists(os.path.join(flat_path, '_SUCCESS')):
+        ht.export(flat_path, overwrite=True)
+
     return ht
 
 

@@ -456,7 +456,7 @@ class CromwellManager:
     def update_all_status(self):
         self.update_run_statistics()
         if not self.quiet:
-            print(f'Updating status for {str(self.n_running)} workflow ids.', flush=True)
+            print(f'Updating status for {str(self.n_running + self.n_submitted)} workflow ids.', flush=True)
         
         this_running_workflows = self.running_workflows.copy()
         for idx, (id, workflow) in enumerate(self.running_workflows.items()):
@@ -589,7 +589,7 @@ class CromwellManager:
 
         self.update_run_statistics()
         if not self.quiet:
-            print(f'Updating tokens for {str(self.n_running)} workflow ids.', flush=True)
+            print(f'Updating tokens for {str(self.n_running + self.n_submitted)} workflow ids.', flush=True)
         
         for idx, (id, workflow) in enumerate(self.running_workflows.items()):
 

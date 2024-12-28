@@ -61,6 +61,14 @@ def get_hap_ht_path(version, format, cutoff):
         return base_path + f'haplogroup_tall.ht'
 
 
+def get_hap_flat_path(version, format, cutoff):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
+    if format == 'wide':
+        return base_path + f'haplogroup_wide_N_{str(cutoff)}.tsv.bgz'
+    else:
+        return base_path + f'haplogroup_tall.tsv.bgz'
+
+
 def get_path_raw_positive_control():
     return os.path.join(PHENO_PATH, 'raw', '241016_positive_control_phenotypes.tsv')
 
