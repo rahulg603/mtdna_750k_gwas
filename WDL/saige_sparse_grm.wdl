@@ -299,7 +299,7 @@ task upload {
 
     runtime {
         docker: HailDocker
-        memory: '4 GB'
+        memory: '2 GB'
         cpu: '1'
         preemptible: 5
         disks: 'local-disk ' + disk + ' HDD'
