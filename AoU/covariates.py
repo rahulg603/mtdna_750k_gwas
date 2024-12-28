@@ -249,7 +249,7 @@ def get_hap_covariates(version, format, overwrite=False, hap_cutoff=HAP_CUTOFF):
     
     flat_path = get_hap_flat_path(version, format, hap_cutoff)
     if overwrite or not hl.hadoop_exists(os.path.join(flat_path, '_SUCCESS')):
-        ht.export(flat_path, overwrite=True)
+        ht.export(flat_path)
 
     return ht
 
