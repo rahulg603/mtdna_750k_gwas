@@ -839,6 +839,10 @@ task null {
         for c in iter(lambda: process.stdout.read(1), b""):
             sys.stdout.buffer.write(c)
             f.write(c)
+        
+        stdout, _ = process.communicate()
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, process.args, output=stdout)
 
     with open('rda_path.txt', 'w') as f:
         f.write(rda_path)
