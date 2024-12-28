@@ -816,7 +816,7 @@ task null {
                                        '--sparseGRMFile=~{sparse_grm}',
                                        '--sparseGRMSampleIDFile=~{sparse_grm_ids}',
                                        '--useSparseGRMtoFitNULL=TRUE',
-                                       '--useSparseGRMforVarRatio=TRUE',
+                                       #'--useSparseGRMforVarRatio=TRUE',
                                        '--LOCO=FALSE']
     else:
         if '~{loco}' == 'loco':
