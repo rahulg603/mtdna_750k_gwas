@@ -810,7 +810,6 @@ task null {
                     f'--traitType={trait_type}',
                     '--minCovariateCount=1',
                     '--nThreads=~{n_cpu_null}',
-                    '--isCateVarianceRatio=TRUE',
                     '--maxiterPCG=5000']
 
     if "~{tf_defined_spGRM}" == 'defined':
@@ -827,7 +826,8 @@ task null {
             saige_step_1 = saige_step_1 + ['--LOCO=FALSE']
     
     if "~{analysis_type}" == 'gene':
-        saige_step_1 = saige_step_1 + ['--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
+        saige_step_1 = saige_step_1 + ['--isCateVarianceRatio=TRUE',
+                                       '--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
                                        '--cateVarRatioMaxMACVecInclude=1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5']
 
     if "~{invnorm}" == "inv_normal":
