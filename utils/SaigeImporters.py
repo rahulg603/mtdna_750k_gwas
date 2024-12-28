@@ -609,3 +609,8 @@ def make_iteration_suffix(iteration):
         return ''
     else:
         return f'_iter{str(iteration)}'
+    
+
+def remove_bucket(path):
+    this_bucket = os.getenv('WORKSPACE_BUCKET')
+    return re.sub('^'+this_bucket, '', path)
