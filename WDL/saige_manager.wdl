@@ -811,7 +811,7 @@ task null {
                     '--minCovariateCount=1',
                     '--nThreads=~{n_cpu_null}',
                     '--isCateVarianceRatio=TRUE',
-                    '--maxiterPCG=1000']
+                    '--maxiterPCG=5000']
 
     if "~{tf_defined_spGRM}" == 'defined':
         saige_step_1 = saige_step_1 + ['--relatednessCutoff=~{rel_cutoff}',
