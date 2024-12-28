@@ -809,14 +809,16 @@ task null {
                     f'--sampleIDColinphenoFile={PHENO_SAMPLE_ID}',
                     f'--traitType={trait_type}',
                     '--minCovariateCount=1',
-                    '--nThreads=~{n_cpu_null}']
+                    '--nThreads=~{n_cpu_null}',
+                    '--isCateVarianceRatio=TRUE',
+                    '--maxiterPCG=1000']
 
     if "~{tf_defined_spGRM}" == 'defined':
         saige_step_1 = saige_step_1 + ['--relatednessCutoff=~{rel_cutoff}',
                                        '--sparseGRMFile=~{sparse_grm}',
                                        '--sparseGRMSampleIDFile=~{sparse_grm_ids}',
                                        '--useSparseGRMtoFitNULL=TRUE',
-                                       #'--useSparseGRMforVarRatio=TRUE',
+                                       '--useSparseGRMforVarRatio=TRUE',
                                        '--LOCO=FALSE']
     else:
         if '~{loco}' == 'loco':
@@ -825,8 +827,7 @@ task null {
             saige_step_1 = saige_step_1 + ['--LOCO=FALSE']
     
     if "~{analysis_type}" == 'gene':
-        saige_step_1 = saige_step_1 + ['--isCateVarianceRatio=TRUE',
-                                       '--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
+        saige_step_1 = saige_step_1 + ['--cateVarRatioMinMACVecExclude=0.5,1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5',
                                        '--cateVarRatioMaxMACVecInclude=1.5,2.5,3.5,4.5,5.5,10.5,15.5,20.5']
 
     if "~{invnorm}" == "inv_normal":
