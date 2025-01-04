@@ -36,6 +36,7 @@ workflow saige_manager {
         Float sparse_min_af
         Float sparse_relatedness_cutoff
         
+        Boolean use_array_for_sparse = True
         Int n_markers_common = 50000
         Int n_markers_rare_maf = 10000
         Int n_markers_rare_mac = 2000
@@ -119,6 +120,7 @@ workflow saige_manager {
             n_markers_common = n_markers_common,
             n_markers_rare_maf = n_markers_rare_maf,
             n_markers_rare_mac = n_markers_rare_mac,
+            use_array_for_sparse = use_array_for_sparse,
 
             use_plink = use_plink,
 
@@ -384,6 +386,7 @@ task get_tasks_to_run {
         Boolean use_drc_pop
         Boolean sample_qc
         Boolean use_plink
+        Boolean use_array_for_sparse
 
         File SaigeImporters
         String HailDocker
@@ -398,6 +401,7 @@ task get_tasks_to_run {
     String drc = if use_drc_pop then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
     String plink = if use_plink then 'plink' else 'no_plink'
+    String arr = if use_array_for_sparse then 'arr' else 'no_arr'
 
     command <<<
         set -e
@@ -431,6 +435,7 @@ task get_tasks_to_run {
     drc_tf = '~{drc}' == 'drc'
     sample_qc_tf = '~{qc}' == 'qc'
     plink_tf = '~{plink}' == 'plink'
+    arr_tf = '~{arr}' == 'arr'
 
     ht = ht.filter(criteria).key_by()
 
@@ -572,14 +577,26 @@ task get_tasks_to_run {
                                             n_mac=~{n_markers_rare_mac},
                                             use_drc_pop=drc_tf, 
                                             use_array_for_variant=False)
-    mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
-                                  pop='~{pop}', 
-                                  n_markers=~{sparse_n_markers}, 
-                                  relatedness=~{relatedness}, 
-                                  sample_qc=sample_qc_tf, 
-                                  use_plink=plink_tf,
-                                  use_drc_pop=drc_tf, 
-                                  af_cutoff=~{min_maf})
+
+    if arr_tf:
+        mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
+                                    pop='~{pop}', 
+                                    n_markers=~{sparse_n_markers}, 
+                                    relatedness=~{relatedness}, 
+                                    sample_qc=sample_qc_tf, 
+                                    use_plink=plink_tf,
+                                    use_drc_ancestry_data=drc_tf, 
+                                    af_cutoff=~{min_maf})
+    else:
+        mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
+                                    pop='~{pop}', 
+                                    n_markers=~{sparse_n_markers}, 
+                                    relatedness=~{relatedness}, 
+                                    sample_qc=sample_qc_tf, 
+                                    use_plink=plink_tf,
+                                    use_drc_ancestry_data=drc_tf, 
+                                    af_cutoff=~{min_maf},
+                                    use_array_data='~{n_markers_common}_~{n_markers_rare_maf}_~{n_markers_rare_mac}')
 
     with open('bed.txt', 'w') as f:
         f.write(bed)
@@ -810,7 +827,7 @@ task null {
                     f'--traitType={trait_type}',
                     '--minCovariateCount=1',
                     '--nThreads=~{n_cpu_null}',
-                    '--maxiterPCG=5000']
+                    '--maxiterPCG=500']
 
     if "~{tf_defined_spGRM}" == 'defined':
         saige_step_1 = saige_step_1 + ['--relatednessCutoff=~{rel_cutoff}',

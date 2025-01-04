@@ -55,13 +55,15 @@ def get_plink_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_prune
     return path_finder('bed'), path_finder('bim'), path_finder('fam')
 
 
-def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_plink, use_drc_pop=False, af_cutoff=0.01):
+def get_sparse_grm_path(geno_folder, pop, n_markers, relatedness, sample_qc, use_plink, use_drc_pop=False, use_array_data='', af_cutoff=0.01):
+    # use_array_data is expected to be A_B_C or blank, where A is n_common, B is n_maf, C is n_mac
     af = f'_maf{str(af_cutoff)}'
     related = f'_rel{str(relatedness)}'
     drc_string = '_drc' if use_drc_pop else '_axaou'
     qc = '_sample_qc' if sample_qc else ''
     plink = '_plink' if use_plink else ''
-    prefix = os.path.join(geno_folder, f'sparse_grm/aou_ld_pruned_{pop}{qc}{drc_string}{af}{plink}_{str(n_markers)}markers{related}')
+    use_array_data = '' if use_array_data == '' else f'_wgs_and_exome_N{use_array_data}'
+    prefix = os.path.join(geno_folder, f'sparse_grm/aou_ld_pruned_{pop}{qc}{drc_string}{af}{plink}{use_array_data}_{str(n_markers)}markers{related}')
     return f'{prefix}.mtx', f'{prefix}.mtx.sampleIDs.txt'
 
 

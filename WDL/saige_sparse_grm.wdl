@@ -26,6 +26,11 @@ workflow saige_sparse_grm {
         Boolean sample_qc = true
         Int n_cpu = 64
 
+        Boolean use_array = true
+        Int? n_common
+        Int? n_maf
+        Int? n_mac
+
     }
 
     Array[String] pops = read_lines(pop_list)
@@ -44,6 +49,11 @@ workflow saige_sparse_grm {
             use_drc_pop = use_drc_pop,
             sample_qc = sample_qc,
             use_plink = use_plink,
+
+            use_array = use_array,
+            n_common = n_common,
+            n_maf = n_maf,
+            n_mac = n_mac,
 
             SaigeImporters = SaigeImporters,
             HailDocker = HailDocker
@@ -109,6 +119,11 @@ task get_sparse_grm_paths {
         Boolean sample_qc
         Boolean use_plink
 
+        Boolean use_array = true
+        Int? n_common
+        Int? n_maf
+        Int? n_mac
+
         File SaigeImporters
         String HailDocker
 
@@ -117,6 +132,11 @@ task get_sparse_grm_paths {
     String drc = if use_drc_pop then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
     String plink = if use_plink then 'plink' else 'no_plink'
+
+    String arr = if use_array then 'arr' else 'no_arr'
+    Int n_common_this = select_first([n_common, 0])
+    Int n_maf_this = select_first([n_maf, 0])
+    Int n_mac_this = select_first([n_mac, 0])
 
     command <<<
         set -e
@@ -143,6 +163,7 @@ task get_sparse_grm_paths {
     drc_tf = '~{drc}' == 'drc'
     sample_qc_tf = '~{qc}' == 'qc'
     plink_tf = '~{plink}' == 'plink'
+    arr_tf = '~{arr}' == 'arr'
     pops_to_iter = '~{sep="," pops}'.split(',')
 
     # generate filenames
@@ -153,20 +174,48 @@ task get_sparse_grm_paths {
     ix = []
 
     for pop in pops_to_iter:
-        mtx_p, ix_p = get_sparse_grm_path(gs_genotype_path, pop=pop,
-                                          n_markers=~{n_markers},
-                                          relatedness=~{relatedness_cutoff},
-                                          sample_qc=sample_qc_tf,
-                                          af_cutoff=~{min_af},
-                                          use_drc_pop=drc_tf,
-                                          use_plink=plink_tf)
-        pref = get_ld_pruned_array_data_path(gs_genotype_path, pop=pop, sample_qc=sample_qc_tf,
-                                             use_drc_pop=drc_tf,
-                                             use_plink=plink_tf,
-                                             af_cutoff=~{min_af}, extension='')
-        bed.append(f'{pref}bed')
-        bim.append(f'{pref}bim')
-        fam.append(f'{pref}fam')
+
+        if arr_tf:
+            pref = get_ld_pruned_array_data_path(gs_genotype_path, pop=pop, 
+                                                 sample_qc=sample_qc_tf,
+                                                 use_drc_pop=drc_tf,
+                                                 use_plink=plink_tf,
+                                                 af_cutoff=~{min_af}, extension='')
+            bed.append(f'{pref}bed')
+            bim.append(f'{pref}bim')
+            fam.append(f'{pref}fam')
+
+            mtx_p, ix_p = get_sparse_grm_path(gs_genotype_path, pop=pop,
+                                            n_markers=~{n_markers},
+                                            relatedness=~{relatedness_cutoff},
+                                            sample_qc=sample_qc_tf,
+                                            af_cutoff=~{min_af},
+                                            use_drc_pop=drc_tf,
+                                            use_plink=plink_tf,
+                                            use_array_data='')
+        else:
+            out_set = get_plink_for_null_path(gs_genotype_path, pop=pop,
+                                              sample_qc=sample_qc_tf,
+                                              analysis_type='both',
+                                              ld_pruned=True,
+                                              n_common=~{n_common_this},
+                                              n_maf=~{n_maf_this},
+                                              n_mac=~{n_mac_this},
+                                              use_drc_pop=drc_tf,
+                                              use_array_for_variant=False)
+            bed.append(out_set[0])
+            bim.append(out_set[1])
+            fam.append(out_set[2])
+
+            mtx_p, ix_p = get_sparse_grm_path(gs_genotype_path, pop=pop,
+                                              n_markers=~{n_markers},
+                                              relatedness=~{relatedness_cutoff},
+                                              sample_qc=sample_qc_tf,
+                                              af_cutoff=~{min_af},
+                                              use_drc_pop=drc_tf,
+                                              use_plink=plink_tf,
+                                              use_array_data='~{n_common_this}_~{n_maf_this}_~{n_mac_this}')
+        
         mtx.append(mtx_p)
         ix.append(ix_p)
 
@@ -192,8 +241,8 @@ task get_sparse_grm_paths {
 
     runtime {
         docker: HailDocker
-        memory: '4 GB'
-        cpu: '2'
+        memory: '3 GB'
+        cpu: '1'
         preemptible: 5
     }
 

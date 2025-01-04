@@ -646,7 +646,11 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                     n_cpu_sparse=32,
                                     use_drc_pop=False,
                                     overwrite=False,
-                                    use_plink=True):
+                                    use_plink=True,
+                                    use_array_data=True,
+                                    n_common=50000,
+                                    n_maf=10000,
+                                    n_mac=2000):
     """
     Uses cromwell to distribute across pops.
     """
@@ -656,13 +660,24 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
     pops_to_queue = []
 
     for pop in pops:
-        mtx, _ = get_sparse_grm_path(GENO_PATH, pop=pop,
-                                     n_markers=n_markers,
-                                     relatedness=relatedness,
-                                     sample_qc=sample_qc,
-                                     af_cutoff=af_cutoff,
-                                     use_drc_pop=use_drc_pop,
-                                     use_plink=use_plink)
+        if use_array_data:
+            mtx, _ = get_sparse_grm_path(GENO_PATH, pop=pop,
+                                         n_markers=n_markers,
+                                         relatedness=relatedness,
+                                         sample_qc=sample_qc,
+                                         af_cutoff=af_cutoff,
+                                         use_drc_pop=use_drc_pop,
+                                         use_plink=use_plink,
+                                         use_array_data='')
+        else:
+            mtx, _ = get_sparse_grm_path(GENO_PATH, pop=pop,
+                                         n_markers=n_markers,
+                                         relatedness=relatedness,
+                                         sample_qc=sample_qc,
+                                         af_cutoff=af_cutoff,
+                                         use_drc_pop=use_drc_pop,
+                                         use_plink=use_plink,
+                                         use_array_data=f'{str(n_common)}_{str(n_maf)}_{str(n_mac)}')
         if overwrite or not hl.hadoop_exists(mtx):
             pops_to_queue.append(pop)
 
@@ -678,6 +693,10 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
         baseline = {'saige_sparse_grm.relatednessCutoff': relatedness,
                     'saige_sparse_grm.min_af': af_cutoff,
                     'saige_sparse_grm.num_markers': n_markers,
+                    'saige_sparse_grm.use_array_data': use_array_data,
+                    'saige_sparse_grm.n_common': n_common,
+                    'saige_sparse_grm.n_maf': n_maf,
+                    'saige_sparse_grm.n_mac': n_mac,
                     'saige_sparse_grm.gs_bucket': BUCKET,
                     'saige_sparse_grm.gs_genotype_path': remove_bucket(GENO_PATH),
                     'saige_sparse_grm.SaigeImporters': saige_importers_path,
@@ -692,13 +711,13 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
         print('NOW COMMENCING GENERATION OF SPARSE GRMs.')
         print('This stage will use Cromwell.')
         manager = CromwellManager(run_name='saige_sparse_grm_multipop_aou',
-                                inputs_file=df,
-                                json_template_path=os.path.abspath('./saige_template.json'),
-                                wdl_path=wdl_path,
-                                batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
-                                add_requester_pays_parameter=False,
-                                restart=False, batches_precomputed=False, 
-                                submission_sleep=0, check_freq=120, quiet=False)
+                                  inputs_file=df,
+                                  json_template_path=os.path.abspath('./saige_template.json'),
+                                  wdl_path=wdl_path,
+                                  batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
+                                  add_requester_pays_parameter=False,
+                                  restart=False, batches_precomputed=False, 
+                                  submission_sleep=0, check_freq=120, quiet=False)
         manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
     
     print('Generation of all sparse GRMs completed.')
