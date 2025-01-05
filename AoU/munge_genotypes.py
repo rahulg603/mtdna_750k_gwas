@@ -716,7 +716,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
                                   wdl_path=wdl_path,
                                   batch=len(pops), limit=len(pops)+1, n_parallel_workflows=len(pops)+1, 
                                   add_requester_pays_parameter=False,
-                                  restart=False, batches_precomputed=False, 
+                                  restart=False, batches_precomputed=False, continue_when_possible=True,
                                   submission_sleep=0, check_freq=120, quiet=False)
         manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
     

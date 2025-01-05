@@ -572,7 +572,7 @@ task get_tasks_to_run {
         json.dump(run_hail_merge, f)
 
     #### NOW generate paths for null model construction
-    if arr_null_tf:
+    if not arr_null_tf:
         bed, bim, fam = get_plink_for_null_path(geno_folder=gs_genotype_path, 
                                                 pop='~{pop}', 
                                                 sample_qc=sample_qc_tf, 
