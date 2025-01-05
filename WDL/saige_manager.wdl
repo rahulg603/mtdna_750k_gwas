@@ -600,7 +600,7 @@ task get_tasks_to_run {
                                     relatedness=~{relatedness}, 
                                     sample_qc=sample_qc_tf, 
                                     use_plink=plink_tf,
-                                    use_drc_ancestry_data=drc_tf, 
+                                    use_drc_pop=drc_tf, 
                                     af_cutoff=~{min_maf})
     else:
         mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
@@ -609,7 +609,7 @@ task get_tasks_to_run {
                                     relatedness=~{relatedness}, 
                                     sample_qc=sample_qc_tf, 
                                     use_plink=plink_tf,
-                                    use_drc_ancestry_data=drc_tf, 
+                                    use_drc_pop=drc_tf, 
                                     af_cutoff=~{min_maf},
                                     use_array_data='~{n_markers_common}_~{n_markers_rare_maf}_~{n_markers_rare_mac}')
 
