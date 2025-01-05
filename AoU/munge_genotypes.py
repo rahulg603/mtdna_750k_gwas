@@ -693,7 +693,7 @@ def generate_sparse_grm_distributed(pops, sample_qc, af_cutoff,
         baseline = {'saige_sparse_grm.relatednessCutoff': relatedness,
                     'saige_sparse_grm.min_af': af_cutoff,
                     'saige_sparse_grm.num_markers': n_markers,
-                    'saige_sparse_grm.use_array_data': use_array_data,
+                    'saige_sparse_grm.use_array': use_array_data,
                     'saige_sparse_grm.n_common': n_common,
                     'saige_sparse_grm.n_maf': n_maf,
                     'saige_sparse_grm.n_mac': n_mac,
@@ -861,6 +861,8 @@ def main():
     min_maf_common = 0.01
     n_mac = 2000
     n_maf = 10000
+
+    use_array_data_for_sparse = True
     
     if use_plink:
         mt_dict = plink_ld_pruned_mt(sample_qc=sample_qc,
@@ -914,7 +916,11 @@ def main():
                                     wdl_path=sparse_wdl_path,
                                     use_drc_pop=use_drc_pop,
                                     overwrite=overwrite,
-                                    use_plink=use_plink)
+                                    use_plink=use_plink,
+                                    use_array_data=use_array_data_for_sparse,
+                                    n_common=n_common,
+                                    n_maf=n_maf,
+                                    n_mac=n_mac)
 
 
 if __name__ == '__main__':
