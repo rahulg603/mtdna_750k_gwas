@@ -300,7 +300,7 @@ task create_sparse_grm {
     runtime {
         docker: SaigeDocker
         cpu: this_cpu
-        preemptible: 3
+        preemptible: 1
     }
 
     output {
