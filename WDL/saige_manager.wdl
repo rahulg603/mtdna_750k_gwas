@@ -36,7 +36,8 @@ workflow saige_manager {
         Float sparse_min_af
         Float sparse_relatedness_cutoff
         
-        Boolean use_array_for_sparse = True
+        Boolean use_array_for_sparse = true
+        Boolean use_array_for_null = false
         Int n_markers_common = 50000
         Int n_markers_rare_maf = 10000
         Int n_markers_rare_mac = 2000
@@ -121,6 +122,7 @@ workflow saige_manager {
             n_markers_rare_maf = n_markers_rare_maf,
             n_markers_rare_mac = n_markers_rare_mac,
             use_array_for_sparse = use_array_for_sparse,
+            use_array_for_null = use_array_for_null,
 
             use_plink = use_plink,
 
@@ -387,6 +389,7 @@ task get_tasks_to_run {
         Boolean sample_qc
         Boolean use_plink
         Boolean use_array_for_sparse
+        Boolean use_array_for_null
 
         File SaigeImporters
         String HailDocker
@@ -402,6 +405,7 @@ task get_tasks_to_run {
     String qc = if sample_qc then 'qc' else 'no_qc'
     String plink = if use_plink then 'plink' else 'no_plink'
     String arr = if use_array_for_sparse then 'arr' else 'no_arr'
+    String arr_null = if use_array_for_null then 'arr_null' else 'no_arr_null'
 
     command <<<
         set -e
@@ -436,6 +440,7 @@ task get_tasks_to_run {
     sample_qc_tf = '~{qc}' == 'qc'
     plink_tf = '~{plink}' == 'plink'
     arr_tf = '~{arr}' == 'arr'
+    arr_null_tf = '~{arr_null}' == 'arr_null'
 
     ht = ht.filter(criteria).key_by()
 
@@ -567,16 +572,26 @@ task get_tasks_to_run {
         json.dump(run_hail_merge, f)
 
     #### NOW generate paths for null model construction
-    bed, bim, fam = get_plink_for_null_path(geno_folder=gs_genotype_path, 
-                                            pop='~{pop}', 
-                                            sample_qc=sample_qc_tf, 
-                                            analysis_type='both',
-                                            ld_pruned=True,
-                                            n_common=~{n_markers_common},
-                                            n_maf=~{n_markers_rare_maf},
-                                            n_mac=~{n_markers_rare_mac},
-                                            use_drc_pop=drc_tf, 
-                                            use_array_for_variant=False)
+    if arr_null_tf:
+        bed, bim, fam = get_plink_for_null_path(geno_folder=gs_genotype_path, 
+                                                pop='~{pop}', 
+                                                sample_qc=sample_qc_tf, 
+                                                analysis_type='both',
+                                                ld_pruned=True,
+                                                n_common=~{n_markers_common},
+                                                n_maf=~{n_markers_rare_maf},
+                                                n_mac=~{n_markers_rare_mac},
+                                                use_drc_pop=drc_tf, 
+                                                use_array_for_variant=False)
+    else:
+        pref = get_ld_pruned_array_data_path(gs_genotype_path, pop='~{pop}',
+                                             sample_qc=sample_qc_tf,
+                                             use_drc_pop=drc_tf,
+                                             use_plink=plink_tf,
+                                             af_cutoff=~{min_maf}, extension='')
+        bed = f'{pref}bed'
+        bim = f'{pref}bim'
+        fam = f'{pref}fam'
 
     if arr_tf:
         mtx, ix = get_sparse_grm_path(geno_folder=gs_genotype_path, 
