@@ -188,7 +188,7 @@ task split_bgen {
         GT=hl.if_else(mt.GT.is_haploid(), hl.call(mt.GT[0], mt.GT[0]), mt.GT)
     )
     if "~{encoding}" == 'recessive':
-        mt = mt.annotate_entries(GP = hl.if_else(mt.GT.is_het(), hl.call(0, 0, phased=False), mt.GT))
+        mt = mt.annotate_entries(GT = hl.if_else(mt.GT.is_het(), hl.call(0, 0, phased=False), mt.GT))
     mt = gt_to_gp(mt)
     mt = impute_missing_gp(mt, mean_impute=mean_impute_missing_tf)
     hl.export_bgen(mt, "~{bgen_prefix}", gp=mt.GP, varid=mt.rsid)
