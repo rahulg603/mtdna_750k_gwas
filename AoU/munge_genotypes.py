@@ -760,32 +760,11 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
 
     from cromwell.classes import CromwellManager
 
-    interval_list = get_variant_intervals(pop=pop, overwrite=False)
-    bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
-    
-    dct = {'chr': [],
-           'start': [],
-           'end': [],
-           'bgen_prefix': []}
-    
-    for _, row in interval_list.iterrows():
-        this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
-        if not hl.hadoop_exists(this_bgen_prefix + '.bgen') or not hl.hadoop_exists(this_bgen_prefix + '.bgen.bgi'):
-            dct['chr'].append(row['chrom'])
-            dct['start'].append(row['start'])
-            dct['end'].append(row['end'])
-            dct['bgen_prefix'].append(this_bgen_prefix)
-
-    df = pd.DataFrame(dct)
-    df.to_csv(os.path.abspath(f'./this_{pop}_run.tsv'), index=False, sep='\t')
-
     subprocess.run(['tar', '-czf', './saige_wdl.tar.gz', git_path])
     repo_tarball = os.path.join(BUCKET,'scripts/saige_wdl.tar.gz')
     _ = subprocess.run(['gsutil','cp','./saige_wdl.tar.gz',repo_tarball])
 
-
-    baseline = {'split_bgen_intervals.pop': pop,
-                'split_bgen_intervals.sample_qc': True,
+    baseline = {'split_bgen_intervals.sample_qc': True,
                 'split_bgen_intervals.variant_qc': True,
                 'split_bgen_intervals.use_drc_pop': use_drc_pop,
                 'split_bgen_intervals.mean_impute_missing': mean_impute_missing,
@@ -796,17 +775,64 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                 'split_bgen_intervals.repo_tarball': repo_tarball,
                 'split_bgen_intervals.tar_folder_path': git_path.lstrip('/'),
                 'split_bgen_intervals.n_cpu': n_cpu}
-    with open(os.path.abspath(f'./saige_template_{pop}.json'), 'w') as j:
+
+    if type(pop) == list:
+        this_pop_list = ','.join(pop)
+
+        dct = {'chr': [],
+               'start': [],
+               'end': [],
+               'bgen_prefix': [],
+               'pop': []}
+
+        for this_pop in pop:
+            interval_list = get_variant_intervals(pop=this_pop, overwrite=False)
+            bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=this_pop, use_drc_pop=use_drc_pop, encoding=encoding)
+        
+            for _, row in interval_list.iterrows():
+                this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
+                if not hl.hadoop_exists(this_bgen_prefix + '.bgen') or not hl.hadoop_exists(this_bgen_prefix + '.bgen.bgi'):
+                    dct['chr'].append(row['chrom'])
+                    dct['start'].append(row['start'])
+                    dct['end'].append(row['end'])
+                    dct['bgen_prefix'].append(this_bgen_prefix)
+                    dct['pop'].append(this_pop)
+
+    else:
+        this_pop_list = pop
+        baseline.update({'split_bgen_intervals.pop': pop})
+    
+        interval_list = get_variant_intervals(pop=pop, overwrite=False)
+        bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
+        
+        dct = {'chr': [],
+               'start': [],
+               'end': [],
+               'bgen_prefix': []}
+        
+        for _, row in interval_list.iterrows():
+            this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
+            if not hl.hadoop_exists(this_bgen_prefix + '.bgen') or not hl.hadoop_exists(this_bgen_prefix + '.bgen.bgi'):
+                dct['chr'].append(row['chrom'])
+                dct['start'].append(row['start'])
+                dct['end'].append(row['end'])
+                dct['bgen_prefix'].append(this_bgen_prefix)
+
+
+    df = pd.DataFrame(dct)
+    df.to_csv(os.path.abspath(f'./this_{this_pop_list}_run.tsv'), index=False, sep='\t')    
+
+    with open(os.path.abspath(f'./saige_template_{this_pop_list}.json'), 'w') as j:
         json.dump(baseline, j)
 
     # run sparse GRM analysis
     print('NOW COMMENCING GENERATION OF BGENs.')
     print('This stage will use Cromwell.')
-    manager = CromwellManager(run_name=f'saige_aou_split_bgen_{pop}',
+    manager = CromwellManager(run_name=f'saige_aou_split_bgen_{this_pop_list}',
                               inputs_file=df,
-                              json_template_path=os.path.abspath(f'./saige_template_{pop}.json'),
+                              json_template_path=os.path.abspath(f'./saige_template_{this_pop_list}.json'),
                               wdl_path=wdl_path,
-                              limit=limit, n_parallel_workflows=500, 
+                              limit=limit, n_parallel_workflows=limit, 
                               add_requester_pays_parameter=True,
                               restart=False, batches_precomputed=False, 
                               submission_sleep=0, check_freq=120, quiet=False)
