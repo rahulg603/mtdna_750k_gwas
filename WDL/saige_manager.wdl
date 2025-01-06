@@ -76,6 +76,7 @@ workflow saige_manager {
 
         Int num_pcs
         Int min_cases = 50
+        Int max_null_iter = 20
 
         Boolean append_pheno = false
         Boolean overwrite_pheno = false
@@ -213,6 +214,7 @@ workflow saige_manager {
                     analysis_type = analysis_type,
                     force_inverse_normalize = force_inverse_normalize,
                     disable_loco = disable_loco,
+                    max_null_iter = max_null_iter,
 
                     SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker
@@ -781,6 +783,7 @@ task null {
         String analysis_type
 
         Float rel_cutoff
+        Int max_null_iter
 
         Int n_cpu_null
 
@@ -842,7 +845,8 @@ task null {
                     f'--traitType={trait_type}',
                     '--minCovariateCount=1',
                     '--nThreads=~{n_cpu_null}',
-                    '--maxiterPCG=500']
+                    '--maxiterPCG=500',
+                    '--maxiter=~{max_null_iter}']
 
     if "~{tf_defined_spGRM}" == 'defined':
         saige_step_1 = saige_step_1 + ['--relatednessCutoff=~{rel_cutoff}',
