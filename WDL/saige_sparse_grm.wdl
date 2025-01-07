@@ -16,7 +16,7 @@ workflow saige_sparse_grm {
         File SaigeImporters
 
         # docker images
-        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.3.6'
+        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.4.3'
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         # options
