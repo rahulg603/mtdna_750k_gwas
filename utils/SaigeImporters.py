@@ -618,7 +618,8 @@ def remove_bucket(path):
     return re.sub('^'+this_bucket, '', path)
 
 
-def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=False):
+def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=''):
+    # sex_stratified can be 'all', 'only', ''.
     ht = hl.read_table(get_custom_phenotype_summary_path(gs_phenotype_path, suffix))
     ht = ht.filter(ht.pop == pop)
 
@@ -639,7 +640,7 @@ def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=
     return pheno_key_dict
 
 
-def get_all_merged_ht_paths(gs_output_path, gs_phenotype_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=False):
+def get_all_merged_ht_paths(gs_output_path, gs_phenotype_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=''):
     pheno_dict = get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=0, sex_stratified=sex_stratified)
     
     paths_list = []
