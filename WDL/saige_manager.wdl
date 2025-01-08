@@ -958,7 +958,7 @@ task merge {
     String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
     String drc = if use_drc_pop then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
-    Array[File] gene_test_defined = select_first(gene_test)
+    Array[File] gene_test_defined = select_all(gene_test)
 
     command <<<
         set -e
@@ -1039,7 +1039,7 @@ task merge {
     gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=True)
     if "~{analysis_type}" == "gene":
         load_gene_data(output_ht_path=gene_ht,
-                       paths='~{sep="," gene_test}'.split(','),
+                       paths='~{sep="," gene_test_defined}'.split(','),
                        extension='',
                        trait_type=trait_type,
                        pheno_dict=pheno_dct,
