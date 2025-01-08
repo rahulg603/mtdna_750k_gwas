@@ -2,7 +2,7 @@ import os
 import json
 import hail as hl
 import pandas as pd
-import tqdm
+from tqdm import tqdm
 from AoU.paths import *
 from utils.SaigeImporters import *
 from cromwell.classes import CromwellManager
@@ -255,13 +255,13 @@ def join_pheno_hts_to_mt(all_hts, row_keys, col_keys, temp_dir = None, inner_mod
     return mt
 
 
-def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_mode, checkpoint):
+def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_mode, checkpoint, n_partitions):
     row_keys = ['locus', 'alleles', 'gene', 'annotation']
     col_keys = PHENO_KEY_FIELDS
 
-    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x), patch_case_control_count=x) for x in tqdm(all_variant_outputs)]
+    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x)) for x in tqdm(all_variant_outputs)]
     mt = join_pheno_hts_to_mt(all_hts, row_keys, col_keys, temp_dir=temp_dir,
-                              inner_mode=inner_mode, repartition_final=10000)
+                              inner_mode=inner_mode, repartition_final=n_partitions)
     print('After merge schema...')
     mt.describe()
 
@@ -283,7 +283,7 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     return mt
 
 
-def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, read_previous=False, overwrite=True, gene_analysis=False, pops=POPS):
+def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, read_previous=False, overwrite=True, gene_analysis=False, n_partitions=5000):
 
     inner_mode = 'overwrite' if overwrite else '_read_if_exists'
     suffix = suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
@@ -291,6 +291,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, read
     for pop in pops:
 
         merged_mt_path = get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop)
+        print(f'Final path: {merged_mt_path}')
 
         if read_previous and hl.hadoop_exists(f'{merged_mt_path}/_SUCCESS'):
             continue
@@ -298,15 +299,18 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, read
         all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, PHENO_PATH, suffix, pop, encoding)
         pheno_dict = get_pheno_dict(PHENO_PATH, suffix, pop, min_cases=50, sex_stratified='')
 
-        print(f'For {suffix}, pop {pop}, {encoding}, found {str(len(pheno_dict))} with {str(len(all_variant_outputs))} valid per-pheno HTs.')
+        print(f'For {suffix}, pop {pop}, {encoding}, found {str(len(pheno_dict))} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
 
         if len(all_variant_outputs) > 0:
-            mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/variant', inner_mode=inner_mode)
+            mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/variant', inner_mode=inner_mode, checkpoint=True, n_partitions=n_partitions)
             mt.write(merged_mt_path, overwrite=overwrite)
 
             hl.read_matrix_table(merged_mt_path).describe()
 
-    return mt
+            return mt
+
+        else:
+            return None
 
 
 def saige_append_merged_sumstats():
