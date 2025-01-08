@@ -945,6 +945,12 @@ task merge {
     }
 
     parameter_meta {
+        single_test: {
+            localization_optional: true
+        }
+        gene_test: {
+            localization_optional: true
+        }
     }
 
 
@@ -952,6 +958,7 @@ task merge {
     String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
     String drc = if use_drc_pop then 'drc' else 'custom'
     String qc = if sample_qc then 'qc' else 'no_qc'
+    Array[File] gene_test_defined = select_first(gene_test)
 
     command <<<
         set -e
