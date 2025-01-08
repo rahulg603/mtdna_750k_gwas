@@ -639,12 +639,12 @@ def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=
     return pheno_key_dict
 
 
-def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=False):
+def get_all_merged_ht_paths(gs_output_path, suffix, suffix_results, pop, encoding, gene_analysis=False, sex_stratified=False):
     pheno_dict = get_pheno_dict(gs_output_path, suffix, pop, min_cases=0, sex_stratified=sex_stratified)
     
     paths_list = []
     for this_pheno_dict in pheno_dict:
-        this_ht = get_merged_ht_path(gs_output_path, suffix, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
+        this_ht = get_merged_ht_path(gs_output_path, suffix_results, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
         if hl.hadoop_exists(os.path.join(this_ht, '_SUCCESS')):
             paths_list.append(this_ht)
 
@@ -654,7 +654,7 @@ def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis
 def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_mode = 'overwrite',
                      repartition_final: int = None):
 
-    
+
     def get_n_even_intervals(n):
         ref = hl.default_reference()
         genome_size = sum(ref.lengths.values())

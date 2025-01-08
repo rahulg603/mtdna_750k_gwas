@@ -283,18 +283,19 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     return mt
 
 
-def saige_merge_raw_sumstats(suffix, encoding, read_previous=False, overwrite=True, gene_analysis=False, pops=POPS):
+def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, read_previous=False, overwrite=True, gene_analysis=False, pops=POPS):
 
     inner_mode = 'overwrite' if overwrite else '_read_if_exists'
+    suffix_results = suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
 
     for pop in pops:
 
-        merged_mt_path = get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop)
+        merged_mt_path = get_saige_sumstats_mt_path(suffix_results, encoding, gene_analysis, pop)
 
         if read_previous and hl.hadoop_exists(f'{merged_mt_path}/_SUCCESS'):
             continue
 
-        all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, suffix, pop, encoding)
+        all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, suffix, suffix_results, pop, encoding)
         pheno_dict = get_pheno_dict(PHENO_PATH, suffix, pop, min_cases=50, sex_stratified=False)
 
         print(f'For {suffix}, pop {pop}, {encoding}, found {str(len(pheno_dict))} with {str(len(all_variant_outputs))} valid per-pheno HTs.')
