@@ -616,3 +616,85 @@ def make_iteration_suffix(iteration):
 def remove_bucket(path):
     this_bucket = os.getenv('WORKSPACE_BUCKET')
     return re.sub('^'+this_bucket, '', path)
+
+
+def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=False):
+    ht = hl.read_table(get_custom_phenotype_summary_path(gs_phenotype_path, suffix))
+    ht = ht.filter(ht.pop == pop)
+
+    criteria = True
+    criteria &= (ht.n_cases_by_pop >= min_cases)
+    ht = ht.filter(criteria).key_by()
+
+    if len(sex_stratified) > 0:
+        ht_sex_specific = ht.annotate(pheno_sex='males').union(ht.annotate(pheno_sex='females'))
+        if sex_stratified == 'all':
+            ht = ht.union(ht_sex_specific)
+        else:
+            ht = ht_sex_specific
+
+    out = set([tuple(x[field] for field in PHENO_KEY_FIELDS) for x in ht.select(*PHENO_KEY_FIELDS).collect()])
+    pheno_key_dict = [dict(zip(PHENO_KEY_FIELDS, x)) for x in out]
+
+    return pheno_key_dict
+
+
+def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=False):
+    pheno_dict = get_pheno_dict(gs_output_path, suffix, pop, min_cases=0, sex_stratified=sex_stratified)
+    
+    paths_list = []
+    for this_pheno_dict in pheno_dict:
+        this_ht = get_merged_ht_path(gs_output_path, suffix, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
+        if hl.hadoop_exists(os.path.join(this_ht, '_SUCCESS')):
+            paths_list.append(this_ht)
+
+    return paths_list
+
+
+def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_mode = 'overwrite',
+                     repartition_final: int = None):
+
+    
+    def get_n_even_intervals(n):
+        ref = hl.default_reference()
+        genome_size = sum(ref.lengths.values())
+        partition_size = int(genome_size / n) + 1
+        return list(map(
+            lambda x: hl.Interval(hl.eval(hl.locus_from_global_position(x * partition_size)),
+                                hl.eval(hl.locus_from_global_position(min(x * partition_size + partition_size, genome_size - 1)))),
+            range(n)))
+
+
+    chunk_size = int(len(all_hts) ** 0.5) + 1
+    outer_hts = []
+
+    checkpoint_kwargs = {inner_mode: True}
+    if repartition_final is not None:
+        intervals = get_n_even_intervals(repartition_final)
+        checkpoint_kwargs['_intervals'] = intervals
+
+    if debug: print(f'Running chunk size {chunk_size}...')
+    for i in range(chunk_size):
+        if i * chunk_size >= len(all_hts): break
+        hts = all_hts[i * chunk_size:(i + 1) * chunk_size]
+        if debug: print(f'Going from {i * chunk_size} to {(i + 1) * chunk_size} ({len(hts)} HTs)...')
+        try:
+            if isinstance(hts[0], str):
+                hts = list(map(lambda x: hl.read_table(x), hts))
+            ht = hl.Table.multi_way_zip_join(hts, 'row_field_name', 'global_field_name')
+        except:
+            if debug:
+                print(f'problem in range {i * chunk_size}-{i * chunk_size + chunk_size}')
+                _ = [ht.describe() for ht in hts]
+            raise
+        outer_hts.append(ht.checkpoint(f'{temp_dir}/temp_output_{i}.ht', **checkpoint_kwargs))
+    ht = hl.Table.multi_way_zip_join(outer_hts, 'row_field_name_outer', 'global_field_name_outer')
+    ht = ht.transmute(inner_row=hl.flatmap(lambda i:
+                                           hl.cond(hl.is_missing(ht.row_field_name_outer[i].row_field_name),
+                                                   hl.range(0, hl.len(ht.global_field_name_outer[i].global_field_name))
+                                                   .map(lambda _: hl.null(ht.row_field_name_outer[i].row_field_name.dtype.element_type)),
+                                                   ht.row_field_name_outer[i].row_field_name),
+                                           hl.range(hl.len(ht.global_field_name_outer))))
+    ht = ht.transmute_globals(inner_global=hl.flatmap(lambda x: x.global_field_name, ht.global_field_name_outer))
+    mt = ht._unlocalize_entries('inner_row', 'inner_global', globals_for_col_key)
+    return mt

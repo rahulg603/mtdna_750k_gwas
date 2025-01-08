@@ -943,6 +943,16 @@ task merge {
         Int n_cpu_merge
         Int mem
     }
+    
+    parameter_meta {
+        single_test: {
+            localization_optional: true
+        }
+        gene_test: {
+            localization_optional: true
+        }
+    }
+
 
     Int disk = ceil((size(single_test, 'G') + size(gene_test, 'G')) * 6)
     String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
@@ -1028,7 +1038,7 @@ task merge {
     gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=True)
     if "~{analysis_type}" == "gene":
         load_gene_data(output_ht_path=gene_ht,
-                       paths='~{sep="," single_test}'.split(','),
+                       paths='~{sep="," gene_test}'.split(','),
                        extension='',
                        trait_type=trait_type,
                        pheno_dict=pheno_dct,
