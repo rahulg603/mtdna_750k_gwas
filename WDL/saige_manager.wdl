@@ -945,12 +945,6 @@ task merge {
     }
 
     parameter_meta {
-        single_test: {
-            localization_optional: true
-        }
-        gene_test: {
-            localization_optional: true
-        }
     }
 
 
