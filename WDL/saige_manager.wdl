@@ -55,7 +55,7 @@ workflow saige_manager {
         File SaigeImporters
 
         # docker images
-        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.4.3.2'
+        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.4.3.3'
         String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
 
         # options
@@ -943,7 +943,7 @@ task merge {
         Int n_cpu_merge
         Int mem
     }
-    
+
     parameter_meta {
         single_test: {
             localization_optional: true
