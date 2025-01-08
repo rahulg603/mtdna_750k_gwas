@@ -260,6 +260,7 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     col_keys = PHENO_KEY_FIELDS
 
     all_hts = [custom_unify_saige_ht_schema(hl.read_table(x)) for x in tqdm(all_variant_outputs)]
+    print('Schemas unified. Starting joining...')
     mt = join_pheno_hts_to_mt(all_hts, row_keys, col_keys, temp_dir=temp_dir,
                               inner_mode=inner_mode, repartition_final=n_partitions)
     print('After merge schema...')
@@ -284,7 +285,8 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
 
 
 def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, read_previous=False, overwrite=True, gene_analysis=False, n_partitions=5000):
-
+    
+    hl._set_flags(no_whole_stage_codegen="1")
     inner_mode = 'overwrite' if overwrite else '_read_if_exists'
     suffix = suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
 
