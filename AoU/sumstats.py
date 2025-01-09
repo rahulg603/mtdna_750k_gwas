@@ -198,7 +198,7 @@ def check_and_annotate_with_dict(mt, input_dict, dict_key_from_mt, axis='cols'):
     return mt
 
 
-def custom_unify_saige_ht_schema(ht):
+def custom_unify_saige_ht_schema(ht, path, tmp):
     """
 
     :param Table ht:
@@ -234,6 +234,9 @@ def custom_unify_saige_ht_schema(ht):
         ht = ht.annotate_globals(heritability=hl.null(hl.tfloat64))
     if 'saige_version' not in list(ht.globals):
         ht = ht.annotate_globals(saige_version=hl.null(hl.tstr))
+    
+    ht = ht.checkpoint(os.path.join(tmp, 'unified_schema_individual_tables', os.path.basename(path)))
+    
     return ht
 
 
@@ -259,7 +262,7 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     row_keys = ['locus', 'alleles', 'gene', 'annotation']
     col_keys = PHENO_KEY_FIELDS
 
-    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x)) for x in tqdm(all_variant_outputs)]
+    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x), x, temp_dir) for x in tqdm(all_variant_outputs)]
     print('Schemas unified. Starting joining...')
     mt = join_pheno_hts_to_mt(all_hts, row_keys, col_keys, temp_dir=temp_dir,
                               inner_mode=inner_mode, repartition_final=n_partitions)
