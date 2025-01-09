@@ -7,7 +7,7 @@ from utils.SaigeImporters import *
 from cromwell.classes import CromwellManager
 
 
-def distributed_export_meta(wdl_path, saige_importers, suffix, encoding, gene_analysis, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom'):
+def distributed_export_meta(wdl_path, saige_importers, suffix, encoding, gene_analysis, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', n_cpu=32):
     """
     This function exports sumstats with meta-analyses as flat files in the pan ancestry format.
     In its current form, summary statistics without meta-analyses will NOT be exported via this method.
@@ -48,8 +48,8 @@ def distributed_export_meta(wdl_path, saige_importers, suffix, encoding, gene_an
                 'export_single_saige_sumstats.gs_bucket': BUCKET.rstrip('/'),
                 'export_single_saige_sumstats.gs_gwas_path': remove_bucket(GWAS_PATH),
                 'export_single_saige_sumstats.SaigeImporters': saige_importers,
-                'export_single_saige_sumstats.n_cpu': 32,
-                'export_single_saige_sumstats.mem': 30}
+                'export_single_saige_sumstats.n_cpu': n_cpu,
+                'export_single_saige_sumstats.mem': 40}
 
     with open(os.path.abspath('./saige_template.json'), 'w') as j:
         json.dump(baseline, j)

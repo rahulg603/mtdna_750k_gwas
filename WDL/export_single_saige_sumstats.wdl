@@ -89,6 +89,7 @@ task run_export {
     String drc = if use_drc_pop then 'drc' else 'custom'
     String gene = if gene_analysis then 'gene' else 'variant'
     String exp = if legacy_exponentiate_p then 'exp' else 'neglog10'
+    String rm_low = if remove_low_quality_sites then 'low' else 'not_low'
 
     command <<<
 
@@ -121,6 +122,7 @@ task run_export {
     suffix_updated = update_suffix('~{suffix}', drc_tf, '~{use_custom_pcs}')
     gene_analysis = '~{gene}' == 'gene'
     legacy_exponentiate_p = '~{exp}' == 'exp'
+    remove_low_quality_sites = '~{rm_low}' == 'low'
 
     mt = hl.read_matrix_table(get_saige_sumstats_mt_path(gs_gwas_path, suffix_updated, '~{encoding}', gene_analysis, pop='full'))
     mt = mt.annotate_entries(all_low_conf = hl.all(mt.summary_stats.low_confidence))
