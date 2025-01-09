@@ -12,7 +12,7 @@ workflow export_single_saige_sumstats {
 
         Boolean gene_analysis
         Boolean use_drc_pop
-        Boolean use_custom_pcs
+        String use_custom_pcs
         Boolean legacy_exponentiate_p = true
         Boolean remove_low_quality_sites = true
         
@@ -70,7 +70,7 @@ task run_export {
 
         Boolean gene_analysis
         Boolean use_drc_pop
-        Boolean use_custom_pcs
+        String use_custom_pcs
         Boolean legacy_exponentiate_p
         Boolean remove_low_quality_sites
 
