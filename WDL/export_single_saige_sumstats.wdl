@@ -170,7 +170,7 @@ task run_export {
     pop_list = sorted(mt.pheno_data.pop.collect()[0])
     annotate_dict = {}
     annotate_dict.update({'chr': mt.locus.contig,
-                          'pos': hl.format('%.3e', mt.locus.position),
+                          'pos': mt.locus.position,
                           'ref': mt.alleles[0],
                           'alt': mt.alleles[1]})
     if use_meta:
