@@ -199,7 +199,7 @@ def check_and_annotate_with_dict(mt, input_dict, dict_key_from_mt, axis='cols'):
     return mt
 
 
-def custom_unify_saige_ht_schema(ht, path, tmp):
+def custom_unify_saige_ht_schema(ht, path, tmp, row_keys, col_keys):
     """
 
     :param Table ht:
@@ -236,37 +236,26 @@ def custom_unify_saige_ht_schema(ht, path, tmp):
     if 'saige_version' not in list(ht.globals):
         ht = ht.annotate_globals(saige_version=hl.null(hl.tstr))
     
+    ht2 = ht.head(1)
+    glob = ht2.aggregate(hl.agg.take(hl.struct(**{x: ht2[x] for x in col_keys}), 1)[0], _localize=False)
+    ht = ht.key_by(*row_keys).drop(*col_keys).annotate_globals(**glob)
+    
     ht = ht.checkpoint(os.path.join(tmp, 'unified_schema_individual_tables', secrets.token_urlsafe(12), os.path.basename(os.path.dirname(path))))
     
     return ht
-
-
-def join_pheno_hts_to_mt(all_hts, row_keys, col_keys, temp_dir = None, inner_mode: str = 'overwrite',
-                         repartition_final: int = None):
-    
-    def pull_out_col_keys(all_hts, row_keys, col_keys):
-        rekeyed_hts = []
-        for ht in all_hts:
-            ht2 = ht.head(1)
-            glob = ht2.aggregate(hl.agg.take(hl.struct(**{x: ht2[x] for x in col_keys}), 1)[0], _localize=False)
-            rekeyed_hts.append(ht.key_by(*row_keys).drop(*col_keys).annotate_globals(**glob))
-        return rekeyed_hts
-
-    rekeyed_hts = pull_out_col_keys(all_hts, row_keys, col_keys)
-    mt = mwzj_hts_by_tree(rekeyed_hts, temp_dir, col_keys, debug=True,
-                          inner_mode=inner_mode, repartition_final=repartition_final)
-    print(f'Unioned MTs...')
-    return mt
 
 
 def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_mode, checkpoint, n_partitions):
     row_keys = ['locus', 'alleles', 'gene', 'annotation']
     col_keys = PHENO_KEY_FIELDS
 
-    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x), x, temp_dir) for x in tqdm(all_variant_outputs)]
+    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
     print('Schemas unified. Starting joining...')
-    mt = join_pheno_hts_to_mt(all_hts, row_keys, col_keys, temp_dir=temp_dir,
-                              inner_mode=inner_mode, repartition_final=n_partitions)
+
+    mt = mwzj_hts_by_tree(all_hts, temp_dir, col_keys, debug=True,
+                          inner_mode=inner_mode, repartition_final=n_partitions)
+    
+    print(f'Unioned MTs...')
     print('After merge schema...')
     mt.describe()
 
@@ -288,9 +277,8 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     return mt
 
 
-def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, read_previous=False, overwrite=True, gene_analysis=False, n_partitions=5000):
-    
-    hl._set_flags(no_whole_stage_codegen="1")
+def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, read_previous=False, overwrite=True, gene_analysis=False, n_partitions=1500):
+        
     inner_mode = 'overwrite' if overwrite else '_read_if_exists'
     suffix = suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
 

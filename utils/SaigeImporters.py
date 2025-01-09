@@ -697,5 +697,8 @@ def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_
                                                    ht.row_field_name_outer[i].row_field_name),
                                            hl.range(hl.len(ht.global_field_name_outer))))
     ht = ht.transmute_globals(inner_global=hl.flatmap(lambda x: x.global_field_name, ht.global_field_name_outer))
+    if debug:
+        ht = ht.checkpoint(f'{temp_dir}/temp_output_final_combined.ht', **checkpoint_kwargs)
+    
     mt = ht._unlocalize_entries('inner_row', 'inner_global', globals_for_col_key)
     return mt
