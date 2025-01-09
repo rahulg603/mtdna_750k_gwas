@@ -1,4 +1,5 @@
 import os
+import secrets
 import json
 import hail as hl
 import pandas as pd
@@ -235,7 +236,7 @@ def custom_unify_saige_ht_schema(ht, path, tmp):
     if 'saige_version' not in list(ht.globals):
         ht = ht.annotate_globals(saige_version=hl.null(hl.tstr))
     
-    ht = ht.checkpoint(os.path.join(tmp, 'unified_schema_individual_tables', os.path.basename(path)))
+    ht = ht.checkpoint(os.path.join(tmp, 'unified_schema_individual_tables', secrets.token_urlsafe(12), os.path.basename(os.path.dirname(path))))
     
     return ht
 
