@@ -14,6 +14,7 @@ from cromwell.classes import CromwellManager
 hl.init(default_reference='GRCh38', log='combine_results.log', branching_factor=8)
 hl._set_flags(no_whole_stage_codegen="1")
 
+
 ### ADAPTED FROM UPDATED PAN UKBB REPO
 def all_and_leave_one_out(x, pop_array, all_f=hl.sum, loo_f=lambda i, x: hl.sum(x) - hl.or_else(x[i], 0)):
     """
@@ -32,8 +33,9 @@ def all_and_leave_one_out(x, pop_array, all_f=hl.sum, loo_f=lambda i, x: hl.sum(
     arr = arr.extend(hl.map(lambda i: loo_f(i, x), hl.range(hl.len(pop_array))))
     return hl.or_missing(hl.any(hl.is_defined, x), arr)
 
+
 ### ADAPTED FROM UPDATED PAN UKBB REPO
-def run_meta_analysis(mt, remove_low_confidence=True):
+def run_meta_analysis(mt, saige=True, remove_low_confidence=True):
     """
     Run inverse-variance fixed-effect meta-analysis for a given MatrixTable. 
     Modified now to remove entries that are low confidence prior to meta-analysis.
@@ -90,29 +92,43 @@ def run_meta_analysis(mt, remove_low_confidence=True):
     )
 
     # Add other annotations
-    mt = mt.annotate_entries(
-        #ac_cases=hl.map(lambda x: x["AF.Cases"] * x.N, mt.summary_stats),
-        #ac_controls=hl.map(lambda x: x["AF.Controls"] * x.N, mt.summary_stats),
-        META_AC_Allele2=all_and_leave_one_out(mt.summary_stats.AF * mt.summary_stats.N, mt.pheno_data.pop),
-        META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data.pop),
-    )
-    mt = mt.annotate_entries(
-        META_AF=mt.META_AC_Allele2 / mt.META_N,
-        #META_AF_Allele2=mt.META_AC_Allele2 / mt.META_N,
-        #META_AF_Cases=all_and_leave_one_out(mt.ac_cases, mt.pheno_data.pop) / mt.META_N,
-        #META_AF_Controls=all_and_leave_one_out(mt.ac_controls, mt.pheno_data.pop) / mt.META_N,
-    )
-    mt = mt.drop(
-        #"unnorm_beta", "inv_se2", "variant_exists", "ac_cases", "ac_controls", "summary_stats", "META_AC_Allele2"
-        "unnorm_beta", "inv_se2", "variant_exists", "summary_stats", "META_AC_Allele2"
-    )
+    if saige:
+        mt = mt.annotate_entries(
+            ac_cases=hl.map(lambda x: x["AF.Cases"] * x.N, mt.summary_stats),
+            ac_controls=hl.map(lambda x: x["AF.Controls"] * x.N, mt.summary_stats),
+            META_AC_Allele2=all_and_leave_one_out(mt.summary_stats.AF_Allele2 * mt.summary_stats.N, mt.pheno_data.pop),
+            META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data.pop),
+        )
+        mt = mt.annotate_entries(
+            META_AF_Allele2=mt.META_AC_Allele2 / mt.META_N,
+            META_AF_Cases=all_and_leave_one_out(mt.ac_cases, mt.pheno_data.pop) / mt.META_N,
+            META_AF_Controls=all_and_leave_one_out(mt.ac_controls, mt.pheno_data.pop) / mt.META_N,
+        )
+        mt = mt.drop(
+            "unnorm_beta", "inv_se2", "variant_exists", "ac_cases", "ac_controls", "summary_stats", "META_AC_Allele2"
+        )
+
+        meta_fields = ["BETA", "SE", "Pvalue", "Q", "Pvalue_het", "N", "N_pops", "AF_Allele2", "AF_Cases", "AF_Controls"]
+    
+    else:
+        mt = mt.annotate_entries(
+            META_AC_Allele2=all_and_leave_one_out(mt.summary_stats.AF * mt.summary_stats.N, mt.pheno_data.pop),
+            META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data.pop),
+        )
+        mt = mt.annotate_entries(
+            META_AF=mt.META_AC_Allele2 / mt.META_N,
+        )
+        mt = mt.drop(
+            "unnorm_beta", "inv_se2", "variant_exists", "summary_stats", "META_AC_Allele2"
+        )
+
+        meta_fields = ["BETA", "SE", "Pvalue", "Q", "Pvalue_het", "N", "N_pops", "AF"]
+    
 
     # Format everything into array<struct>
     def is_finite_or_missing(x):
         return hl.or_missing(hl.is_finite(x), x)
 
-    meta_fields = ["BETA", "SE", "Pvalue", "Q", "Pvalue_het", "N", "N_pops", "AF"]
-    #meta_fields = ["BETA", "SE", "Pvalue", "Q", "Pvalue_het", "N", "N_pops", "AF_Allele2", "AF_Cases", "AF_Controls"]
     mt = mt.transmute_entries(
         meta_analysis=hl.map(
             lambda i: hl.struct(**{field: is_finite_or_missing(mt[f"META_{field}"][i]) for field in meta_fields}),
@@ -221,7 +237,7 @@ def check_and_annotate_with_dict(mt, input_dict, dict_key_from_mt, axis='cols'):
     return mt
 
 
-def custom_unify_saige_ht_schema(ht, path, tmp, row_keys, col_keys):
+def unify_saige_ht_schema(ht, path, tmp, row_keys, col_keys):
     """
 
     :param Table ht:
@@ -267,11 +283,31 @@ def custom_unify_saige_ht_schema(ht, path, tmp, row_keys, col_keys):
     return ht
 
 
+def saige_apply_qc(mt, this_pop_N: int, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
+                   min_call_rate: float = CALLRATE_CUTOFF):
+    mt = mt.filter_cols(mt.n_cases >= min_case_count)
+    ac_cases = mt.n_cases * 2 * mt['AF.Cases']
+    an_controls = mt.n_controls * 2 * mt['AF.Controls']
+
+    maf_total = 0.5 - hl.abs(0.5 - mt['AF_Allele2'])
+    an_total = (mt.n_cases + hl.or_else(mt.n_controls, 0)) * 2
+    mac_total = maf_total * an_total
+
+    return mt.annotate_entries(
+        low_confidence=hl.case(missing_false=True)
+            .when(ac_cases <= case_ac_threshold, True)
+            .when(an_controls <= case_ac_threshold, True)
+            .when(mac_total <= overall_mac_threshold, True)
+            .when(mt.overall_AN < 2 * this_pop_N * min_call_rate, True)
+            .default(False)
+    )
+
+
 def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_mode, checkpoint, n_partitions):
     row_keys = ['locus', 'alleles', 'gene', 'annotation']
     col_keys = PHENO_KEY_FIELDS
 
-    all_hts = [custom_unify_saige_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
+    all_hts = [unify_saige_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
     print('Schemas unified. Starting joining...')
 
     mt = mwzj_hts_by_tree(all_hts, temp_dir, col_keys, debug=True,
@@ -299,26 +335,6 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     return mt
 
 
-def saige_apply_qc(mt, this_pop_N: int, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
-                   min_call_rate: float = CALLRATE_CUTOFF):
-    mt = mt.filter_cols(mt.n_cases >= min_case_count)
-    ac_cases = mt.n_cases * 2 * mt['AF.Cases']
-    an_controls = mt.n_controls * 2 * mt['AF.Controls']
-
-    maf_total = 0.5 - hl.abs(0.5 - mt['AF_Allele2'])
-    an_total = (mt.n_cases + hl.or_else(mt.n_controls, 0)) * 2
-    mac_total = maf_total * an_total
-
-    return mt.annotate_entries(
-        low_confidence=hl.case(missing_false=True)
-            .when(ac_cases <= case_ac_threshold, True)
-            .when(an_controls <= case_ac_threshold, True)
-            .when(mac_total <= overall_mac_threshold, True)
-            .when(mt.overall_AN < 2 * this_pop_N * min_call_rate, True)
-            .default(False)
-    )
-
-
 def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, read_previous=False, overwrite=True, gene_analysis=False, n_partitions=1500):
     
     inner_mode = 'overwrite' if overwrite else '_read_if_exists'
@@ -341,10 +357,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
             mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/variant', inner_mode=inner_mode, checkpoint=True, n_partitions=n_partitions)
             mt.write(merged_mt_path, overwrite=overwrite)
 
-            return hl.read_matrix_table(merged_mt_path)
-
-        else:
-            return None
+    return None
 
 
 def saige_append_merged_sumstats():
@@ -365,7 +378,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
         return mt
 
     def re_colkey_mt(mt):
-        mt = mt.key_cols_by().select_cols(*(set(PHENO_COLUMN_FIELDS) - set(PHENO_DESCRIPTION_FIELDS)), *PHENO_GWAS_FIELDS, 'pop')
+        mt = mt.key_cols_by().select_cols(*PHENO_KEY_FIELDS, *(set(PHENO_COLUMN_FIELDS) - set(PHENO_DESCRIPTION_FIELDS)), *PHENO_GWAS_FIELDS, 'pop')
         return mt.key_cols_by(*PHENO_KEY_FIELDS)
 
     if _debug_read and hl.hadoop_exists(staging_full + '/_SUCCESS'):
@@ -403,8 +416,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
 
     full_mt = full_mt.collect_cols_by_key()
     full_mt = full_mt.annotate_cols(
-        pheno_data=full_mt.pheno_data.map(lambda x: x.drop(*PHENO_COLUMN_FIELDS)),
-        **{x: full_mt.pheno_data[x][0] for x in PHENO_DESCRIPTION_FIELDS},
+        pheno_data=full_mt.pheno_data.map(lambda x: x.drop(*(set(PHENO_COLUMN_FIELDS) - set(PHENO_DESCRIPTION_FIELDS)))),
         **{f'n_cases_full_cohort_{sex}': full_mt.pheno_data[f'n_cases_{sex}'][0]
            for sex in ('both_sexes', 'females', 'males')}
     )
@@ -415,11 +427,11 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
             full_mt = hl.read_matrix_table(staging_lambda)
         else:
             full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
-        full_mt = aou_generate_final_lambdas(full_mt, suffix, overwrite, exp_p=True)
+        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=overwrite, exp_p=True)
             
     full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop='full'), overwrite)
 
-    full_mt_meta = run_meta_analysis(full_mt)
+    full_mt_meta = run_meta_analysis(full_mt, saige=True)
     full_mt_meta = full_mt_meta.checkpoint(get_saige_meta_mt_path(suffix, encoding, gene_analysis), overwrite)
     
     print('Pops per pheno:')
