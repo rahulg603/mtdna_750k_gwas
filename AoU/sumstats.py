@@ -296,7 +296,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
         all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, PHENO_PATH, suffix, pop, encoding)
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
 
-        print(f'For {suffix}, pop {pop}, {encoding}, found {str(len(pheno_dict))} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
+        print(f'For {suffix}, pop {pop}, {encoding}, found {str(hl.len(pheno_dict).collect()[0])} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
 
         if len(all_variant_outputs) > 0:
             mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/variant', inner_mode=inner_mode, checkpoint=True, n_partitions=n_partitions)
