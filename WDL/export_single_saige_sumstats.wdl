@@ -182,10 +182,10 @@ task run_export {
             field_expr = mt_meta[mt.row_key,mt.col_key].meta_analysis[field]
             annotate_dict.update({f'{meta_field_rename_dict[field]}': hl.if_else(hl.is_nan(field_expr),
                                                                     hl.str(field_expr),
-                                                                    hl.format('%.3e', field_expr))})
-
+                                                                    field_expr if field=='N' else hl.format('%.3e', field_expr))})
+    
+    print('Exporting fields for pops ' + ', '.join(pop_list))
     for field in fields:
-        print('Exporting fields for pops ' + ','.join(pop_list))
         for pop_idx, pop in enumerate(pop_list):
             field_expr = mt.summary_stats[field][pop_idx]
             annotate_dict.update({f'{field_rename_dict[field]}_{pop}': hl.if_else(hl.is_nan(field_expr),
