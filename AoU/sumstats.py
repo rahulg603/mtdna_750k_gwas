@@ -294,7 +294,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
             continue
 
         all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, PHENO_PATH, suffix, pop, encoding)
-        pheno_dict = get_pheno_dict(PHENO_PATH, suffix, pop, min_cases=50, sex_stratified='')
+        pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
 
         print(f'For {suffix}, pop {pop}, {encoding}, found {str(len(pheno_dict))} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
 

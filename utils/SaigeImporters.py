@@ -640,6 +640,14 @@ def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=
     return pheno_key_dict
 
 
+def get_hail_pheno_dict(gs_phenotype_path, suffix):
+    pheno_ht = hl.read_matrix_table(get_custom_ukb_pheno_mt_path(gs_phenotype_path, suffix)).cols()
+    key = pheno_ht.key
+    ht = key._indices.source
+    value = ht.row_value
+    return hl.dict(ht.aggregate(hl.agg.collect((key, value)), _localize=False))
+
+
 def get_all_merged_ht_paths(gs_output_path, gs_phenotype_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=''):
     pheno_dict = get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=0, sex_stratified=sex_stratified)
     
