@@ -46,7 +46,6 @@ workflow export_single_saige_sumstats {
             gs_bucket = gs_bucket,
             gs_gwas_path = gs_gwas_path,
 
-
             SaigeImporters = SaigeImporters,
 
             HailDocker = HailDocker,

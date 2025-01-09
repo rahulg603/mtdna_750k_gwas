@@ -357,8 +357,8 @@ def get_saige_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis):
     return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'meta_analysis.mt')
 
 
-def get_saige_sumstats_tsv_folder_meta_only(gs_gwas_path, suffix, encoding, gene_analysis):
-    return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'meta_flat_files')
+def get_saige_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'flat_files')
 
 
 ######### IMPORT UTILS ##########

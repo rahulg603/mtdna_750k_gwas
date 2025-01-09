@@ -14,12 +14,12 @@ def distributed_export_meta(wdl_path, saige_importers, suffix, encoding, gene_an
     TODO update to export any summary statistic.
     """
     suffix_updated = update_suffix(suffix, use_drc_pop, use_custom_pcs)
-    meta_mt = get_saige_meta_mt_path(GWAS_PATH, suffix_updated, encoding, gene_analysis=gene_analysis)
+    meta_mt = hl.read_matrix_table(get_saige_meta_mt_path(GWAS_PATH, suffix_updated, encoding, gene_analysis=gene_analysis))
     ht = meta_mt.cols()
     phenotype_list = ht.annotate(phenotype_id = hl.str('-').join([ht[x] for x in PHENO_KEY_FIELDS])).phenotype_id.collect()
     sumstat_files = [format_pheno_dir(x) + '.tsv.bgz' for x in phenotype_list]
 
-    path_to_meta_sumstats = get_saige_sumstats_tsv_folder_meta_only(GWAS_PATH, suffix_updated, encoding, gene_analysis)
+    path_to_meta_sumstats = get_saige_sumstats_tsv_folder(GWAS_PATH, suffix_updated, encoding, gene_analysis)
     
     if hl.hadoop_exists(path_to_meta_sumstats):
         existing_files = [os.path.basename(x['path']) for x in hl.hadoop_ls(path_to_meta_sumstats) if not x['is_dir']]
@@ -47,7 +47,7 @@ def distributed_export_meta(wdl_path, saige_importers, suffix, encoding, gene_an
                 'export_single_saige_sumstats.remove_low_quality_sites': True,
                 'export_single_saige_sumstats.gs_bucket': BUCKET.rstrip('/'),
                 'export_single_saige_sumstats.gs_gwas_path': remove_bucket(GWAS_PATH),
-                'saige_manager.SaigeImporters': saige_importers,
+                'export_single_saige_sumstats.SaigeImporters': saige_importers,
                 'export_single_saige_sumstats.n_cpu': 32,
                 'export_single_saige_sumstats.mem': 30}
 
