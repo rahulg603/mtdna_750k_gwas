@@ -8,6 +8,9 @@ from AoU.paths import *
 from utils.SaigeImporters import *
 from cromwell.classes import CromwellManager
 
+hl.init(default_reference='GRCh38', log='combine_results.log', branching_factor=8)
+hl._set_flags(no_whole_stage_codegen="1")
+
 ### ADAPTED FROM UPDATED PAN UKBB REPO
 def all_and_leave_one_out(x, pop_array, all_f=hl.sum, loo_f=lambda i, x: hl.sum(x) - hl.or_else(x[i], 0)):
     """
@@ -278,7 +281,7 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
 
 
 def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, read_previous=False, overwrite=True, gene_analysis=False, n_partitions=1500):
-        
+    
     inner_mode = 'overwrite' if overwrite else '_read_if_exists'
     suffix = suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
 
