@@ -20,6 +20,7 @@ SHORT_READ_ROOT = "gs://fc-aou-datasets-controlled/v7/wgs/short_read/snpindel/"
 
 PHENO_DESCRIPTION_FIELDS = ('description', 'description_more', 'coding_description', 'category')
 PHENO_COLUMN_FIELDS = ('n_cases_both_sexes', 'n_cases_females', 'n_cases_males', *PHENO_DESCRIPTION_FIELDS)
+PHENO_GWAS_FIELDS = ('n_cases', 'n_controls', 'heritability', 'saige_version', 'inv_normalized')
 
 SAIGE_PHENO_TYPES = {
     'continuous': 'quantitative',
@@ -38,6 +39,10 @@ INVERSION_LOCUS = "chr8:8198267-12123140"
 ######### PATHING AND MUNGING ##########
 def get_aou_util_path(util):
     raise NotImplementedError('get_aou_util_path not implemented.')
+
+
+def update_suffix(suffix, use_drc_pop, use_custom_pcs):
+    return suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
 
 
 # Genotypes
@@ -658,6 +663,14 @@ def get_all_merged_ht_paths(gs_output_path, gs_phenotype_path, suffix, pop, enco
             paths_list.append(this_ht)
 
     return paths_list
+
+
+def get_modified_key(mt):
+    key = mt.col_key.annotate(phenocode=format_pheno_dir(mt.phenocode),
+                              modifier=hl.case(missing_false=True)
+                              #.when(mt.trait_type == "biomarkers", "")
+                              .default(mt.modifier))
+    return key
 
 
 def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_mode = 'overwrite',
