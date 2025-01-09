@@ -124,6 +124,8 @@ task run_export {
     legacy_exponentiate_p = '~{exp}' == 'exp'
     remove_low_quality_sites = '~{rm_low}' == 'low'
 
+    print('Exporting ~{phenotype_id}.')
+
     mt = hl.read_matrix_table(get_saige_sumstats_mt_path(gs_gwas_path, suffix_updated, '~{encoding}', gene_analysis, pop='full'))
     mt = mt.annotate_entries(all_low_conf = hl.all(mt.summary_stats.low_confidence))
     if not legacy_exponentiate_p:
@@ -155,6 +157,7 @@ task run_export {
         fields = quant_fields
         meta_field_rename_dict = quant_meta_field_rename_dict
         field_rename_dict = quant_field_rename_dict
+        print('Using quantitative trait mode.')
     elif trait_class == 'binary':
         meta_fields = binary_meta_fields
         fields = binary_fields
@@ -174,6 +177,7 @@ task run_export {
                           'ref': mt.alleles[0],
                           'alt': mt.alleles[1]})
     if use_meta:
+        print('Exporting meta analysis...')
         for field in meta_fields:
             field_expr = mt_meta[mt.row_key,mt.col_key].meta_analysis[field]
             annotate_dict.update({f'{meta_field_rename_dict[field]}': hl.if_else(hl.is_nan(field_expr),
@@ -181,6 +185,7 @@ task run_export {
                                                                     hl.format('%.3e', field_expr))})
 
     for field in fields:
+        print('Exporting fields for pops ' + ','.join(pop_list))
         for pop_idx, pop in enumerate(pop_list):
             field_expr = mt.summary_stats[field][pop_idx]
             annotate_dict.update({f'{field_rename_dict[field]}_{pop}': hl.if_else(hl.is_nan(field_expr),
@@ -194,6 +199,9 @@ task run_export {
             mt_out = mt_out.drop(x)
     
     ht = mt_out.key_cols_by().select_cols().entries()
+    
+    print('Table schema prior to export:')
+    ht.describe()
     ht.export('~{output_path}')
 
     CODE
