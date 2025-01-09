@@ -193,22 +193,6 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, saige=True, exp_
     return mt
 
 
-def get_hail_sumstats_path(model, fold):
-    return os.path.join(HAIL_GWAS_PATH, f'sumstats/{model}/{fold}')
-
-
-def get_saige_sumstats_mt_folder(suffix, encoding, gene_analysis):
-    return os.path.join(GWAS_PATH, f'{"gene_based_sumstats" if gene_analysis else "sumstats"}/{suffix}/{encoding}/mt')
-
-
-def get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop):
-    return os.path.join(get_saige_sumstats_mt_folder(suffix, encoding, gene_analysis), f'results_{pop}.mt')
-
-
-def get_saige_meta_mt_path(suffix, encoding, gene_analysis):
-    return os.path.join(get_saige_sumstats_mt_folder(suffix, encoding, gene_analysis), 'meta_analysis.mt')
-
-
 def custom_patch_mt_keys(mt):
     mt = mt.key_cols_by(**{x: hl.case(missing_false=True)
                         .default(mt[x])
@@ -342,7 +326,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
 
     for pop in pops:
 
-        merged_mt_path = get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop)
+        merged_mt_path = get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis, pop)
         print(f'Final path: {merged_mt_path}')
 
         if read_previous and hl.hadoop_exists(f'{merged_mt_path}/_SUCCESS'):
@@ -390,7 +374,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
                                               analysis_type='gene' if gene_analysis else 'variant', 
                                               use_array_for_variant=False)
         for pop in pops:
-            mt = hl.read_matrix_table(get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop)).annotate_cols(pop=pop)
+            mt = hl.read_matrix_table(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis, pop)).annotate_cols(pop=pop)
             mt = mt.key_rows_by('locus', 'alleles')
             mt = mt.annotate_cols(_logged=hl.agg.any(mt.Pvalue < 0))
             mt = mt.annotate_entries(Pvalue=hl.if_else(mt._logged, mt.Pvalue, hl.log(mt.Pvalue))).drop('_logged')
@@ -429,10 +413,10 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
             full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=overwrite, exp_p=True)
             
-    full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(suffix, encoding, gene_analysis, pop='full'), overwrite)
+    full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis, pop='full'), overwrite)
 
     full_mt_meta = run_meta_analysis(full_mt, saige=True)
-    full_mt_meta = full_mt_meta.checkpoint(get_saige_meta_mt_path(suffix, encoding, gene_analysis), overwrite)
+    full_mt_meta = full_mt_meta.checkpoint(get_saige_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis), overwrite)
     
     print('Pops per pheno:')
     pprint(dict(Counter(full_mt_meta.aggregate_cols(hl.agg.counter(hl.len(full_mt_meta.pheno_data))))))

@@ -233,7 +233,7 @@ phenotypes = pheno_non_irnt + pheno_irnt
 meta_suffix = this_suffix('meta')
 for_paths = '_geno_af_0.01.tsv.bgz'
 filenames = [x + '_' + meta_suffix + for_paths for x in phenotypes]
-file_path = get_hail_sumstats_path('additive', fold)
+file_path = get_hail_sumstats_path(HAIL_GWAS_PATH, 'additive', fold)
 
 output = make_manhattan_plots(run_name='aou_manhattan_meta_snvcount_callrate_x',
                               wdl_path='/home/jupyter/saige_aou_wdl/WDL/ManhattanPlotter.wdl', 

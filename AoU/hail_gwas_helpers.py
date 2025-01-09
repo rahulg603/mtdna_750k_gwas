@@ -104,7 +104,7 @@ def export_for_manhattan(mt, phenos, entry_keep, model, fold, suffix, overwrite,
         entry_keep = [entry_keep]
 
     for pheno in phenos:
-        file_out = os.path.join(get_hail_sumstats_path(model, fold), f'{pheno}{suffix}')
+        file_out = os.path.join(get_hail_sumstats_path(HAIL_GWAS_PATH, model, fold), f'{pheno}{suffix}')
         if include_cols_for_mung:
             extra_cols = ['rsid']
         else:

@@ -2,6 +2,7 @@
 import hail as hl
 import os, re
 from datetime import date
+from copy import deepcopy
 
 
 ######### CONSTANTS ##########
@@ -36,6 +37,41 @@ SAIGE_PHENO_TYPES = {
 HLA_LOCUS = "chr6:28510120-33480577"
 INVERSION_LOCUS = "chr8:8198267-12123140"
 
+# fields specific to each category of trait
+quant_meta_fields = ['AF_Allele2']
+quant_fields = ['AF_Allele2']
+
+binary_meta_fields = ['AF_Cases','AF_Controls']
+binary_fields = ['AF.Cases','AF.Controls']
+
+# dictionaries for renaming fields
+quant_meta_field_rename_dict = {'AF_Allele2': 'af_meta',
+                                'BETA': 'beta_meta',
+                                'SE': 'se_meta',
+                                'Pvalue': 'pval_meta',
+                                'Pvalue_het': 'pval_heterogeneity',
+                                'N': 'N_meta'}
+quant_field_rename_dict = {'AF_Allele2': 'af',
+                           'BETA': 'beta',
+                           'SE': 'se',
+                           'Pvalue': 'pval',
+                           'low_confidence': 'low_confidence'}
+
+binary_meta_field_rename_dict = {'BETA': 'beta_meta',
+                                 'SE': 'se_meta',
+                                 'Pvalue': 'pval_meta',
+                                 'AF_Cases': 'af_cases_meta',
+                                 'AF_Controls': 'af_controls_meta',
+                                 'Pvalue_het': 'pval_heterogeneity',
+                                 'N': 'N_meta'}
+binary_field_rename_dict = {'AF.Cases': 'af_cases',
+                            'AF.Controls': 'af_controls',
+                            'BETA': 'beta',
+                            'SE': 'se',
+                            'Pvalue': 'pval',
+                            'low_confidence': 'low_confidence'}
+
+
 ######### PATHING AND MUNGING ##########
 def get_aou_util_path(util):
     raise NotImplementedError('get_aou_util_path not implemented.')
@@ -43,6 +79,15 @@ def get_aou_util_path(util):
 
 def update_suffix(suffix, use_drc_pop, use_custom_pcs):
     return suffix + ('_drcpop' if use_drc_pop else '') + ('_custompcs' if use_custom_pcs == 'custom' else ('_axaoupcs' if use_custom_pcs == 'axaou' else ''))
+
+
+def rename_dict_for_log10(dct, legacy_exp_p_values=False):
+    dct_out = deepcopy(dct)
+    if not legacy_exp_p_values:
+        for k, v in dct_out.items():
+            if re.search('^Pvalue', k) and re.search('^pval', v):
+                dct_out.update({k: re.sub('^pval', 'neglog10_pval',v)})
+    return dct_out
 
 
 # Genotypes
@@ -289,6 +334,31 @@ def get_merged_flat_path(gs_output_path, suffix, pop, pheno_dct, encoding, gene_
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.tsv.bgz'
     else:
         return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.tsv.bgz'
+
+
+# Merged sumstats
+def get_hail_sumstats_path(gs_hail_gwas_path, model, fold):
+    return os.path.join(gs_hail_gwas_path, f'sumstats/{model}/{fold}')
+
+
+def get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(gs_gwas_path, f'{"gene_based_sumstats" if gene_analysis else "sumstats"}/{suffix}/{encoding}')
+
+
+def get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'mt')
+
+
+def get_saige_sumstats_mt_path(gs_gwas_path, suffix, encoding, gene_analysis, pop):
+    return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), f'results_{pop}.mt')
+
+
+def get_saige_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'meta_analysis.mt')
+
+
+def get_saige_sumstats_tsv_folder_meta_only(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'meta_flat_files')
 
 
 ######### IMPORT UTILS ##########
