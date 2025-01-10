@@ -267,9 +267,12 @@ def unify_saige_ht_schema(ht, path, tmp, row_keys, col_keys):
     return ht
 
 
-def saige_apply_qc(mt, this_pop_N: int, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
+def saige_apply_qc(mt, filter_sumstats, this_pop_N: int, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
                    min_call_rate: float = CALLRATE_CUTOFF):
-    mt = mt.filter_cols(mt.n_cases >= min_case_count)
+    
+    if filter_sumstats:
+        mt = mt.filter_cols(mt.n_cases >= min_case_count)
+    
     ac_cases = mt.n_cases * 2 * mt['AF.Cases']
     an_controls = mt.n_controls * 2 * mt['AF.Controls']
 
@@ -349,11 +352,12 @@ def saige_append_merged_sumstats():
 
 
 def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_pcs, sample_qc=True, pops=POPS, overwrite=False, gene_analysis=False, 
-                                      skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF, _debug_read=False):
+                                      skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF, filter_sumstats=True, _debug_read=False):
     temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
     staging_full = f'{temp_dir}/staging_full.mt'
     suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
-
+    max_lambda = 4
+    min_lambda = 0.5
 
     def reannotate_cols(mt, suffix):
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
@@ -384,7 +388,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
                                            overwrite=False)
             mt = mt.annotate_rows(overall_AN = call_stats[mt.locus, mt.alleles].call_stats.AN)
 
-            mt = saige_apply_qc(mt, min_call_rate=min_call_rate, this_pop_N=per_pop_N[pop])
+            mt = saige_apply_qc(mt, filter_sumstats, min_call_rate=min_call_rate, this_pop_N=per_pop_N[pop])
             mt = custom_patch_mt_keys(mt)
             mt = reannotate_cols(mt, suffix)
             mt = re_colkey_mt(mt)
@@ -412,6 +416,11 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
         else:
             full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=True, exp_p=True)
+        if filter_sumstats:
+            full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
+                                                                     ).filter(lambda x: (x[1] < max_lambda) & (x[1] > min_lambda)
+                                                                     ).map(lambda x: x[0]))
+            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < max_lambda) & (x.lambda_gc > min_lambda)))
             
     full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis, pop='full'), overwrite)
 
