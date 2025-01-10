@@ -455,8 +455,10 @@ task get_tasks_to_run {
 
     out = set([tuple(x[field] for field in PHENO_KEY_FIELDS) for x in ht.select(*PHENO_KEY_FIELDS).collect()])
     if len('~{specific_phenos_sel}') > 0:
+        print('Filtering to specific phenotypes...')
         specific_phenos = '~{specific_phenos_sel}'.split(',')
         out = [x for x in out if all(map(lambda y: y is not None, x)) and any([re.match(pcd, '-'.join(x)) for pcd in specific_phenos])]
+        print(f'Of {str(len(specific_phenos))}, {str(len(out))} phenotypes were identified in the pheno table.')
 
     pheno_key_dict = [dict(zip(PHENO_KEY_FIELDS, x)) for x in out]
     pheno_export_dir = get_pheno_export_dir(gs_phenotype_path, '~{suffix}', '~{pop}')
