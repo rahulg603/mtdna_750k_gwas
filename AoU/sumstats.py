@@ -332,7 +332,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
         if read_previous and hl.hadoop_exists(f'{merged_mt_path}/_SUCCESS'):
             continue
 
-        all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, PHENO_PATH, suffix, pop, encoding)
+        all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, suffix, pop, encoding)
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
 
         print(f'For {suffix}, pop {pop}, {encoding}, found {str(hl.len(pheno_dict).collect()[0])} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
@@ -411,7 +411,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
             full_mt = hl.read_matrix_table(staging_lambda)
         else:
             full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
-        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=overwrite, exp_p=True)
+        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=True, exp_p=True)
             
     full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis, pop='full'), overwrite)
 

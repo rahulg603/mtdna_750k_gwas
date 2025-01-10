@@ -694,6 +694,7 @@ def remove_bucket(path):
 
 
 def get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=50, sex_stratified=''):
+    raise NotImplementedError('Not implemented correctly.')
     # sex_stratified can be 'all', 'only', ''.
     ht = hl.read_table(get_custom_phenotype_summary_path(gs_phenotype_path, suffix))
     ht = ht.filter(ht.pop == pop)
@@ -723,11 +724,12 @@ def get_hail_pheno_dict(gs_phenotype_path, suffix):
     return hl.dict(ht.aggregate(hl.agg.collect((key, value)), _localize=False))
 
 
-def get_all_merged_ht_paths(gs_output_path, gs_phenotype_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=''):
-    pheno_dict = get_pheno_dict(gs_phenotype_path, suffix, pop, min_cases=0, sex_stratified=sex_stratified)
+def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=''):
+    items = [x['path'] for x in hl.hadoop_ls(get_result_path(gs_output_path, suffix, pop=pop, encoding=encoding)) if x['is_dir']]
     
     paths_list = []
-    for this_pheno_dict in pheno_dict:
+    for item in items:
+        this_pheno_dict = pheno_str_to_dict(os.path.basename(item))
         this_ht = get_merged_ht_path(gs_output_path, suffix, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
         if hl.hadoop_exists(os.path.join(this_ht, '_SUCCESS')):
             paths_list.append(this_ht)
