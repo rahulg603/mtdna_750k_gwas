@@ -455,7 +455,7 @@ task get_tasks_to_run {
 
     out = set([tuple(x[field] for field in PHENO_KEY_FIELDS) for x in ht.select(*PHENO_KEY_FIELDS).collect()])
     if len('~{specific_phenos_sel}') > 0:
-        specific_phenos = specific_phenos.split(',')
+        specific_phenos = '~{specific_phenos_sel}'.split(',')
         out = [x for x in out if all(map(lambda y: y is not None, x)) and any([re.match(pcd, '-'.join(x)) for pcd in specific_phenos])]
 
     pheno_key_dict = [dict(zip(PHENO_KEY_FIELDS, x)) for x in out]
