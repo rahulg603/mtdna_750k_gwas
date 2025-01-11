@@ -357,7 +357,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
     staging_full = f'{temp_dir}/staging_full.mt'
     suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
     max_lambda = 4
-    min_lambda = 0.5
+    min_lambda = 0
 
     def reannotate_cols(mt, suffix):
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
