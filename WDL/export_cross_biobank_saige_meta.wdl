@@ -140,12 +140,12 @@ task run_export {
         raise ValueError('ERROR: mt did not have the input phenotype.')
 
     if trait_class == 'quantitative':
+        meta_fields = quant_meta_fields
         meta_field_rename_dict = quant_meta_field_rename_dict
-        field_rename_dict = quant_field_rename_dict
         print('Using quantitative trait mode.')
     elif trait_class == 'binary':
+        meta_fields = binary_meta_fields
         meta_field_rename_dict = binary_meta_field_rename_dict
-        field_rename_dict = binary_field_rename_dict
 
     meta_field_rename_dict = rename_dict_for_log10(meta_field_rename_dict, legacy_exponentiate_p)
 
