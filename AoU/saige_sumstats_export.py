@@ -1,4 +1,4 @@
-import os
+import os, re
 import json
 import hail as hl
 import pandas as pd
@@ -65,6 +65,28 @@ def distributed_export_meta(wdl_path, saige_importers, suffix, encoding, gene_an
                               add_requester_pays_parameter=False,
                               restart=True, batches_precomputed=False, 
                               submission_sleep=0, check_freq=120, quiet=False)
-    #manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
+    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
     
     return manager
+
+
+def list_all_saige_sumstats(suffix, encoding, gene_analysis, use_drc_pop=True, use_custom_pcs='custom'):
+    suffix_updated = update_suffix(suffix, use_drc_pop, use_custom_pcs)
+    meta_mt = hl.read_matrix_table(get_saige_meta_mt_path(GWAS_PATH, suffix_updated, encoding, gene_analysis=gene_analysis))
+    ht = meta_mt.cols()
+    phenotype_list = ht.annotate(phenotype_id = hl.str('-').join([ht[x] for x in PHENO_KEY_FIELDS])).phenotype_id.collect()
+    sumstat_files = [format_pheno_dir(x) + '.tsv.bgz' for x in phenotype_list]
+
+    path_to_meta_sumstats = get_saige_sumstats_tsv_folder(GWAS_PATH, suffix_updated, encoding, gene_analysis)
+    
+    phenos_to_plot = []
+    files_to_plot = []
+
+    if hl.hadoop_exists(path_to_meta_sumstats):
+        existing_files = [os.path.basename(x['path']) for x in hl.hadoop_ls(path_to_meta_sumstats) if not x['is_dir'] and re.search('.tsv.bgz$', x['path'])]
+        for pheno, file in zip(phenotype_list, sumstat_files):
+            if file in existing_files:
+                phenos_to_plot.append(pheno)
+                files_to_plot.append(os.path.join(path_to_meta_sumstats, file))
+
+    return phenos_to_plot, files_to_plot

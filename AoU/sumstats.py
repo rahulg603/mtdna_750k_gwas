@@ -505,4 +505,4 @@ def make_manhattan_plots(wdl_path,
                               submission_sleep=0, check_freq=120, quiet=False)
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
     
-    return manager.workflow_status
+    return manager
