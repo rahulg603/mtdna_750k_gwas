@@ -458,9 +458,6 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
 
 def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, overwrite=True, use_drc_pop=True, use_custom_pcs='custom'):
 
-    suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
-    temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
-
 
     def munge_mt_for_merge(mt, cohort):
         mt = mt.select_cols(cohort = cohort, 
@@ -478,39 +475,46 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
         return mt
 
 
-    # load mts
-    mt_aou = hl.read_matrix_table(get_saige_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis))
-    mt_ukb = hl.read_matrix_table(ukb_meta_path)
-    # 'gs://rgupta-assoc/saige_gwas/sumstats/241215_case_only_heteroplasmy_500k_fixed/mt/meta_analysis.mt'
-    
-    # modify ukb to be compatible with aou
-    ht_liftover = get_ukb_b37_b38_liftover().checkpoint(os.path.join(BUCKET, 'ukb_500k', 'ukb_lift_b37_b38.ht'), _read_if_exists=True)
-    mt_ukb = mt_ukb.key_cols_by()
-    mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + '_irnt')
-    mt_ukb = mt_ukb.key_cols_by(*PHENO_KEY_FIELDS)
-    mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
-    mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
-    mt_ukb = mt_ukb.transmute_rows(locus = mt_ukb.locus_b38, alleles = mt_ukb.alleles_b38).key_rows_by('locus','alleles')
-    mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, 'ukb_heteroplasmy_meta_modified.mt'), _read_if_exists=True)
+    suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
+    temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
+    meta_path = get_saige_cross_biobank_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis)
 
-    # confirm that the number of shared variants and traits make sense
-    #mt_aou.semi_join_cols(mt_ukb.cols()).count_cols() # 65
-    #mt_aou.semi_join_rows(mt_ukb.rows()).count() # 24657342 (of 28152304)
+    if overwrite or not hl.hadoop_exists(os.path.join(meta_path, '_SUCCESS')):
 
-    # find the highest power analysis for each trait
-    # it actually looks like the meta table pulls in the highest power pop automatically
-    # we assume that low confidence variants are pre-filtered
+        # load mts
+        mt_aou = hl.read_matrix_table(get_saige_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis))
+        mt_ukb = hl.read_matrix_table(ukb_meta_path)
+        # 'gs://rgupta-assoc/saige_gwas/sumstats/241215_case_only_heteroplasmy_500k_fixed/mt/meta_analysis.mt'
+        
+        # modify ukb to be compatible with aou
+        ht_liftover = get_ukb_b37_b38_liftover().checkpoint(os.path.join(BUCKET, 'ukb_500k', 'ukb_lift_b37_b38.ht'), _read_if_exists=True)
+        mt_ukb = mt_ukb.key_cols_by()
+        mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + '_irnt')
+        mt_ukb = mt_ukb.key_cols_by(*PHENO_KEY_FIELDS)
+        mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
+        mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
+        mt_ukb = mt_ukb.transmute_rows(locus = mt_ukb.locus_b38, alleles = mt_ukb.alleles_b38).key_rows_by('locus','alleles')
+        mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, 'ukb_heteroplasmy_meta_modified.mt'), _read_if_exists=True)
 
-    # combine the mts so that each row has 2 items
-    mt_ukb_munged = munge_mt_for_merge(mt_ukb, cohort='ukb')
-    mt_aou_munged = munge_mt_for_merge(mt_aou, cohort='aou')
-    full_mt = mt_ukb_munged.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(4000).checkpoint(os.path.join(TEMP_PATH, 'staging_cross_biobank_joint.mt'), overwrite=True)
-    full_mt = full_mt.collect_cols_by_key()
-    full_mt = full_mt.checkpoint(os.path.join(temp_dir, 'staging_cross_biobank_before_meta.mt'), overwrite=True)
+        # confirm that the number of shared variants and traits make sense
+        #mt_aou.semi_join_cols(mt_ukb.cols()).count_cols() # 65
+        #mt_aou.semi_join_rows(mt_ukb.rows()).count() # 24657342 (of 28152304)
 
-    # feed into meta analysis generator
-    full_mt_meta = run_meta_analysis(full_mt, saige=True, remove_low_confidence=False, cross_biobank_meta=True)
-    full_mt_meta = full_mt_meta.checkpoint(get_saige_cross_biobank_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis), overwrite=overwrite)
+        # find the highest power analysis for each trait
+        # it actually looks like the meta table pulls in the highest power pop automatically
+        # we assume that low confidence variants are pre-filtered
+
+        # combine the mts so that each row has 2 items
+        mt_ukb_munged = munge_mt_for_merge(mt_ukb, cohort='ukb')
+        mt_aou_munged = munge_mt_for_merge(mt_aou, cohort='aou')
+        full_mt = mt_ukb_munged.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(4000).checkpoint(os.path.join(TEMP_PATH, 'staging_cross_biobank_joint.mt'), overwrite=True)
+        full_mt = full_mt.collect_cols_by_key()
+        full_mt = full_mt.checkpoint(os.path.join(temp_dir, 'staging_cross_biobank_before_meta.mt'), overwrite=True)
+
+        # feed into meta analysis generator
+        full_mt_meta = run_meta_analysis(full_mt, saige=True, remove_low_confidence=False, cross_biobank_meta=True)
+        full_mt_meta = full_mt_meta.checkpoint(meta_path, overwrite=overwrite)
+
 
     print('Meta analysis complete.')
     return None
