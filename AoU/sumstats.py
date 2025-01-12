@@ -1,4 +1,5 @@
 import os
+import math
 import secrets
 import json
 import hail as hl
@@ -35,7 +36,7 @@ def all_and_leave_one_out(x, pop_array, all_f=hl.sum, loo_f=lambda i, x: hl.sum(
 
 
 ### ADAPTED FROM UPDATED PAN UKBB REPO
-def run_meta_analysis(mt, saige=True, remove_low_confidence=True):
+def run_meta_analysis(mt, saige=True, remove_low_confidence=True, cross_biobank_meta=False):
     """
     Run inverse-variance fixed-effect meta-analysis for a given MatrixTable. 
     Modified now to remove entries that are low confidence prior to meta-analysis.
@@ -53,20 +54,24 @@ def run_meta_analysis(mt, saige=True, remove_low_confidence=True):
         print('Removing low_confidence variants prior to meta-analysis...')
         mt = mt.annotate_entries(summary_stats = mt.summary_stats.map(lambda x: hl.if_else(x.low_confidence, hl.missing(x.dtype), x)))
 
-    mt = mt.annotate_entries(
-        summary_stats=hl.map(
-            lambda x: x[1].annotate(N=hl.or_missing(hl.is_defined(x[1]), get_n(mt.pheno_data, x[0]))),
-            hl.enumerate(mt.summary_stats),
+    if not cross_biobank_meta:
+        loo_operator = 'pop'
+        mt = mt.annotate_entries(
+            summary_stats=hl.map(
+                lambda x: x[1].annotate(N=hl.or_missing(hl.is_defined(x[1]), get_n(mt.pheno_data, x[0]))),
+                hl.enumerate(mt.summary_stats),
+            )
         )
-    )
+    else:
+        loo_operator = 'cohort'
 
     # Run fixed-effect meta-analysis (all + leave-one-out)
     mt = mt.annotate_entries(
         unnorm_beta=mt.summary_stats.BETA / (mt.summary_stats.SE ** 2), inv_se2=1 / (mt.summary_stats.SE ** 2)
     )
     mt = mt.annotate_entries(
-        sum_unnorm_beta=all_and_leave_one_out(mt.unnorm_beta, mt.pheno_data.pop),
-        sum_inv_se2=all_and_leave_one_out(mt.inv_se2, mt.pheno_data.pop),
+        sum_unnorm_beta=all_and_leave_one_out(mt.unnorm_beta, mt.pheno_data[loo_operator]),
+        sum_inv_se2=all_and_leave_one_out(mt.inv_se2, mt.pheno_data[loo_operator]),
     )
     mt = mt.transmute_entries(
         META_BETA=mt.sum_unnorm_beta / mt.sum_inv_se2, META_SE=hl.map(lambda x: hl.sqrt(1 / x), mt.sum_inv_se2)
@@ -80,7 +85,7 @@ def run_meta_analysis(mt, saige=True, remove_low_confidence=True):
         META_Q=hl.map(lambda x: hl.sum((mt.summary_stats.BETA - x) ** 2 * mt.inv_se2), mt.META_BETA),
         variant_exists=hl.map(lambda x: ~hl.is_missing(x), mt.summary_stats.BETA),
     )
-    mt = mt.annotate_entries(META_N_pops=all_and_leave_one_out(mt.variant_exists, mt.pheno_data.pop))
+    mt = mt.annotate_entries(META_N_pops=all_and_leave_one_out(mt.variant_exists, mt.pheno_data[loo_operator]))
     # filter Q-values when N_pops == 1
     mt = mt.annotate_entries(
         META_Q=hl.map(lambda i: hl.or_missing(mt.META_N_pops[i] > 1, mt.META_Q[i]), hl.range(hl.len(mt.META_Q)))
@@ -93,16 +98,24 @@ def run_meta_analysis(mt, saige=True, remove_low_confidence=True):
 
     # Add other annotations
     if saige:
-        mt = mt.annotate_entries(
-            ac_cases=hl.map(lambda x: x["AF.Cases"] * x.N, mt.summary_stats),
-            ac_controls=hl.map(lambda x: x["AF.Controls"] * x.N, mt.summary_stats),
-            META_AC_Allele2=all_and_leave_one_out(mt.summary_stats.AF_Allele2 * mt.summary_stats.N, mt.pheno_data.pop),
-            META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data.pop),
-        )
+        if cross_biobank_meta:
+            mt = mt.annotate_entries(
+                ac_cases=hl.map(lambda x: x["AF_Cases"] * x.N, mt.summary_stats),
+                ac_controls=hl.map(lambda x: x["AF_Controls"] * x.N, mt.summary_stats),
+                META_AC_Allele2=all_and_leave_one_out(mt.summary_stats.AF_Allele2 * mt.summary_stats.N, mt.pheno_data[loo_operator]),
+                META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data[loo_operator]),
+            )
+        else:
+            mt = mt.annotate_entries(
+                ac_cases=hl.map(lambda x: x["AF.Cases"] * x.N, mt.summary_stats),
+                ac_controls=hl.map(lambda x: x["AF.Controls"] * x.N, mt.summary_stats),
+                META_AC_Allele2=all_and_leave_one_out(mt.summary_stats.AF_Allele2 * mt.summary_stats.N, mt.pheno_data[loo_operator]),
+                META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data[loo_operator]),
+            )
         mt = mt.annotate_entries(
             META_AF_Allele2=mt.META_AC_Allele2 / mt.META_N,
-            META_AF_Cases=all_and_leave_one_out(mt.ac_cases, mt.pheno_data.pop) / mt.META_N,
-            META_AF_Controls=all_and_leave_one_out(mt.ac_controls, mt.pheno_data.pop) / mt.META_N,
+            META_AF_Cases=all_and_leave_one_out(mt.ac_cases, mt.pheno_data[loo_operator]) / mt.META_N,
+            META_AF_Controls=all_and_leave_one_out(mt.ac_controls, mt.pheno_data[loo_operator]) / mt.META_N,
         )
         mt = mt.drop(
             "unnorm_beta", "inv_se2", "variant_exists", "ac_cases", "ac_controls", "summary_stats", "META_AC_Allele2"
@@ -138,20 +151,30 @@ def run_meta_analysis(mt, saige=True, remove_low_confidence=True):
 
     col_fields = ["n_cases", "n_controls"]
     mt = mt.annotate_cols(
-        **{field: all_and_leave_one_out(mt.pheno_data[field], mt.pheno_data.pop) for field in col_fields}
+        **{field: all_and_leave_one_out(mt.pheno_data[field], mt.pheno_data[loo_operator]) for field in col_fields}
     )
     col_fields += ["pop"]
     mt = mt.annotate_cols(
         pop=all_and_leave_one_out(
             mt.pheno_data.pop,
-            mt.pheno_data.pop,
+            mt.pheno_data[loo_operator],
             all_f=lambda x: x,
             loo_f=lambda i, x: hl.filter(lambda y: y != x[i], x),
         )
     )
+    if cross_biobank_meta:
+        col_fields += ["cohort"]
+        mt = mt.annotate_cols(
+            cohort=all_and_leave_one_out(
+                mt.pheno_data.cohort,
+                mt.pheno_data[loo_operator],
+                all_f=lambda x: x,
+                loo_f=lambda i, x: hl.filter(lambda y: y != x[i], x),
+            )
+        )
     mt = mt.transmute_cols(
         meta_analysis_data=hl.map(
-            lambda i: hl.struct(**{field: mt[field][i] for field in col_fields}), hl.range(hl.len(mt.pop))
+            lambda i: hl.struct(**{field: mt[field][i] for field in col_fields}), hl.range(hl.len(mt[loo_operator]))
         )
     )
 
@@ -430,6 +453,66 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
     print('Pops per pheno:')
     pprint(dict(Counter(full_mt_meta.aggregate_cols(hl.agg.counter(hl.len(full_mt_meta.pheno_data))))))
 
+    return None
+
+
+def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, overwrite=True, use_drc_pop=True, use_custom_pcs='custom'):
+
+    suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
+    temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
+
+
+    def munge_mt_for_merge(mt, cohort):
+        mt = mt.select_cols(cohort = cohort, 
+                            n_cases = mt.meta_analysis_data[0].n_cases,
+                            n_controls = mt.meta_analysis_data[0].n_controls,
+                            saige_version = hl.array(hl.set(mt.pheno_data.saige_version))[0],
+                            inv_normalized = hl.array(hl.set(mt.pheno_data.inv_normalized))[0],
+                            pop = mt.meta_analysis_data[0].pop,
+                            n_variants = hl.agg.count_where(hl.is_defined(mt.meta_analysis[0])),
+                            n_sig_variants = hl.agg.count_where(mt.meta_analysis[0].Pvalue <  math.log(5e-8)))
+        mt = mt.select_entries(**mt.meta_analysis[0])
+
+        mt = mt.select_cols(pheno_data=mt.col_value)
+        mt = mt.select_entries(summary_stats=mt.entry)
+        return mt
+
+
+    # load mts
+    mt_aou = hl.read_matrix_table(get_saige_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis))
+    mt_ukb = hl.read_matrix_table(ukb_meta_path)
+    # 'gs://rgupta-assoc/saige_gwas/sumstats/241215_case_only_heteroplasmy_500k_fixed/mt/meta_analysis.mt'
+    
+    # modify ukb to be compatible with aou
+    ht_liftover = get_ukb_b37_b38_liftover().checkpoint(os.path.join(BUCKET, 'ukb_500k', 'ukb_lift_b37_b38.ht'), _read_if_exists=True)
+    mt_ukb = mt_ukb.key_cols_by()
+    mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + '_irnt')
+    mt_ukb = mt_ukb.key_cols_by(*PHENO_KEY_FIELDS)
+    mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
+    mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
+    mt_ukb = mt_ukb.transmute_rows(locus = mt_ukb.locus_b38, alleles = mt_ukb.alleles_b38).key_rows_by('locus','alleles')
+    mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, 'ukb_heteroplasmy_meta_modified.mt'), _read_if_exists=True)
+
+    # confirm that the number of shared variants and traits make sense
+    #mt_aou.semi_join_cols(mt_ukb.cols()).count_cols() # 65
+    #mt_aou.semi_join_rows(mt_ukb.rows()).count() # 24657342 (of 28152304)
+
+    # find the highest power analysis for each trait
+    # it actually looks like the meta table pulls in the highest power pop automatically
+    # we assume that low confidence variants are pre-filtered
+
+    # combine the mts so that each row has 2 items
+    mt_ukb_munged = munge_mt_for_merge(mt_ukb, cohort='ukb')
+    mt_aou_munged = munge_mt_for_merge(mt_aou, cohort='aou')
+    full_mt = mt_ukb_munged.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(4000).checkpoint(os.path.join(TEMP_PATH, 'staging_cross_biobank_joint.mt'), overwrite=True)
+    full_mt = full_mt.collect_cols_by_key()
+    full_mt = full_mt.checkpoint(os.path.join(temp_dir, 'staging_cross_biobank_before_meta.mt'), overwrite=True)
+
+    # feed into meta analysis generator
+    full_mt_meta = run_meta_analysis(full_mt, saige=True, remove_low_confidence=False, cross_biobank_meta=True)
+    full_mt_meta = full_mt_meta.checkpoint(get_saige_cross_biobank_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis), overwrite=overwrite)
+
+    print('Meta analysis complete.')
     return None
 
 

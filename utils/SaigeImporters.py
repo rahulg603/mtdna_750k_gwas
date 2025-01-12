@@ -357,8 +357,16 @@ def get_saige_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis):
     return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'meta_analysis.mt')
 
 
+def get_saige_cross_biobank_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'cross_biobank_meta_analysis.mt')
+
+
 def get_saige_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis):
     return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'flat_files')
+
+
+def get_saige_cross_biobank_meta_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis):
+    return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'cross_biobank_meta_flat_files')
 
 
 ######### IMPORT UTILS ##########
@@ -743,6 +751,16 @@ def get_modified_key(mt):
                               #.when(mt.trait_type == "biomarkers", "")
                               .default(mt.modifier))
     return key
+
+
+def get_ukb_b37_b38_liftover():
+    ht = hl.import_table('gs://mito-wgs-public-2023/ukb_b37_b38_lifted_variants.tsv.bgz', min_partitions=100)
+    ht = ht.select(locus_b37 = hl.locus(contig=ht.chr_b37, pos=hl.int(ht.pos_b37), reference_genome='GRCh37'),
+                   alleles_b37 = [ht.ref_b37, ht.alt_b37],
+                   locus_b38 = hl.locus(contig=ht.chr_b38, pos=hl.int(ht.pos_b38), reference_genome='GRCh38'),
+                   alleles_b38 = [ht.ref_b38, ht.alt_b38],
+                   rsid = ht.rsid).key_by('locus_b37', 'alleles_b37')
+    return ht
 
 
 def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_mode = 'overwrite',
