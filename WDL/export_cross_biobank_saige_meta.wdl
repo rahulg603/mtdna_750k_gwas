@@ -138,6 +138,7 @@ task run_export {
         mt = mt.filter_cols(mt[k] == v)
     if mt.count_cols() != 1:
         raise ValueError('ERROR: mt did not have the input phenotype.')
+    mt = mt.filter_entries(~hl.is_missing(mt.meta_analysis.Pvalue))
 
     if trait_class == 'quantitative':
         meta_fields = quant_meta_fields

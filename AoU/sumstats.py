@@ -14,7 +14,8 @@ from cromwell.classes import CromwellManager
 
 hl.init(default_reference='GRCh38', log='combine_results.log', branching_factor=8)
 hl._set_flags(no_whole_stage_codegen="1")
-
+MAX_LAMBDA = 2
+MIN_LAMBDA = 0
 
 ### ADAPTED FROM UPDATED PAN UKBB REPO
 def all_and_leave_one_out(x, pop_array, all_f=hl.sum, loo_f=lambda i, x: hl.sum(x) - hl.or_else(x[i], 0)):
@@ -52,7 +53,10 @@ def run_meta_analysis(mt, saige=True, remove_low_confidence=True, cross_biobank_
     
     if remove_low_confidence:
         print('Removing low_confidence variants prior to meta-analysis...')
-        mt = mt.annotate_entries(summary_stats = mt.summary_stats.map(lambda x: hl.if_else(x.low_confidence, hl.missing(x.dtype), x)))
+        mt = mt.annotate_entries(summary_stats=mt.summary_stats.map(
+            lambda x: hl.or_missing(~x.low_confidence, x)
+        ))
+    mt = mt.filter_entries(~mt.summary_stats.all(lambda x: hl.is_missing(x.Pvalue)))
 
     if not cross_biobank_meta:
         loo_operator = 'pop'
@@ -189,7 +193,7 @@ def get_saige_lambdas_path(suffix, pop, encoding, extn):
     return os.path.join(GWAS_PATH, f'lambdas/{suffix}/{encoding}/lambda_export_{pop}.{extn}')
 
 
-def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, saige=True, exp_p=False):
+def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=False, saige=True, exp_p=False):
     if exp_p:
         transf = lambda x: hl.exp(x)
     else:
@@ -210,8 +214,9 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, saige=True, exp_
     else:
         get_lambdas_path = get_hail_lambdas_path
     
-    ht = ht.checkpoint(get_lambdas_path(suffix, 'full', encoding, 'ht'), overwrite=overwrite, _read_if_exists=not overwrite)
-    ht.explode('pheno_data').flatten().export(get_lambdas_path(suffix, 'full', encoding, 'txt.bgz'))
+    term = 'full_cross_biobank' if cross_biobank else 'full'
+    ht = ht.checkpoint(get_lambdas_path(suffix, term, encoding, 'ht'), overwrite=overwrite, _read_if_exists=not overwrite)
+    ht.explode('pheno_data').flatten().export(get_lambdas_path(suffix, term, encoding, 'txt.bgz'))
     
     return mt
 
@@ -379,8 +384,6 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
     temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
     staging_full = f'{temp_dir}/staging_full.mt'
     suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
-    max_lambda = 4
-    min_lambda = 0
 
     def reannotate_cols(mt, suffix):
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
@@ -441,9 +444,9 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=True, exp_p=True)
         if filter_sumstats:
             full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
-                                                                     ).filter(lambda x: (x[1] < max_lambda) & (x[1] > min_lambda)
+                                                                     ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
                                                                      ).map(lambda x: x[0]))
-            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < max_lambda) & (x.lambda_gc > min_lambda)))
+            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc > MIN_LAMBDA)))
             
     full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis, pop='full'), overwrite)
 
@@ -456,7 +459,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
     return None
 
 
-def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, overwrite=True, use_drc_pop=True, use_custom_pcs='custom'):
+def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, filter_sumstats, overwrite=True, use_drc_pop=True, use_custom_pcs='custom'):
 
 
     def munge_mt_for_merge(mt, cohort):
@@ -509,7 +512,20 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
         mt_aou_munged = munge_mt_for_merge(mt_aou, cohort='aou')
         full_mt = mt_ukb_munged.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(4000).checkpoint(os.path.join(TEMP_PATH, 'staging_cross_biobank_joint.mt'), overwrite=True)
         full_mt = full_mt.collect_cols_by_key()
-        full_mt = full_mt.checkpoint(os.path.join(temp_dir, 'staging_cross_biobank_before_meta.mt'), overwrite=True)
+        staging_lambda = os.path.join(temp_dir, 'staging_cross_biobank_before_lambda_meta.mt')
+        
+        full_mt = full_mt.checkpoint(staging_lambda, overwrite=True)
+
+        if hl.hadoop_exists(staging_lambda + '/_SUCCESS'):
+            full_mt = hl.read_matrix_table(staging_lambda)
+        else:
+            full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
+        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, cross_biobank=True, overwrite=True, exp_p=True)
+        if filter_sumstats:
+            full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
+                                                                    ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
+                                                                    ).map(lambda x: x[0]))
+            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc > MIN_LAMBDA)))
 
         # feed into meta analysis generator
         full_mt_meta = run_meta_analysis(full_mt, saige=True, remove_low_confidence=False, cross_biobank_meta=True)

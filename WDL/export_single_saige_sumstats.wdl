@@ -143,7 +143,8 @@ task run_export {
         mt = mt.filter_cols(mt[k] == v)
     if mt.count_cols() != 1:
         raise ValueError('ERROR: mt did not have the input phenotype.')
-
+    mt = mt.filter_entries(~mt.summary_stats.all(lambda x: hl.is_missing(x.Pvalue)))
+    
     if remove_low_quality_sites:
         mt = mt.filter_rows(~hl.agg.all(mt.all_low_conf))
     mt = mt.drop('all_low_conf')

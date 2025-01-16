@@ -65,6 +65,7 @@ workflow saige_manager {
                                       # Sparse GRM is always used for rare-variant analyses.
         Boolean force_inverse_normalize # force inverse normalization. Intended for continuous traits only
         Boolean disable_loco # disables leave-one-chromosome-out
+        Boolean disable_offset = false# disables offset, theoretically requires more time to fit null model if True
 
         Boolean use_drc_pop = true
         String use_custom_pcs = 'custom' # can be custom, axaou, or none
@@ -215,6 +216,7 @@ workflow saige_manager {
                     force_inverse_normalize = force_inverse_normalize,
                     disable_loco = disable_loco,
                     max_null_iter = max_null_iter,
+                    disable_offset = disable_offset,
 
                     SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker
@@ -781,6 +783,7 @@ task null {
 
         Boolean force_inverse_normalize
         Boolean disable_loco
+        Boolean disable_offset
 
         String analysis_type
 
@@ -796,6 +799,7 @@ task null {
     String tf_defined_spGRM = if defined(sparse_grm) then "defined" else "not"
     String loco = if disable_loco then "noloco" else "loco"
     String invnorm = if force_inverse_normalize then "inv_normal" else "no_normal"
+    String no_offset = if disable_offset then "nooff" else "offset"
     String output_prefix = phenotype_id + "." + analysis_type + "." + pop + "." + suffix
 
     command <<<
@@ -862,6 +866,11 @@ task null {
             saige_step_1 = saige_step_1 + ['--LOCO=TRUE']
         else:
             saige_step_1 = saige_step_1 + ['--LOCO=FALSE']
+    
+    if "~{no_offset}" == 'nooff':
+        saige_step_1 = saige_step_1 + ['--isCovariateOffset=FALSE']
+    else:
+        saige_step_1 = saige_step_1 + ['--isCovariateOffset=TRUE']
     
     if "~{analysis_type}" == 'gene':
         saige_step_1 = saige_step_1 + ['--isCateVarianceRatio=TRUE',
