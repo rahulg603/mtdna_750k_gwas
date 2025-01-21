@@ -199,14 +199,23 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
     else:
         transf = lambda x: x
     
-    mt = mt.annotate_cols(
-        pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
-            lambda ss: hl.agg.filter(~ss.low_confidence,
-                hl.struct(lambda_gc=hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue)),
-                          n_variants=hl.agg.count_where(hl.is_defined(ss.Pvalue)),
-                          n_sig_variants=hl.agg.count_where(transf(ss.Pvalue) < 5e-8))),
-            mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
-    )
+    if cross_biobank:
+        mt = mt.annotate_cols(
+            pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
+                lambda ss: hl.struct(lambda_gc=hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue)),
+                                     n_variants=hl.agg.count_where(hl.is_defined(ss.Pvalue)),
+                                     n_sig_variants=hl.agg.count_where(transf(ss.Pvalue) < 5e-8)),
+                mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
+        )
+    else:
+        mt = mt.annotate_cols(
+            pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
+                lambda ss: hl.agg.filter(~ss.low_confidence,
+                    hl.struct(lambda_gc=hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue)),
+                            n_variants=hl.agg.count_where(hl.is_defined(ss.Pvalue)),
+                            n_sig_variants=hl.agg.count_where(transf(ss.Pvalue) < 5e-8))),
+                mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
+        )
     ht = mt.cols()
 
     if saige:

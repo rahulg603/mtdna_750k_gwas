@@ -65,7 +65,7 @@ workflow saige_manager {
                                       # Sparse GRM is always used for rare-variant analyses.
         Boolean force_inverse_normalize # force inverse normalization. Intended for continuous traits only
         Boolean disable_loco # disables leave-one-chromosome-out
-        Boolean disable_offset = false# disables offset, theoretically requires more time to fit null model if True
+        Boolean disable_offset = true# disables offset, theoretically requires more time to fit null model if True
 
         Boolean use_drc_pop = true
         String use_custom_pcs = 'custom' # can be custom, axaou, or none
