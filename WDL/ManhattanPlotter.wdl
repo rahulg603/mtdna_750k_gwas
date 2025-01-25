@@ -25,6 +25,7 @@ workflow ManhattanPlotter {
 
       File? hq_file
       File plotting_script = 'gs://mito-wgs-public-free/produce_manhattan.R'
+      String build = 'GRCh38'
 
       #Optional runtime arguments
       Int? preemptible_tries
@@ -51,6 +52,7 @@ workflow ManhattanPlotter {
         exponentiate_p = exponentiate_p,
         var_as_rsid = var_as_rsid,
         keep_x = keep_x,
+        build = build,
 
         hq_file = hq_file,
         plotting_script = plotting_script,
@@ -87,6 +89,7 @@ task RunManhattan {
       Boolean exponentiate_p
       Boolean var_as_rsid
       Boolean keep_x
+      String build
 
       File? hq_file
       File plotting_script
@@ -128,7 +131,7 @@ task RunManhattan {
     tar -xf variants.tsv.tar.gz
     gunzip -c '~{sumstats}' > $file_holder/this_extracted_file.tsv
 
-    Rscript '~{plotting_script}' $file_holder/this_extracted_file.tsv '~{pheno}' '~{p_col}' '~{af_col}' '~{af_field_this}' '~{conf_field_this}' '~{exponentiate_argument}' '~{x_arg}' '~{point_size}' '~{var_arg}' '~{wid}' '~{hei}' '~{cex}' '~{hq_field_this}' '~{pop}_~{suffix}'
+    Rscript '~{plotting_script}' $file_holder/this_extracted_file.tsv '~{pheno}' '~{p_col}' '~{af_col}' '~{af_field_this}' '~{conf_field_this}' '~{exponentiate_argument}' '~{x_arg}' '~{point_size}' '~{var_arg}' '~{wid}' '~{hei}' '~{cex}' '~{hq_field_this}' '~{build}' '~{pop}_~{suffix}'
 
     cp ~{path_manhattan} /cromwell_root/~{path_manhattan}
     cp ~{path_qq} /cromwell_root/~{path_qq}
@@ -138,7 +141,7 @@ task RunManhattan {
   runtime {
     memory: machine_mem + " GB"
     disks: "local-disk " + disk_size + " SSD"
-    docker: "us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/r_for_manhattans"
+    docker: "us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/r_for_manhattans:2"
     preemptible: select_first([preemptible_tries, 5])
   }
   output {
