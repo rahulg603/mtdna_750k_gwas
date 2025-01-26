@@ -99,22 +99,22 @@ task clump {
   command <<<
     set -e
 
-    python3.8 {script} \
-        --sumstats {input_file} \
-        --gene-annot {gene_file} \
-        --output {file_out} \
-        --p-col {p_col} \
-        --p-thresh {p_thresh} \
-        --window-kb {window_kb} \
-        --ref-genome {ref_genome} \
-        --n-threads {machine_cpu} \
-        --chr {chr} \
-        --pos {pos} \
-        --ref {ref} \
-        --alt {alt} \
-        --n-partitions {n_partitions} \
-        {exponentiate_argument} \
-        {conf_argument}
+    python3.8 ~{script} \
+        --sumstats ~{input_file} \
+        --gene-annot ~{gene_file} \
+        --output ~{file_out} \
+        --p-col ~{p_col} \
+        --p-thresh ~{p_thresh} \
+        --window-kb ~{window_kb} \
+        --ref-genome ~{ref_genome} \
+        --n-threads ~{machine_cpu} \
+        --chr ~{chr} \
+        --pos ~{pos} \
+        --ref ~{ref} \
+        --alt ~{alt} \
+        --n-partitions ~{n_partitions} \
+        ~{exponentiate_argument} \
+        ~{conf_argument}
 
   >>>
   runtime {
