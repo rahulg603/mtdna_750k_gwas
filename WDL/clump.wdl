@@ -100,7 +100,7 @@ task clump {
     set -e
 
     python3.8 ~{script} \
-        --sumstats ~{input_file} \
+        --sumstats ~{sumstats} \
         --gene-annot ~{gene_file} \
         --output ~{file_out} \
         --p-col ~{p_col} \
