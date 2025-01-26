@@ -618,3 +618,75 @@ def make_manhattan_plots(wdl_path,
     manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
     
     return manager
+
+
+def proximity_clump_sumstats(wdl_path,
+                             sumstat_paths: list, 
+                             phenotypes: list,
+                             suffix: str, 
+                             p_col: str,
+                             p_thresh=5e-5,
+                             window_kb=100,
+                             chr='chr', pos='pos', ref='ref', alt='alt',
+                             conf_col=None,
+                             n_partitions=20,
+                             n_cpu=16,
+                             exponentiate_p=True,
+                             build='GRCh38',
+                             run_name='aou_clumping',
+                             no_wait=False):
+    """
+
+    PARAMETERS
+    ----------
+    wdl_path: local path to clump.wdl
+    sumstat_paths: paths to summary statistic flat files
+    phenotypes: names of each phenotype
+    suffix: suffix of analysis
+    p_col: column name of p-value column
+    conf_col: column name of "low_confidence" column. Can be None.
+    exponentiate_p: if True, will perform exp(p-value)
+    no_wait: if true will not wait for jobs to finish
+    """
+    # make json
+    this_run = {'sumstats': sumstat_paths, 'pheno': phenotypes}
+    df = pd.DataFrame(this_run)
+    df.to_csv(os.path.abspath('./this_run.tsv'), index=False, sep='\t') # ADD THIS
+
+    if build=='GRCh38':
+        gene_path = 'gs://mito-wgs-public-free/NCBI38_ensembl.gene.loc'
+    else:
+        gene_path = 'gs://mito-wgs-public-free/NCBI37_ensembl.gene.loc'
+
+    baseline = {'clump_sumstats.suffix': suffix,
+                'clump_sumstats.p_col': p_col,
+                'clump_sumstats.p_thresh': p_thresh,
+                'clump_sumstats.window_kb': window_kb,
+                'clump_sumstats.chr': chr,
+                'clump_sumstats.pos': pos,
+                'clump_sumstats.ref': ref,
+                'clump_sumstats.alt': alt,
+                'clump_sumstats.n_partitions': n_partitions,
+                'clump_sumstats.exp_p': exponentiate_p,
+                'clump_sumstats.gene_file': gene_path,
+                'clump_sumstats.ref_genome': build,
+                'clump_sumstats.cpu': n_cpu}
+    if conf_col is not None:
+        baseline.update({'clump_sumstats.conf_col': conf_col})
+
+    with open(os.path.abspath('./saige_template.json'), 'w') as j:
+        json.dump(baseline, j)
+
+    print('Starting clumping-by-proximity...')
+    print('This stage will use Cromwell.')
+    manager = CromwellManager(run_name=run_name,
+                              inputs_file=df,
+                              json_template_path=os.path.abspath('./saige_template.json'),
+                              wdl_path=wdl_path,
+                              batch=None, limit=None, n_parallel_workflows=99, 
+                              add_requester_pays_parameter=False,
+                              restart=True, batches_precomputed=False, 
+                              submission_sleep=0, check_freq=120, quiet=False)
+    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=no_wait)
+    
+    return manager
