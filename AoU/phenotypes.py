@@ -44,6 +44,11 @@ def get_final_munged_snvcount_byclass_path(version, extension='ht'):
     return base_path + f'heteroplasmic_snv_count_by_class_fullqc.{extension}'
 
 
+def get_final_munged_snvcount_age_accum_path(version, extension='ht'):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
+    return base_path + f'heteroplasmic_snv_count_hl_age_accum_fullqc.{extension}'
+
+
 def get_final_sample_stats_flat_path(version):
     if version == 'v6':
         return 'gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/221012_filtered_aou_tab_per_sample_stats.tsv'
@@ -323,6 +328,39 @@ def get_snv_count_by_class(version, overwrite=False):
         ht_wide_snv_count.export(get_final_munged_snvcount_byclass_path(version, 'tsv'))
     
     return ht_wide_snv_count
+
+
+def get_age_accumulating_snv_count(version, overwrite=False):
+    if hl.hadoop_exists(f"{get_final_munged_snvcount_age_accum_path(version)}/_SUCCESS") and not overwrite:
+        ht_snv_age_accum_count = hl.read_table(get_final_munged_snvcount_age_accum_path(version))
+    
+    else:
+        mt = hl.read_matrix_table(get_final_annotated_variant_mt_path('v6andv7'))
+        mt_snv_class = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
+
+        bp_compl = hl.literal({'C': 'G', 'G': 'C', 'T': 'A', 'A': 'T'})
+        mt_snv_class = mt_snv_class.annotate_rows(allele_compl = [bp_compl[mt_snv_class.alleles[0]], bp_compl[mt_snv_class.alleles[1]]])
+        mt_snv_class = mt_snv_class.annotate_rows(location = hl.if_else((mt_snv_class.locus.position > 16172) | (mt_snv_class.locus.position < 210), 'Ori (16172-200)', 'Other region'))
+        mt_snv_class = mt_snv_class.annotate_rows(variant_class = hl.if_else(hl.literal(['C','T']).contains(mt_snv_class.alleles[0]), 
+                                                                            mt_snv_class.alleles[0] + '>' + mt_snv_class.alleles[1],
+                                                                            mt_snv_class.allele_compl[0] + '>' + mt_snv_class.allele_compl[1]),
+                                                strand = hl.if_else(hl.literal(['C','T']).contains(mt_snv_class.alleles[0]), 'light', 'heavy'))
+        mt_snv_class_f = mt_snv_class.filter_rows((mt_snv_class.variant_class == 'T>C') | ((mt_snv_class.variant_class == 'C>T') & (mt_snv_class.strand == 'heavy')))
+        mt_snv_class_f = mt_snv_class_f.drop('allele_compl')
+
+        ht_snv_age_accum = mt_snv_class_f.entries()
+        ht_snv_age_accum_count = ht_snv_age_accum.group_by(ht_snv_age_accum.s
+                                                ).aggregate(snv_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05)),
+                                                            snv_invHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.sum(1 / ht_snv_age_accum.HL)),
+                                                            snv_sumHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.sum(1 / ht_snv_age_accum.HL)),
+                                                            snv_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.sum(1 / ht_snv_age_accum.HL)),
+                                                            snv_meanHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.mean(ht_snv_age_accum.HL))).select_globals()
+        ht_snv_age_accum_count = ht_snv_age_accum_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_snv_age_accum_count.snv_mean_HL), 0, ht_snv_age_accum_count.snv_mean_HL))
+        ht_snv_age_accum_count = ht_snv_age_accum_count.checkpoint(get_final_munged_snvcount_age_accum_path(version), overwrite=True)
+        ht_snv_age_accum_count.export(get_final_munged_snvcount_age_accum_path(version, 'tsv'))
+    
+    return ht_snv_age_accum_count
+
 
 
 def extract_single_mtdna_variant(position, ref, alt, version):
