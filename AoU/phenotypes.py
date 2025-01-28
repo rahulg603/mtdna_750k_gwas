@@ -355,7 +355,7 @@ def get_age_accumulating_snv_count(version, overwrite=False):
                                                             snv_sumHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.sum(1 / ht_snv_age_accum.HL)),
                                                             snv_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.sum(1 / ht_snv_age_accum.HL)),
                                                             snv_meanHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.05), hl.agg.mean(ht_snv_age_accum.HL))).select_globals()
-        ht_snv_age_accum_count = ht_snv_age_accum_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_snv_age_accum_count.snv_mean_HL), 0, ht_snv_age_accum_count.snv_mean_HL))
+        ht_snv_age_accum_count = ht_snv_age_accum_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_snv_age_accum_count.snv_meanHL), 0, ht_snv_age_accum_count.snv_meanHL))
         ht_snv_age_accum_count = ht_snv_age_accum_count.checkpoint(get_final_munged_snvcount_age_accum_path(version), overwrite=True)
         ht_snv_age_accum_count.export(get_final_munged_snvcount_age_accum_path(version, 'tsv'))
     
