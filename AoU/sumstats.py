@@ -468,7 +468,7 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
     return None
 
 
-def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, filter_sumstats, overwrite=True, use_drc_pop=True, use_custom_pcs='custom'):
+def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, filter_sumstats, overwrite=True, use_drc_pop=True, use_custom_pcs='custom', append_ukb_modifier='_irnt'):
 
 
     def munge_mt_for_merge(mt, cohort):
@@ -501,7 +501,7 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
         # modify ukb to be compatible with aou
         ht_liftover = get_ukb_b37_b38_liftover().checkpoint(os.path.join(BUCKET, 'ukb_500k', 'ukb_lift_b37_b38.ht'), _read_if_exists=True)
         mt_ukb = mt_ukb.key_cols_by()
-        mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + '_irnt')
+        mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + append_ukb_modifier)
         mt_ukb = mt_ukb.key_cols_by(*PHENO_KEY_FIELDS)
         mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
         mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
