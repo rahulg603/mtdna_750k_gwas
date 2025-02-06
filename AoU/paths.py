@@ -22,6 +22,7 @@ GENO_PATH = os.path.join(GWAS_PATH, 'genotypes')
 PHENO_PATH = os.path.join(GWAS_PATH, 'phenotypes')
 COVAR_PATH = os.path.join(GWAS_PATH, 'covariates')
 RESULTS_PATH = os.path.join(GWAS_PATH, 'results')
+ANNOT_PATH = os.path.join(GWAS_PATH, 'annotations')
 TEMP_PATH = os.path.join(BUCKET, 'tmp')
 
 # Call rate

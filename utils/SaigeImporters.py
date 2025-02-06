@@ -71,6 +71,87 @@ binary_field_rename_dict = {'AF.Cases': 'af_cases',
                             'Pvalue': 'pval',
                             'low_confidence': 'low_confidence'}
 
+# consequences
+CSQ_CODING_HIGH_IMPACT = [
+    "transcript_ablation",
+    "splice_acceptor_variant",
+    "splice_donor_variant",
+    "stop_gained",
+    "frameshift_variant",
+    "stop_lost",
+]
+CSQ_CODING_MEDIUM_IMPACT = [
+    "start_lost",  # considered high impact in v105, previously medium
+    "initiator_codon_variant",  # deprecated
+    "transcript_amplification",  # considered high impact in v105, previously medium
+    "inframe_insertion",
+    "inframe_deletion",
+    "missense_variant",
+    "protein_altering_variant",  # new in v79
+]
+CSQ_CODING_LOW_IMPACT = [
+    "splice_donor_5th_base_variant",  # new in v105
+    "splice_region_variant",  # Considered low impact in v105, previously medium
+    "splice_donor_region_variant",  # new in v105
+    "splice_polypyrimidine_tract_variant",  # new in v105
+    "incomplete_terminal_codon_variant",
+    "start_retained_variant",  # new in v92
+    "stop_retained_variant",
+    "synonymous_variant",
+    "coding_sequence_variant",
+    "coding_transcript_variant",
+]
+CSQ_NON_CODING = [
+    "mature_miRNA_variant",
+    "5_prime_UTR_variant",
+    "3_prime_UTR_variant",
+    "non_coding_transcript_exon_variant",
+    "non_coding_exon_variant",  # deprecated
+    "intron_variant",
+    "NMD_transcript_variant",
+    "non_coding_transcript_variant",
+    "nc_transcript_variant",  # deprecated
+    "upstream_gene_variant",
+    "downstream_gene_variant",
+    "TFBS_ablation",
+    "TFBS_amplification",
+    "TF_binding_site_variant",
+    "regulatory_region_ablation",
+    "regulatory_region_amplification",
+    "feature_elongation",
+    "regulatory_region_variant",
+    "feature_truncation",
+    "intergenic_variant",
+    "sequence_variant",
+]
+CSQ_ORDER = (
+    CSQ_CODING_HIGH_IMPACT
+    + CSQ_CODING_MEDIUM_IMPACT
+    + CSQ_CODING_LOW_IMPACT
+    + CSQ_NON_CODING
+)
+LOF_CSQ_SET = {
+    "splice_acceptor_variant",
+    "splice_donor_variant",
+    "stop_gained",
+    "frameshift_variant",
+}
+
+PLOF_CSQS = ["transcript_ablation", "splice_acceptor_variant",
+             "splice_donor_variant", "stop_gained", "frameshift_variant"]
+
+MISSENSE_CSQS = ["stop_lost", "start_lost", "transcript_amplification",
+                 "inframe_insertion", "inframe_deletion", "missense_variant"]
+
+SYNONYMOUS_CSQS = ["stop_retained_variant", "synonymous_variant"]
+
+OTHER_CSQS = ["mature_miRNA_variant", "5_prime_UTR_variant",
+              "3_prime_UTR_variant", "non_coding_transcript_exon_variant", "intron_variant",
+              "NMD_transcript_variant", "non_coding_transcript_variant", "upstream_gene_variant",
+              "downstream_gene_variant", "TFBS_ablation", "TFBS_amplification", "TF_binding_site_variant",
+              "regulatory_region_ablation", "regulatory_region_amplification", "feature_elongation",
+              "regulatory_region_variant", "feature_truncation", "intergenic_variant"]
+
 
 ######### PATHING AND MUNGING ##########
 def get_aou_util_path(util):
@@ -165,9 +246,14 @@ def get_wildcard_path_genotype_bgen(analysis_type):
     return os.path.join(SHORT_READ_ROOT,f'{data_type}/bgen/{file}.@')
 
 
-def get_wildcard_path_intervals_bgen(geno_folder, pop, use_drc_pop, encoding='additive'):
+def get_wildcard_path_intervals_bgen(geno_folder, pop, use_drc_pop, encoding='additive', analysis_type='variant'):
     drc_string = '_drc' if use_drc_pop else '_axaou'
-    return os.path.join(geno_folder, f'split_acaf_bgen/aou_wgs_acaf_qc{drc_string}_{pop}.@.#.?_{encoding}')
+    fold = 'split_acaf_bgen' if analysis_type == 'variant' else 'split_exome_bgen'
+    intermediate = 'wgs_acaf' if analysis_type == 'variant' else 'wes'
+    if analysis_type == 'gene':
+        if encoding != 'additive':
+            raise ValueError('If doing a gene analysis, encoding must be additive.')
+    return os.path.join(geno_folder, f'{fold}/aou_{intermediate}_qc{drc_string}_{pop}.@.#.?_{encoding}')
 
 
 def get_saige_interval_path(geno_folder, pop, analysis_type):
@@ -186,6 +272,10 @@ def read_variant_intervals(geno_folder, pop, analysis_type):
 
 def stringify_interval(chr, start, end):
     return f'{chr}.{str(start)}.{str(end)}'
+
+
+def get_processed_vat_path(annot_folder):
+    os.path.join(annot_folder, 'vat_processed_final.ht')
 
 
 # Samples

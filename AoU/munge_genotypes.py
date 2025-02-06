@@ -17,6 +17,7 @@ from AoU.covariates import get_all_demographics
 from copy import deepcopy
 from typing import Union
 
+
 def get_adj_expr(
     gt_expr: hl.expr.CallExpression,
     gq_expr: Union[hl.expr.Int32Expression, hl.expr.Int64Expression],
@@ -866,6 +867,157 @@ def impute_missing_gp(mt, location: str = "GP", mean_impute: bool = True):
     else:
         gp_expr = [1.0, 0.0, 0.0]
     return mt.annotate_entries(**{location: hl.or_else(mt._gp, gp_expr)}).drop("_gp")
+
+
+def generate_gene_group_files(overwrite=False):
+    # import giant table and save as ht
+    ht = hl.import_table(os.path.join(AUX_PATH, 'vat/vat_complete_v7.1.bgz.tsv.gz'), force_bgz=True, min_partitions=20000)
+    ht = ht.checkpoint(os.path.join(TEMP_PATH, 'vat_prelim.ht'), _read_if_exists=not overwrite).key_by('contig', 'position', 'ref_allele', 'alt_allele')
+    ht = ht.filter(hl.is_defined(ht.gene_symbol))
+    ht = ht.transmute(consequences = ht.consequence.split(', ')).drop('vid')
+    ht = ht.transmute(transcript_consequences = hl.struct(consequence_terms = ht.consequences,
+                                                        gene_symbol = ht.gene_symbol,
+                                                        is_canonical_transcript = ht.is_canonical_transcript,
+                                                        transcript = ht.transcript))
+    ht = ht.drop(*[x for x in ht.row if re.search('^gvs', x)])
+    ht = ht.drop(*[x for x in ht.row if re.search('^gnomad', x) and x != 'gnomad_failed_filter'])
+    ht = ht.checkpoint(os.path.join(TEMP_PATH, 'vat_truly_final.ht'), _read_if_exists=not overwrite)
+
+    # set up processing functions
+    csqs = hl.literal(CSQ_ORDER)
+    PENALIZE_LOFTEE = False
+    csq_dict = hl.literal(dict(zip(CSQ_ORDER, range(len(CSQ_ORDER)))))
+
+    def _get_most_severe_consequence_expr(
+        csq_expr: hl.expr.ArrayExpression,
+        csq_order = None,
+    ) -> hl.expr.StringExpression:
+        if csq_order is None:
+            csq_order = CSQ_ORDER
+        csqs = hl.literal(csq_order)
+        return csqs.find(lambda c: csq_expr.contains(c))
+
+
+    def _add_most_severe_consequence_to_consequence(
+        tc,
+        csq_order = None,
+        most_severe_csq_field: str = "most_severe_consequence",
+    ):
+        csq = lambda x: _get_most_severe_consequence_expr(x.consequence_terms, csq_order)
+        if isinstance(tc, hl.expr.StructExpression):
+            return tc.annotate(**{most_severe_csq_field: csq(tc)})
+        else:
+            return tc.map(lambda x: x.annotate(**{most_severe_csq_field: csq(x)}))
+
+
+    def _find_worst_transcript_consequence(
+        tcl: hl.expr.ArrayExpression,
+        include_loftee=False, include_polyphen=False
+    ) -> hl.expr.StructExpression:
+        """
+        Find the worst transcript consequence in an array of transcript consequences.
+
+        :param tcl: Array of transcript consequences.
+        :return: Worst transcript consequence.
+        """
+        flag = 500
+        no_flag = flag * (1 + PENALIZE_LOFTEE)
+
+        # Score each consequence based on the order in csq_order.
+        score_expr = tcl.map(
+            lambda tc: csq_dict[csqs.find(lambda x: x == tc.most_severe_consequence)]
+        )
+
+        if include_loftee:
+            # Determine the score adjustment based on the consequence's LOF and LOF flags.
+            sub_expr = tcl.map(
+                lambda tc: (
+                    hl.case(missing_false=True)
+                    .when((tc.lof == "HC") & hl.or_else(tc.lof_flags == "", True), no_flag)
+                    .when((tc.lof == "HC") & (tc.lof_flags != ""), flag)
+                    .when(tc.lof == "OS", 20)
+                    .when(tc.lof == "LC", 10)
+                    .default(0)
+                )
+            )
+
+        if include_polyphen:
+            # If requested, determine the score adjustment based on the consequence's
+            # PolyPhen prediction.
+                polyphen_sub_expr = tcl.map(
+                    lambda tc: (
+                        hl.case(missing_false=True)
+                        .when(tc.polyphen_prediction == "probably_damaging", 0.5)
+                        .when(tc.polyphen_prediction == "possibly_damaging", 0.25)
+                        .when(tc.polyphen_prediction == "benign", 0.1)
+                        .default(0)
+                    )
+                )
+                sub_expr = hl.map(lambda s, ps: s + ps, sub_expr, polyphen_sub_expr)
+
+        # Calculate the final consequence score.
+        if include_loftee:
+            tcl = hl.map(
+                lambda tc, s, ss: tc.annotate(csq_score=s - ss), tcl, score_expr, sub_expr
+            )
+        else:
+            tcl = hl.map(
+                lambda tc, s: tc.annotate(csq_score=s), tcl, score_expr
+            )
+
+        # Return the worst consequence based on the calculated score.
+        return hl.or_missing(hl.len(tcl) > 0, hl.sorted(tcl, lambda x: x.csq_score)[0])
+
+
+    # process VAT table
+    # Annotate each transcript consequence with the 'most_severe_consequence'.
+    ht_f = ht.filter(ht.transcript_consequences.gene_symbol != '')
+    ht_f = ht_f.collect_by_key()
+    ht_f = ht_f.annotate(vep = hl.struct())
+
+    transcript_csqs = _add_most_severe_consequence_to_consequence(
+        ht_f.values.transcript_consequences, CSQ_ORDER
+    )
+
+    # Group transcript consequences by gene and find the worst consequence for each.
+    gene_dict = transcript_csqs.group_by(lambda tc: tc.gene_symbol)
+    worst_csq_gene = gene_dict.map_values(_find_worst_transcript_consequence).values()
+    sorted_scores = hl.sorted(worst_csq_gene, key=lambda tc: tc.csq_score)
+
+    # Filter transcript consequences to only include canonical transcripts and find the
+    # worst consequence for each gene.
+    canonical = transcript_csqs.filter(lambda csq: csq.is_canonical_transcript == 'true')
+    gene_canonical_dict = canonical.group_by(lambda tc: tc.gene_symbol)
+    worst_csq_gene_canonical = gene_canonical_dict.map_values(
+        _find_worst_transcript_consequence
+    ).values()
+    sorted_canonical_scores = hl.sorted(
+        worst_csq_gene_canonical, key=lambda tc: tc.csq_score
+    )
+
+    vep_data = ht_f['vep'].annotate(
+        transcript_consequences=transcript_csqs,
+        worst_consequence_term=csqs.find(
+            lambda c: transcript_csqs.map(
+                lambda csq: csq.most_severe_consequence
+            ).contains(c)
+        ),
+        worst_csq_by_gene=sorted_scores,
+        worst_csq_by_gene_canonical=sorted_canonical_scores
+    )
+    ht_vep = ht_f.annotate(vep = vep_data)
+    ht_vep = ht_vep.checkpoint(os.path.join(TEMP_PATH, 'vat_post_processed_vep_style_pre.ht'), _read_if_exists=True)
+    ht_vep = ht_vep.annotate(vep = ht_vep.vep.annotate(
+        worst_csq_for_variant=hl.or_missing(
+            hl.len(ht_vep.vep.worst_csq_by_gene) > 0, ht_vep.vep.worst_csq_by_gene[0]
+        ),
+        worst_csq_for_variant_canonical=hl.or_missing(
+            hl.len(ht_vep.vep.worst_csq_by_gene_canonical) > 0, ht_vep.vep.worst_csq_by_gene_canonical[0]
+        ),
+    ))
+    ht_vep = ht_vep.checkpoint(get_processed_vat_path(ANNOT_PATH), _read_if_exists=True)
+    
+    return ht_vep
 
 
 def main():
