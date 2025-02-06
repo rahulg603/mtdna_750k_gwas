@@ -1028,7 +1028,7 @@ def generate_gene_boundries_via_vat(remove_cross_contig_genes=True, overwrite=Fa
                                         min_pos = hl.agg.min(hl.int(ht_vep_e.position)),
                                         max_pos = hl.agg.max(hl.int(ht_vep_e.position)))
     ht_gene_position = ht_gene_position.naive_coalesce(500).checkpoint(os.path.join(ANNOT_PATH, 'gene_boundry_using_vat_variants.ht'), _read_if_exists=True)
-    
+
     if remove_cross_contig_genes:
         ht_gene_position = ht_gene_position.filter(hl.len(ht_gene_position.contig) == 1)
         ht_gene_position = ht_gene_position.filter(~ht_gene_position.gene_symbol.startswith('SNORA') & \
@@ -1051,7 +1051,7 @@ def generate_gene_boundries_via_vat(remove_cross_contig_genes=True, overwrite=Fa
         annot_table_single = annot_table_single.filter((annot_table_single.size_ratio > 30))
         genes_too_long += annot_table_single.aggregate(hl.agg.collect(annot_table_single.gene_symbol))
         
-        ht_gene_position = ht_gene_position.filter(hl.literal(genes_too_long).contains(ht_gene_position.gene_symbol))
+        ht_gene_position = ht_gene_position.filter(~hl.literal(genes_too_long).contains(ht_gene_position.gene_symbol))
         return ht_gene_position
     else: 
         return ht_gene_position
