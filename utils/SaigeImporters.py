@@ -905,3 +905,25 @@ def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_
     
     mt = ht._unlocalize_entries('inner_row', 'inner_global', globals_for_col_key)
     return mt
+
+
+def get_ucsc_gene_table(gs_bucket, gs_annot, overwrite):
+    ht_gene_size = hl.import_table(os.path.join(gs_bucket, 'reference_files/gencode.v37.annotation.gff3.gz'), force=True, no_header=True, impute=True, comment='#').repartition(100)
+    ht_gene_size = ht_gene_size.filter(ht_gene_size.f2 == 'gene')
+    ht_gene_size = ht_gene_size.transmute(chrom = ht_gene_size.f0,
+                                        source = ht_gene_size.f1,
+                                        type = ht_gene_size.f2,
+                                        start = ht_gene_size.f3,
+                                        end = ht_gene_size.f4,
+                                        strand = ht_gene_size.f6,
+                                        size = ht_gene_size.f4 - ht_gene_size.f3,
+                                        info = ht_gene_size.f8.split(';'))
+    ht_gene_size = ht_gene_size.annotate(gene_symbol = ht_gene_size.info.filter(lambda x: x.startswith('gene_name=')))
+    ht_gene_size = ht_gene_size.filter(hl.len(ht_gene_size.gene_symbol) > 0)
+    ht_gene_size = ht_gene_size.annotate(gene_symbol = ht_gene_size.gene_symbol[0].replace('^gene_name=', '')).drop('info')
+    ht_gene_size = ht_gene_size.key_by('gene_symbol')
+    ht_mult = ht_gene_size.group_by(ht_gene_size.gene_symbol).aggregate(has_multiple = hl.agg.count() > 1)
+    ht_gene_size = ht_gene_size.annotate(has_multiple = ht_mult[ht_gene_size.key].has_multiple)
+    ht_gene_size = ht_gene_size.checkpoint(os.path.join(gs_annot, 'ucsc_gencode.v37.gene_information.ht'), _read_if_exists=not overwrite, overwrite=overwrite)
+
+    return ht_gene_size

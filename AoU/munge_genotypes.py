@@ -1028,8 +1028,31 @@ def generate_gene_boundries_via_vat(remove_cross_contig_genes=True, overwrite=Fa
                                         min_pos = hl.agg.min(hl.int(ht_vep_e.position)),
                                         max_pos = hl.agg.max(hl.int(ht_vep_e.position)))
     ht_gene_position = ht_gene_position.naive_coalesce(500).checkpoint(os.path.join(ANNOT_PATH, 'gene_boundry_using_vat_variants.ht'), _read_if_exists=True)
+    
     if remove_cross_contig_genes:
-        return ht_gene_position.filter(hl.len(ht_gene_position.contig) == 1)
+        ht_gene_position = ht_gene_position.filter(hl.len(ht_gene_position.contig) == 1)
+        ht_gene_position = ht_gene_position.filter(~ht_gene_position.gene_symbol.startswith('SNORA') & \
+                                                   ~ht_gene_position.gene_symbol.startswith('SCARNA') & \
+                                                    ~ht_gene_position.gene_symbol.startswith('SNORD') & \
+                                                        (ht_gene_position.gene_symbol != 'U6atac'))
+        
+        # filter using UCSC table
+        ucsc_table = get_ucsc_gene_table(BUCKET, ANNOT_PATH, overwrite=overwrite)
+        annot_table = ht_gene_position.annotate(ucsc_table = ucsc_table[ht_gene_position.gene_symbol])
+        annot_table = annot_table.annotate(size = annot_table.max_pos - annot_table.min_pos)
+        annot_table_multi = annot_table.filter(annot_table.ucsc_table.has_multiple)
+        annot_table_multi = annot_table_multi.annotate(size_ratio = (annot_table_multi.size - annot_table_multi.ucsc_table.size)/annot_table_multi.ucsc_table.size)
+        genes_too_long = annot_table_multi.aggregate(hl.agg.filter((annot_table_multi.size_ratio >= 2.5) & (annot_table_multi.size >= 30000), hl.agg.collect(annot_table_multi.gene_symbol)))
+
+        annot_table_single = annot_table.filter(~annot_table.ucsc_table.has_multiple)
+        annot_table_single = annot_table_single.annotate(delta = (annot_table_single.size - annot_table_single.ucsc_table.size))
+        annot_table_single = annot_table_single.filter(annot_table_single.size > 30000)
+        annot_table_single = annot_table_single.annotate(size_ratio = annot_table_single.delta / annot_table_single.ucsc_table.size)
+        annot_table_single = annot_table_single.filter((annot_table_single.size_ratio > 30))
+        genes_too_long += annot_table_single.aggregate(hl.agg.collect(annot_table_single.gene_symbol))
+        
+        ht_gene_position = ht_gene_position.filter(hl.literal(genes_too_long).contains(ht_gene_position.gene_symbol))
+        return ht_gene_position
     else: 
         return ht_gene_position
 
