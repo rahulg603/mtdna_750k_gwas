@@ -275,7 +275,7 @@ def stringify_interval(chr, start, end):
 
 
 def get_processed_vat_path(annot_folder):
-    os.path.join(annot_folder, 'vat_processed_final.ht')
+    return os.path.join(annot_folder, 'vat_processed_final.ht')
 
 
 # Samples

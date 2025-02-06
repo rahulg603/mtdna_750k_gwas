@@ -869,7 +869,7 @@ def impute_missing_gp(mt, location: str = "GP", mean_impute: bool = True):
     return mt.annotate_entries(**{location: hl.or_else(mt._gp, gp_expr)}).drop("_gp")
 
 
-def generate_gene_group_files(overwrite=False):
+def generate_vat_ht(overwrite=False):
     # import giant table and save as ht
     ht = hl.import_table(os.path.join(AUX_PATH, 'vat/vat_complete_v7.1.bgz.tsv.gz'), force_bgz=True, min_partitions=20000)
     ht = ht.checkpoint(os.path.join(TEMP_PATH, 'vat_prelim.ht'), _read_if_exists=not overwrite).key_by('contig', 'position', 'ref_allele', 'alt_allele')
