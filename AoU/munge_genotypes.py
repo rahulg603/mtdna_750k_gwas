@@ -1020,6 +1020,45 @@ def generate_vat_ht(overwrite=False):
     return ht_vep
 
 
+def generate_gene_boundries_via_vat(remove_cross_contig_genes=True, overwrite=False):
+    ht = generate_vat_ht(overwrite=overwrite)
+    ht_vep_e = ht.explode('values')
+    ht_gene_position = ht_vep_e.group_by(ht_vep_e.values.transcript_consequences.gene_symbol
+                            ).aggregate(contig = hl.agg.collect_as_set(ht_vep_e.contig),
+                                        min_pos = hl.agg.min(hl.int(ht_vep_e.position)),
+                                        max_pos = hl.agg.max(hl.int(ht_vep_e.position)))
+    ht_gene_position = ht_gene_position.naive_coalesce(500).checkpoint(os.path.join(ANNOT_PATH, 'gene_boundry_using_vat_variants.ht'), _read_if_exists=True)
+    if remove_cross_contig_genes:
+        return ht_gene_position.filter(hl.len(ht_gene_position.contig) == 1)
+    else: 
+        return ht_gene_position
+
+
+def get_overlapping_genes(pop, analysis_type, overwrite=False):
+    ht_gene_position = generate_gene_boundries_via_vat(overwrite=overwrite)
+
+    ht_gene_position_annot = ht_gene_position.repartition(20000)
+    ht_gene_position_annot = ht_gene_position_annot.annotate(all_positions = hl.range(ht_gene_position_annot.min_pos, ht_gene_position_annot.max_pos))
+    ht_gene_position_annot = ht_gene_position_annot.annotate(contig = ht_gene_position_annot.contig.find(lambda x: True))
+    ht_gene_position_annot = ht_gene_position_annot.explode('all_positions')
+    ht_gene_position_annot = ht_gene_position_annot.annotate(locus = hl.locus(ht_gene_position_annot.contig, ht_gene_position_annot.all_positions, reference_genome='GRCh38'))
+    ht_gene_position_annot = ht_gene_position_annot.key_by('locus')
+    ht_gene_position_annot = ht_gene_position_annot.checkpoint(os.path.join(TEMP_PATH, 'ht_gene_position.ht'), _read_if_exists=not overwrite)
+
+    ht_intervals = hl.Table.from_pandas(read_variant_intervals(GENO_PATH, pop, analysis_type))
+    ht_intervals = ht_intervals.annotate(interval = hl.locus_interval(ht_intervals.chrom, ht_intervals.start, ht_intervals.end, reference_genome='GRCh38'))
+    ht_intervals = ht_intervals.annotate(interval_id = ht_intervals.chrom + ':' + hl.str(ht_intervals.start) + '-' + hl.str(ht_intervals.end)).key_by('interval')
+
+    ht_gene_position_annot_interval = ht_gene_position_annot.annotate(interval_id = ht_intervals[ht_gene_position_annot.key].interval_id)
+    intervals_by_gene = ht_gene_position_annot_interval.group_by(ht_gene_position_annot_interval.gene_symbol
+                                                      ).aggregate(gene_start = hl.agg.collect_as_set(ht_gene_position_annot_interval.min_pos),
+                                                                  gene_end = hl.agg.collect_as_set(ht_gene_position_annot_interval.max_pos),
+                                                                  overlapping_intervals = hl.agg.collect_as_set(ht_gene_position_annot_interval.interval_id)
+                                                      ).naive_coalesce(500)
+    intervals_by_gene = intervals_by_gene.checkpoint(os.path.join(ANNOT_PATH, f'gene_to_{analysis_type}_interval_map_{pop}.ht'), overwrite=overwrite, _read_if_exists=not overwrite)
+    return intervals_by_gene, ht_gene_position_annot
+
+
 def main():
     sample_qc = True
     min_af = 0.01
