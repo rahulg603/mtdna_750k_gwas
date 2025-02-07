@@ -24,8 +24,8 @@ workflow saige_manager {
         Float test_min_mac = 0.5
         Float test_min_maf = 0
         Int test_markers_per_chunk = 10000
-        File? groups
-        Float? max_maf_for_group
+        String? groups
+        String? max_maf_for_group
 
         # QC parameters (for low_confidence filter)
         Float min_call_rate
