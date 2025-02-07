@@ -851,9 +851,9 @@ def get_gene_based_intervals(pop, overwrite):
     return(df)
 
 
-def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac,
-                                        mean_impute_missing=True, use_drc_pop=True, encoding='additive', 
-                                        limit=5000, n_cpu=8):
+def create_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac, analysis_type='variant',
+                                mean_impute_missing=True, use_drc_pop=True, encoding='additive', 
+                                limit=5000, n_cpu=8):
 
     from cromwell.classes import CromwellManager
 
@@ -867,7 +867,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                 'split_bgen_intervals.mean_impute_missing': mean_impute_missing,
                 'split_bgen_intervals.call_rate_filter': callrate_filter,
                 'split_bgen_intervals.min_ac': min_ac,
-                'split_bgen_intervals.analysis_type': 'variant',
+                'split_bgen_intervals.analysis_type': analysis_type,
                 'split_bgen_intervals.encoding': encoding,
                 'split_bgen_intervals.repo_tarball': repo_tarball,
                 'split_bgen_intervals.tar_folder_path': git_path.lstrip('/'),
@@ -883,8 +883,11 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
                'pop': []}
 
         for this_pop in pop:
-            interval_list = get_variant_intervals(pop=this_pop, overwrite=False)
-            bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=this_pop, use_drc_pop=use_drc_pop, encoding=encoding)
+            if analysis_type == 'variant':
+                interval_list = get_variant_intervals(pop=this_pop, overwrite=False)
+            elif analysis_type == 'gene':
+                interval_list = get_gene_based_intervals(pop=this_pop, overwrite=False)
+            bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=this_pop, use_drc_pop=use_drc_pop, encoding=encoding, analysis_type=analysis_type)
         
             for _, row in interval_list.iterrows():
                 this_bgen_prefix = bgen_prefix.replace('@', row['chrom']).replace('#', str(row['start'])).replace('?', str(row['end']))
@@ -899,8 +902,11 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
         this_pop_list = pop
         baseline.update({'split_bgen_intervals.pop': pop})
     
-        interval_list = get_variant_intervals(pop=pop, overwrite=False)
-        bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding)
+        if analysis_type == 'variant':
+            interval_list = get_variant_intervals(pop=this_pop, overwrite=False)
+        elif analysis_type == 'gene':
+            interval_list = get_gene_based_intervals(pop=this_pop, overwrite=False)
+        bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding, analysis_type=analysis_type)
         
         dct = {'chr': [],
                'start': [],
@@ -925,7 +931,7 @@ def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter
     # run sparse GRM analysis
     print('NOW COMMENCING GENERATION OF BGENs.')
     print('This stage will use Cromwell.')
-    manager = CromwellManager(run_name=f'saige_aou_split_bgen_{this_pop_list}',
+    manager = CromwellManager(run_name=f'saige_aou_split_{analysis_type}_bgen_{this_pop_list}',
                               inputs_file=df,
                               json_template_path=os.path.abspath(f'./saige_template_{this_pop_list}.json'),
                               wdl_path=wdl_path,

@@ -280,7 +280,11 @@ task run_test {
         df.to_csv('~{output_prefix}' + '.result.txt', sep='\t', index=None)
 
         if results_files[1] is not None:
-            print('PLACEHOLDER: need to generate schema for geneAssoc file.')
+            headers = ['Region', 'Group', 'max_MAF', 'Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT',
+                       'BETA_Burden', 'SE_Burden', 'MAC', 'Number_rare', 'Number_ultra_rare', 'contig']
+
+            df = pd.DataFrame({x: [] for x in headers})
+            df.to_csv('~{output_prefix}' + '.geneAssoc.txt', sep='\t', index=None)
         
 
     with open('single_test.txt', 'w') as f:

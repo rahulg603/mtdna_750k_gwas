@@ -517,7 +517,8 @@ task get_tasks_to_run {
         bgen_prefix = get_wildcard_path_intervals_bgen(gs_genotype_path, 
                                                        pop="~{pop}", 
                                                        use_drc_pop=drc_tf, 
-                                                       encoding="~{encoding}")
+                                                       encoding="~{encoding}",
+                                                       analysis_type='~{analysis_type}')
 
         any_test_run = False
         for _, row in interval_list.iterrows():
@@ -544,18 +545,18 @@ task get_tasks_to_run {
         running_override = True if any_test_run else running_override
         run_tests.append(this_pheno_result_holder)
         
-        # merged hail table
-        merged_ht_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct, '~{encoding}')
-        merged_flat_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct, '~{encoding}')
+        # merged hail table. merged_ht_singleAssoc_path is '' if gene_analysis is False
+        merged_ht_singleAssoc_path, merged_ht_gene_path = get_merged_ht_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct, '~{encoding}')
+        merged_flat_singleAssoc_path, merged_flat_gene_path = get_merged_flat_path(gs_output_path, '~{suffix}', '~{pop}', pheno_dct, '~{encoding}')
         results_path = f'{get_pheno_output_path(result_dir, pheno_dct, "")}/{get_pheno_output_suffix(pheno_dct)}.' + '~{pop}' + '.' + '~{suffix}'
 
         overwrite_hail_tf = ('~{overwrite_h}' == 'overwrite')
         if overwrite_test_tf or overwrite_hail_tf or \
                 merged_ht_path not in results_already_created or \
                 not hl.hadoop_exists(f'{merged_ht_path}/_SUCCESS') or running_override:
-            run_hail_merge.append(['', '', results_path])
+            run_hail_merge.append(['', '', '', '', results_path])
         else:
-            run_hail_merge.append([merged_ht_path, merged_flat_path, results_path])
+            run_hail_merge.append([merged_ht_singleAssoc_path, merged_ht_gene_path, merged_flat_singleAssoc_path, merged_flat_gene_path, results_path])
 
     # phenotype names
     with open('pheno.json', 'w') as f:
@@ -1001,6 +1002,7 @@ task merge {
 
     drc_tf = '~{drc}' == 'drc'
     sample_qc_tf = '~{qc}' == 'qc'
+    gene_analysis = "~{analysis_type}" == "gene"
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
@@ -1009,8 +1011,8 @@ task merge {
     results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
     results_files = get_results_files(results_prefix, '~{analysis_type}')
 
-    variant_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}')
-    variant_ht_tmp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct, '~{encoding}')
+    variant_ht, gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
+    variant_ht_tmp, gene_ht_temp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
 
     ht = load_variant_data(output_ht_path=variant_ht,
                            temp_path=variant_ht_tmp,
@@ -1042,12 +1044,10 @@ task merge {
     ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
     ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
-    single_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}')
+    single_flat, gene_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
     with open('flat_path.txt', 'w') as f:
         f.write(single_flat)
 
-
-    gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=True)
     if "~{analysis_type}" == "gene":
         load_gene_data(output_ht_path=gene_ht,
                        paths='~{sep="," gene_test_defined}'.split(','),

@@ -372,7 +372,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
         if read_previous and hl.hadoop_exists(f'{merged_mt_path}/_SUCCESS'):
             continue
 
-        all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, suffix, pop, encoding)
+        all_variant_outputs = get_all_merged_ht_paths(RESULTS_PATH, suffix, pop, encoding, gene_analysis)
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
 
         print(f'For {suffix}, pop {pop}, {encoding}, found {str(hl.len(pheno_dict).collect()[0])} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')

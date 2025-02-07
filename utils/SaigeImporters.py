@@ -412,18 +412,20 @@ def get_results_files(results_pre, analysis_type):
 
 def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct, encoding, gene_analysis=False):
     result_dir = get_result_path(gs_output_path, suffix, pop, encoding)
+    path = get_pheno_output_path(result_dir, pheno_dct, "")
     if gene_analysis:
-        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.ht'
+        return f'{path}/gene_results_singleAssoc.ht', f'{path}/gene_results.ht'
     else:
-        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.ht'
+        return f'{path}/variant_results.ht', ''
 
 
 def get_merged_flat_path(gs_output_path, suffix, pop, pheno_dct, encoding, gene_analysis=False):
     result_dir = get_result_path(gs_output_path, suffix, pop, encoding)
+    path = get_pheno_output_path(result_dir, pheno_dct, "")
     if gene_analysis:
-        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/gene_results.tsv.bgz'
+        return f'{path}/gene_results_singleAssoc.tsv.bgz', f'{path}/gene_results.tsv.bgz'
     else:
-        return f'{get_pheno_output_path(result_dir, pheno_dct, "")}/variant_results.tsv.bgz'
+        return f'{path}/variant_results.tsv.bgz', ''
 
 
 # Merged sumstats
@@ -825,10 +827,13 @@ def get_hail_pheno_dict(gs_phenotype_path, suffix):
 def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=''):
     items = [x['path'] for x in hl.hadoop_ls(get_result_path(gs_output_path, suffix, pop=pop, encoding=encoding)) if x['is_dir']]
     
+    if gene_analysis:
+        raise NotImplementedError('ERROR: gene_analysis is not supported in ht merging yet.')
+
     paths_list = []
     for item in items:
         this_pheno_dict = pheno_str_to_dict(os.path.basename(item))
-        this_ht = get_merged_ht_path(gs_output_path, suffix, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
+        this_ht, this_ht_gene = get_merged_ht_path(gs_output_path, suffix, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
         if hl.hadoop_exists(os.path.join(this_ht, '_SUCCESS')):
             paths_list.append(this_ht)
 
