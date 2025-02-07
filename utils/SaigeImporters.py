@@ -171,6 +171,14 @@ def rename_dict_for_log10(dct, legacy_exp_p_values=False):
     return dct_out
 
 
+def get_processed_vat_path(annot_folder):
+    return os.path.join(annot_folder, 'vat_processed_final.ht')
+
+
+def get_gene_annotation_path(annot_folder, chrom):
+    return os.path.join(annot_folder, f'formatted_exome_variant_consequence_lof_mis_syn_{chrom}.txt')
+
+
 # Genotypes
 def get_plink_for_null_path(geno_folder, pop, sample_qc, analysis_type, ld_pruned,
                             n_common, n_maf, n_mac,
@@ -272,10 +280,6 @@ def read_variant_intervals(geno_folder, pop, analysis_type):
 
 def stringify_interval(chr, start, end):
     return f'{chr}.{str(start)}.{str(end)}'
-
-
-def get_processed_vat_path(annot_folder):
-    return os.path.join(annot_folder, 'vat_processed_final.ht')
 
 
 # Samples

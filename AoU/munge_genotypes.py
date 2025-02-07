@@ -903,9 +903,9 @@ def create_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac
         baseline.update({'split_bgen_intervals.pop': pop})
     
         if analysis_type == 'variant':
-            interval_list = get_variant_intervals(pop=this_pop, overwrite=False)
+            interval_list = get_variant_intervals(pop=pop, overwrite=False)
         elif analysis_type == 'gene':
-            interval_list = get_gene_based_intervals(pop=this_pop, overwrite=False)
+            interval_list = get_gene_based_intervals(pop=pop, overwrite=False)
         bgen_prefix = get_wildcard_path_intervals_bgen(GENO_PATH, pop=pop, use_drc_pop=use_drc_pop, encoding=encoding, analysis_type=analysis_type)
         
         dct = {'chr': [],
@@ -1182,6 +1182,47 @@ def get_overlapping_genes(pop, analysis_type, overwrite=False):
                                                       ).naive_coalesce(500)
     intervals_by_gene = intervals_by_gene.checkpoint(os.path.join(ANNOT_PATH, f'gene_to_{analysis_type}_interval_map_{pop}.ht'), overwrite=overwrite, _read_if_exists=not overwrite)
     return intervals_by_gene, ht_gene_position_annot
+
+
+def generate_gene_group_files(pop, overwrite=False, use_canonical=False):
+    ht = generate_vat_ht(overwrite=False)
+    ht = ht.annotate(var_id = ht.contig.replace('chr','') + ':' + ht.position + ':' + ht.ref_allele + ':' + ht.alt_allele)
+
+    # load call rate table and remove variants with CR < 90%
+    print(f'Prior to CR filtation, we have {str(ht.count())} records in pop {pop}.')
+    ht_call_rate = get_call_rate_filtered_variants(pop=pop, analysis_type='gene',
+                                                   sample_qc=True, use_array_for_variant=False,
+                                                   use_drc_pop=True)
+    ht = ht.semi_join(ht_call_rate)
+    print(f'After CR filtation, we have {str(ht.count())} records in pop {pop}.')
+
+    if use_canonical:
+        ht = ht.annotate(csq_struct = ht.vep.worst_csq_by_gene_canonical)
+    else:
+        ht = ht.annotate(csq_struct = ht.vep.worst_csq_by_gene)
+    hte = ht.explode('csq_struct')
+    all_csq = PLOF_CSQS + MISSENSE_CSQS + SYNONYMOUS_CSQS
+    lookup_csq = {}
+    lookup_csq.update({x: 'lof' for x in PLOF_CSQS})
+    lookup_csq.update({x: 'missense' for x in MISSENSE_CSQS})
+    lookup_csq.update({x: 'synonymous' for x in SYNONYMOUS_CSQS})
+    hte_f = hte.filter(hl.literal(all_csq).contains(hte.csq_struct.most_severe_consequence))
+    hte_f = hte_f.annotate(csq_class = hl.literal(lookup_csq)[hte_f.csq_struct.most_severe_consequence])
+    htgene = hte_f.group_by(hte_f.csq_struct.gene_symbol
+                ).aggregate(contig = hl.agg.take(hte_f.contig, 1)[0], 
+                            joint = hl.agg.collect([hte_f.var_id, hte_f.csq_class]))
+    htgene = htgene.annotate(var = hl.str(' ').join(hl.map(lambda x: x[0], htgene.joint)),
+                            anno = hl.str(' ').join(hl.map(lambda x: x[1], htgene.joint))).drop('joint')
+    htgene = htgene.annotate(jt = ['var ' + htgene.var, 'anno ' + htgene.anno]).explode('jt').key_by()
+    htgene = htgene.transmute(final_column = htgene.gene_symbol + ' ' + htgene.jt).drop('var', 'anno')
+
+    for chrom in CHROMOSOMES:
+        annotation_path = get_gene_annotation_path(ANNOT_PATH, chrom)
+        if not hl.hadoop_exists(annotation_path) or overwrite:
+            htgene_this = htgene.filter(htgene.contig == chrom).drop('contig')
+            htgene_this.export(annotation_path, header=False)
+    
+    return None
 
 
 def main():
