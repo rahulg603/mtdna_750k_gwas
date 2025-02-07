@@ -1184,7 +1184,7 @@ def get_overlapping_genes(pop, analysis_type, overwrite=False):
     return intervals_by_gene, ht_gene_position_annot
 
 
-def generate_gene_group_files(pop, overwrite=False, use_canonical=False):
+def generate_gene_group_files(pop, overwrite=False, use_canonical=False, min_cr=CALLRATE_CUTOFF):
     ht = generate_vat_ht(overwrite=False)
     ht = ht.annotate(var_id = ht.contig.replace('chr','') + ':' + ht.position + ':' + ht.ref_allele + ':' + ht.alt_allele)
 
@@ -1192,7 +1192,7 @@ def generate_gene_group_files(pop, overwrite=False, use_canonical=False):
     print(f'Prior to CR filtation, we have {str(ht.count())} records in pop {pop}.')
     ht_call_rate = get_call_rate_filtered_variants(pop=pop, analysis_type='gene',
                                                    sample_qc=True, use_array_for_variant=False,
-                                                   use_drc_pop=True)
+                                                   use_drc_pop=True, min_call_rate=min_cr)
     ht_call_rate = ht_call_rate.key_by(chrom = ht_call_rate.locus.contig, 
                                        pos = hl.str(ht_call_rate.locus.position), 
                                        ref = ht_call_rate.alleles[0], 
