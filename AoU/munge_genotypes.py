@@ -1221,7 +1221,7 @@ def generate_gene_group_files(pop, overwrite=False, use_canonical=False, min_cr=
     htgene = htgene.transmute(final_column = htgene.gene_symbol + ' ' + htgene.jt).drop('var', 'anno')
 
     for chrom in CHROMOSOMES:
-        annotation_path = get_gene_annotation_path(ANNOT_PATH, chrom, pop)
+        annotation_path = get_gene_annotation_path(ANNOT_PATH, chrom, pop, min_cr)
         if not hl.hadoop_exists(annotation_path) or overwrite:
             htgene_this = htgene.filter(htgene.contig == chrom).drop('contig')
             htgene_this.export(annotation_path, header=False)
