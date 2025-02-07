@@ -18,7 +18,6 @@ workflow saige_tests {
         Array[Array[String]] tests
 
         File? group_file
-        File? groups
         Float? max_maf_for_group
 
         Float min_mac
@@ -74,7 +73,7 @@ workflow saige_tests {
                     sparse_grm = sparse_grm,
                     sparse_grm_ids = sparse_grm_ids,
 
-                    group_file = group_file,
+                    group_file = this_chr[6],
                     groups = groups,
                     max_maf_for_group = max_maf_for_group,
 

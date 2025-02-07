@@ -24,7 +24,6 @@ workflow saige_manager {
         Float test_min_mac = 0.5
         Float test_min_maf = 0
         Int test_markers_per_chunk = 10000
-        File? group_file
         File? groups
         Float? max_maf_for_group
 
@@ -48,6 +47,7 @@ workflow saige_manager {
         String gs_phenotype_path
         String gs_covariate_path
         String gs_temp_path
+        String gs_annot_path
         String gs_output_path
         String? google_project_req_pays
 
@@ -131,6 +131,7 @@ workflow saige_manager {
             gs_bucket = gs_bucket,
             gs_phenotype_path = gs_phenotype_path,
             gs_genotype_path = gs_genotype_path,
+            gs_annot_path = gs_annot_path,
             gs_output_path = gs_output_path,
 
             overwrite_pheno_export = overwrite_pheno_export,
@@ -250,7 +251,6 @@ workflow saige_manager {
 
                 tests = per_pheno_data.left.left.left.right,
 
-                group_file = group_file,
                 groups = groups,
                 max_maf_for_group = max_maf_for_group,
 
@@ -373,6 +373,7 @@ task get_tasks_to_run {
         String gs_bucket
         String gs_phenotype_path
         String gs_genotype_path
+        String gs_annot_path
         String gs_output_path
 
         Boolean overwrite_pheno_export
@@ -433,6 +434,7 @@ task get_tasks_to_run {
     gs_prefix = parse_bucket('~{gs_bucket}')
     gs_phenotype_path = os.path.join(gs_prefix, '~{gs_phenotype_path}'.lstrip('/'))
     gs_genotype_path = os.path.join(gs_prefix, '~{gs_genotype_path}'.lstrip('/'))
+    gs_annot_path = os.path.join(gs_prefix, '~{gs_annot_path}'.lstrip('/'))
     gs_output_path = os.path.join(gs_prefix, '~{gs_output_path}'.lstrip('/'))
 
     ht = hl.read_table(get_custom_phenotype_summary_path(gs_phenotype_path, '~{suffix}'))
@@ -527,20 +529,22 @@ task get_tasks_to_run {
             results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, this_segment)
             results_files = get_results_files(results_prefix, '~{analysis_type}')
 
+            group_file = get_gene_annotation_path(gs_annot_path, row['chrom'], "~{pop}", 0.8)
+
             if '~{analysis_type}' == 'variant':
                 res_found = results_files[0] in results_already_created
                 if overwrite_test_tf or not res_found or running_override:
-                    this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix])
+                    this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix, group_file])
                     any_test_run = True
                 else:
-                    this_pheno_result_holder.append([this_segment, results_files[0], '', results_files[2], row['chrom'], this_bgen_prefix])
+                    this_pheno_result_holder.append([this_segment, results_files[0], '', results_files[2], row['chrom'], this_bgen_prefix, group_file])
             else:
                 res_found = (results_files[0] in results_already_created) and (results_files[1] in results_already_created)
                 if overwrite_test_tf or not res_found or running_override:
-                    this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix])
+                    this_pheno_result_holder.append([this_segment, '', '', '', row['chrom'], this_bgen_prefix, group_file])
                     any_test_run = True
                 else:
-                    this_pheno_result_holder.append([this_segment, results_files[0], results_files[1], results_files[2], row['chrom'], this_bgen_prefix])
+                    this_pheno_result_holder.append([this_segment, results_files[0], results_files[1], results_files[2], row['chrom'], this_bgen_prefix, group_file])
 
         running_override = True if any_test_run else running_override
         run_tests.append(this_pheno_result_holder)
