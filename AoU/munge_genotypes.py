@@ -1193,6 +1193,10 @@ def generate_gene_group_files(pop, overwrite=False, use_canonical=False):
     ht_call_rate = get_call_rate_filtered_variants(pop=pop, analysis_type='gene',
                                                    sample_qc=True, use_array_for_variant=False,
                                                    use_drc_pop=True)
+    ht_call_rate = ht_call_rate.key_by(chrom = ht_call_rate.locus.contig, 
+                                       pos = hl.str(ht_call_rate.locus.position), 
+                                       ref = ht_call_rate.alleles[0], 
+                                       alt = ht_call_rate.alleles[1])
     ht = ht.semi_join(ht_call_rate)
     print(f'After CR filtation, we have {str(ht.count())} records in pop {pop}.')
 
