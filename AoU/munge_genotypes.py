@@ -755,6 +755,102 @@ def get_variant_intervals(pop, overwrite):
     return(df)
 
 
+def get_gene_based_intervals(pop, overwrite):
+
+    gene_interval_path = get_saige_interval_path(GENO_PATH, analysis_type='gene', pop=pop)
+    if not hl.hadoop_exists(gene_interval_path) or overwrite:
+        # load gene boundaries
+        gene_boundaries = generate_gene_boundries_via_vat(overwrite=False)
+        gene_boundaries = gene_boundaries.annotate(contig = gene_boundaries.contig.find(lambda x: True))
+        gene_boundaries = gene_boundaries.annotate(interval = hl.locus_interval(gene_boundaries.contig, gene_boundaries.min_pos, gene_boundaries.max_pos, reference_genome='GRCh38'))
+        gene_boundaries = gene_boundaries.key_by('interval')
+
+        ht_intervals = hl.Table.from_pandas(read_variant_intervals(GENO_PATH, pop, 'variant'))
+        ht_intervals = ht_intervals.annotate(locus_start = hl.locus(ht_intervals.chrom, ht_intervals.start, reference_genome='GRCh38'),
+                                            locus_end = hl.locus(ht_intervals.chrom, ht_intervals.end, reference_genome='GRCh38'))
+
+        # find where there are interval starts that are overlapping genes
+        ht_intervals_start = ht_intervals.rename({'locus_start': 'locus_start_orig'}).key_by('locus_start_orig')
+        ht_intervals_start = ht_intervals_start.annotate(overlap_gene = gene_boundaries[ht_intervals_start.key])
+        ht_intervals_start_mod = ht_intervals_start
+        ht_intervals_start_mod.show()
+
+        still_overlapping = True
+        this_iter = 1
+        print(f'Prior to loop, there were {str(ht_intervals_start_mod.aggregate(hl.agg.count_where(hl.is_defined(ht_intervals_start_mod.overlap_gene))))} overlapping start sites with genes.')
+        while still_overlapping:
+            ht_intervals_start_mod = ht_intervals_start_mod.persist()
+            ht_intervals_start_mod = ht_intervals_start_mod.annotate(locus_start_pre = hl.locus(ht_intervals_start_mod.chrom, hl.if_else(hl.is_missing(ht_intervals_start_mod.overlap_gene), 
+                                                                                                                                        ht_intervals_start_mod.key[0].position, 
+                                                                                                                                        ht_intervals_start_mod.overlap_gene.min_pos-50), reference_genome='GRCh38'),
+                                                                    locus_start_post = hl.locus(ht_intervals_start_mod.chrom, hl.if_else(hl.is_missing(ht_intervals_start_mod.overlap_gene), 
+                                                                                                                                        ht_intervals_start_mod.key[0].position, 
+                                                                                                                                        ht_intervals_start_mod.overlap_gene.max_pos+50), reference_genome='GRCh38'))
+            ht_intervals_start_mod = ht_intervals_start_mod.key_by('locus_start_pre')
+            ht_intervals_start_mod = ht_intervals_start_mod.annotate(overlap_gene_pre = gene_boundaries[ht_intervals_start_mod.key])
+            ht_intervals_start_mod = ht_intervals_start_mod.key_by('locus_start_post')
+            ht_intervals_start_mod = ht_intervals_start_mod.annotate(overlap_gene_post = gene_boundaries[ht_intervals_start_mod.key])
+            ht_intervals_start_mod = ht_intervals_start_mod.annotate(locus_start = hl.if_else(hl.is_missing(ht_intervals_start_mod.overlap_gene_pre), 
+                                                                                            ht_intervals_start_mod.locus_start_pre, 
+                                                                                            hl.if_else(hl.is_missing(ht_intervals_start_mod.overlap_gene_post),
+                                                                                                        ht_intervals_start_mod.locus_start_post,
+                                                                                                        ht_intervals_start_mod.locus_start_pre)),
+                                                                    overlap_gene = hl.if_else(hl.is_missing(ht_intervals_start_mod.overlap_gene_pre), 
+                                                                                            ht_intervals_start_mod.overlap_gene_pre, 
+                                                                                            hl.if_else(hl.is_missing(ht_intervals_start_mod.overlap_gene_post),
+                                                                                                        ht_intervals_start_mod.overlap_gene_post,
+                                                                                                        ht_intervals_start_mod.overlap_gene_pre)))
+            ht_intervals_start_mod = ht_intervals_start_mod.key_by('locus_start')
+            ht_intervals_start_mod.filter(~hl.is_missing(ht_intervals_start_mod.overlap_gene)).show()
+            
+            noverlap = ht_intervals_start_mod.aggregate(hl.agg.count_where(hl.is_defined(ht_intervals_start_mod.overlap_gene)))
+            print(f'After loop {str(this_iter)}, there were {str(noverlap)} overlapping start sites with genes.')
+            if noverlap == 0:
+                still_overlapping = False
+                print('Completed.')
+            else:
+                this_iter += 1
+        
+        # now produce a fixed interval table by shifting around interval ending
+        ht_intervals_start_mod_for_end = ht_intervals_start_mod.key_by()
+        ht_intervals_start_mod_for_end = ht_intervals_start_mod_for_end.select(chrom=ht_intervals_start_mod_for_end.chrom, 
+                                                                            start=ht_intervals_start_mod_for_end.locus_start.position, 
+                                                                            end=ht_intervals_start_mod_for_end.locus_end.position)
+        df_orig = ht_intervals_start_mod_for_end.to_pandas()
+
+        chr = []
+        start = []
+        end = []
+        CHROMOSOME_LEN = hl.get_reference('GRCh38').lengths
+
+        prev_chr = None
+        prev_end = None
+        for _, row in df_orig.iterrows():
+            this_chr = row['chrom']
+            chrom_length = CHROMOSOME_LEN[this_chr]
+            this_start = max(1, row['start'])
+            this_end = min(row['end'], chrom_length)
+            if prev_chr is not None and row['chrom'] == prev_chr:
+                if this_start != prev_end:
+                    end[-1] = this_start
+
+            chr.append(this_chr)
+            start.append(this_start)
+            end.append(this_end)
+
+            prev_chr = this_chr
+            prev_end = this_end
+                
+        df = pd.DataFrame({'chrom': chr, 'start': start, 'end': end})
+        df.to_csv(gene_interval_path, sep='\t', index=False)
+    
+    df = pd.read_csv(gene_interval_path, sep='\t')
+    print(pop)
+    print(df.head(5))
+    print(df.shape)
+    return(df)
+
+
 def create_variant_bgen_split_intervals(pop, git_path, wdl_path, callrate_filter, min_ac,
                                         mean_impute_missing=True, use_drc_pop=True, encoding='additive', 
                                         limit=5000, n_cpu=8):
@@ -1058,7 +1154,7 @@ def generate_gene_boundries_via_vat(remove_cross_contig_genes=True, overwrite=Fa
 
 
 def get_overlapping_genes(pop, analysis_type, overwrite=False):
-    ht_gene_position = generate_gene_boundries_via_vat(overwrite=overwrite)
+    ht_gene_position = generate_gene_boundries_via_vat(overwrite=False)
 
     ht_gene_position_annot = ht_gene_position.repartition(20000)
     ht_gene_position_annot = ht_gene_position_annot.annotate(all_positions = hl.range(ht_gene_position_annot.min_pos, ht_gene_position_annot.max_pos))
@@ -1066,7 +1162,7 @@ def get_overlapping_genes(pop, analysis_type, overwrite=False):
     ht_gene_position_annot = ht_gene_position_annot.explode('all_positions')
     ht_gene_position_annot = ht_gene_position_annot.annotate(locus = hl.locus(ht_gene_position_annot.contig, ht_gene_position_annot.all_positions, reference_genome='GRCh38'))
     ht_gene_position_annot = ht_gene_position_annot.key_by('locus')
-    ht_gene_position_annot = ht_gene_position_annot.checkpoint(os.path.join(TEMP_PATH, 'ht_gene_position.ht'), _read_if_exists=not overwrite)
+    ht_gene_position_annot = ht_gene_position_annot.checkpoint(os.path.join(TEMP_PATH, 'ht_gene_position.ht'), _read_if_exists=True)
 
     ht_intervals = hl.Table.from_pandas(read_variant_intervals(GENO_PATH, pop, analysis_type))
     ht_intervals = ht_intervals.annotate(interval = hl.locus_interval(ht_intervals.chrom, ht_intervals.start, ht_intervals.end, reference_genome='GRCh38'))
