@@ -175,8 +175,8 @@ def get_processed_vat_path(annot_folder):
     return os.path.join(annot_folder, 'vat_processed_final.ht')
 
 
-def get_gene_annotation_path(annot_folder, chrom):
-    return os.path.join(annot_folder, f'formatted_exome_variant_consequence_lof_mis_syn_{chrom}.txt')
+def get_gene_annotation_path(annot_folder, chrom, pop):
+    return os.path.join(annot_folder, f'/gene_annotations/formatted_exome_variant_consequence_lof_mis_syn_{chrom}_{pop}.txt')
 
 
 # Genotypes
