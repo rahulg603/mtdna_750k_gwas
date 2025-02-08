@@ -315,6 +315,8 @@ task run_test {
                 exit 1
             fi
         fi
+        mv ~{output_prefix + ".result.txt"} ~{output_prefix + ".geneAssoc.txt"}
+        mv ~{output_prefix + ".result.txt.singleAssoc.txt"} ~{output_prefix + ".result.txt"}
     else
         touch ~{output_prefix + ".geneAssoc.txt"}
     fi

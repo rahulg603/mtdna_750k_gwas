@@ -1186,7 +1186,7 @@ def get_overlapping_genes(pop, analysis_type, overwrite=False):
 
 def generate_gene_group_files(pop, overwrite=False, use_canonical=False, min_cr=CALLRATE_CUTOFF):
     ht = generate_vat_ht(overwrite=False)
-    ht = ht.annotate(var_id = ht.contig.replace('chr','') + ':' + ht.position + ':' + ht.ref_allele + ':' + ht.alt_allele)
+    ht = ht.annotate(var_id = ht.contig + ':' + ht.position + ':' + ht.ref_allele + ':' + ht.alt_allele) #.replace('chr','')
 
     # load call rate table and remove variants with CR < 90%
     print(f'Prior to CR filtation, we have {str(ht.count())} records in pop {pop}.')
