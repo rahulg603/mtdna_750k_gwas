@@ -1020,10 +1020,10 @@ task merge {
 
     pheno_dct = pheno_str_to_dict('~{phenotype_id}')
     trait_type = SAIGE_PHENO_TYPES[pheno_dct['trait_type']]
-    result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', '~{encoding}')
-    pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
-    results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
-    results_files = get_results_files(results_prefix, '~{analysis_type}')
+    #result_dir = get_result_path(gs_output_path, '~{suffix}', '~{pop}', '~{encoding}')
+    #pheno_results_dir = get_pheno_output_path(result_dir, pheno_dct, '')
+    #results_prefix = get_results_prefix(pheno_results_dir, pheno_dct, chr)
+    #results_files = get_results_files(results_prefix, '~{analysis_type}')
 
     variant_ht, gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
     variant_ht_tmp, gene_ht_temp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)

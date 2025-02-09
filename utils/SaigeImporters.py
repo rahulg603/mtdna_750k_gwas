@@ -415,7 +415,7 @@ def get_results_files(results_pre, analysis_type):
     if analysis_type == 'variant':
         return f'{results_pre}.single_variant.txt', None, f'{results_pre}.log'
     else:
-        return f'{results_pre}.txt', f'{results_pre}.txt.singleAssoc.txt', f'{results_pre}.log'
+        return f'{results_pre}.singleAssoc.txt', f'{results_pre}.geneAssoc.txt', f'{results_pre}.log'
 
 
 def get_merged_ht_path(gs_output_path, suffix, pop, pheno_dct, encoding, gene_analysis=False):
@@ -731,7 +731,7 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
 
     print(f'Loading variant data...')
     ht = hl.import_table(paths, delimiter='\t', impute=True, min_partitions=300).checkpoint(temp_path, overwrite=True)
-   
+
     print(f'Case/control counts: {str(n_cases)} cases, {str(n_controls)} controls.')
     print(f'Heritability: {str(heritability)}.')
     print(f'Inverse normalized: {str(inv_normalized)}.')
