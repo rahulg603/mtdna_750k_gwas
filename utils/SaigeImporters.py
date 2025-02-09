@@ -769,8 +769,8 @@ def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
     saige_version = get_saige_version_from_log(null_log)
 
     print(f'Loading gene data ...')
-    types = {f'Nmarker_MACCate_{i}': hl.tint32 for i in range(1, 9)}
-    types.update({x: hl.tfloat64 for x in ('Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT', 'Pvalue_skato_NA', 'Pvalue_burden_NA', 'Pvalue_skat_NA')})
+    types = {x: hl.tfloat64 for x in ('Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT', 'BETA_Burden', 'SE_Burden')}
+    types.update({x: hl.int64 for x in ('Number_rare', 'Number_ultra_rare')})
     ht = hl.import_table(paths, delimiter=' ', impute=True, types=types)
     if n_cases == -1: n_cases = hl.null(hl.tint)
     if n_controls == -1: n_controls = hl.null(hl.tint)
@@ -778,15 +778,12 @@ def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
     if saige_version == 'NA': saige_version = hl.null(hl.tstr)
     if inv_normalized == 'NA': inv_normalized = hl.null(hl.tstr)
 
-    ht = ht.filter(hl.len(ht.Gene.split('_')) == 3)
-    fields = ht.Gene.split('_')
-    # gene_ht = hl.read_table(gene_ht_map_path).select('interval').distinct()
-    # ht = ht.key_by(gene_id=fields[0], gene_symbol=fields[1], annotation=fields[2],
-    #                **pheno_dict).drop('Gene').naive_coalesce(10).annotate_globals(
-    #     n_cases=n_cases, n_controls=n_controls, heritability=heritability, saige_version=saige_version, inv_normalized=inv_normalized)
-    # ht = ht.annotate(total_variants=hl.sum([v for k, v in list(ht.row_value.items()) if 'Nmarker' in k]),
-    #                  interval=gene_ht.key_by('gene_id')[ht.gene_id].interval)
-    ht = ht.checkpoint(output_ht_path, overwrite=True).drop('n_cases', 'n_controls')
+    ht = ht.transmute(gene_symbol = ht.Region, group = ht.Group)
+    gene_ht = hl.read_table(gene_ht_map_path).select('interval').distinct()
+    ht = ht.key_by(gene_symbol=ht.gene_symbol, group=ht.group, max_MAF=ht.max_MAF, **pheno_dict).drop('Gene').naive_coalesce(20).annotate_globals(
+        n_cases=n_cases, n_controls=n_controls, heritability=heritability, saige_version=saige_version, inv_normalized=inv_normalized)
+    ht = ht.checkpoint(output_ht_path, overwrite=True)
+    return ht
 
 
 def make_iteration_suffix(iteration):
