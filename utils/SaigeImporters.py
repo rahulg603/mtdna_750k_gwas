@@ -737,22 +737,30 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
     print(f'Inverse normalized: {str(inv_normalized)}.')
     print(f'Saige version: {str(saige_version)}.')
 
-    marker_id_col = 'markerID' if extension == 'single.txt' else 'MarkerID'
-    alleles = (ht[marker_id_col].split('_')[1]).split('/')
+    if extension == 'single.txt':
+        # this is common variant analysis
+        marker_id_col = 'markerID'  
+        alleles = (ht[marker_id_col].split('_')[1]).split('/')
+        ht = ht.key_by(locus=hl.locus(contig=ht[marker_id_col].split(':')[0], 
+                                      pos=hl.int32((ht[marker_id_col].split(':')[1]).split('_')[0]),
+                                      reference_genome='GRCh38'), 
+                       alleles=alleles,
+                       **pheno_dict).distinct().naive_coalesce(150)
+    else:
+        # this is rare analysis
+        marker_id_col = 'MarkerID'
+        ht = ht.key_by(gene_symbol=ht[marker_id_col].split(':')[0], 
+                       group=ht[marker_id_col].split(':')[1],
+                       max_MAF=ht[marker_id_col].split(':')[2],
+                       **pheno_dict).distinct().naive_coalesce(50)
+        ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
+
     if n_cases == -1: n_cases = hl.null(hl.tint)
     if n_controls == -1: n_controls = hl.null(hl.tint)
     if heritability == -1.0: heritability = hl.null(hl.tfloat)
     if saige_version == 'NA': saige_version = hl.null(hl.tstr)
     if inv_normalized == 'NA': inv_normalized = hl.null(hl.tstr)
-
-    ht = ht.key_by(locus=hl.locus(contig=ht[marker_id_col].split(':')[0], 
-                                  pos=hl.int32((ht[marker_id_col].split(':')[1]).split('_')[0]),
-                                  reference_genome='GRCh38'), 
-                   alleles=alleles,
-                   **pheno_dict).distinct().naive_coalesce(150)
     
-    if marker_id_col == 'MarkerID':
-        ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
     ht = ht.transmute(Pvalue=ht['p.value']).annotate_globals(
         n_cases=n_cases, n_controls=n_controls, heritability=heritability, saige_version=saige_version,
         inv_normalized=inv_normalized)
@@ -770,7 +778,7 @@ def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
 
     print(f'Loading gene data ...')
     types = {x: hl.tfloat64 for x in ('Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT', 'BETA_Burden', 'SE_Burden')}
-    types.update({x: hl.int64 for x in ('Number_rare', 'Number_ultra_rare')})
+    types.update({x: hl.tint64 for x in ('Number_rare', 'Number_ultra_rare')})
     ht = hl.import_table(paths, delimiter=' ', impute=True, types=types)
     if n_cases == -1: n_cases = hl.null(hl.tint)
     if n_controls == -1: n_controls = hl.null(hl.tint)
