@@ -779,7 +779,6 @@ def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
     if inv_normalized == 'NA': inv_normalized = hl.null(hl.tstr)
 
     ht = ht.transmute(gene_symbol = ht.Region, group = ht.Group)
-    gene_ht = hl.read_table(gene_ht_map_path).select('interval').distinct()
     ht = ht.key_by(gene_symbol=ht.gene_symbol, group=ht.group, max_MAF=ht.max_MAF, **pheno_dict).drop('Gene').naive_coalesce(20).annotate_globals(
         n_cases=n_cases, n_controls=n_controls, heritability=heritability, saige_version=saige_version, inv_normalized=inv_normalized)
     ht = ht.checkpoint(output_ht_path, overwrite=True)

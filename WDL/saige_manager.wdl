@@ -304,11 +304,21 @@ workflow saige_manager {
                     mem = mem_merge
             }
 
-            call saige_tools.upload as u2 {
-                input:
-                    paths = [merge.single_variant_flat_path],
-                    files = [merge.single_variant_flat_file],
-                    HailDocker = HailDocker
+            if (analysis_type == 'variant') {
+                call saige_tools.upload as u2_variant {
+                    input:
+                        paths = [merge.single_variant_flat_path],
+                        files = [merge.single_variant_flat_file],
+                        HailDocker = HailDocker
+                }
+            }
+            if (analysis_type == 'gene') {
+                call saige_tools.upload as u2_gene {
+                    input:
+                        paths = [merge.single_variant_flat_path, merge.gene_flat_path],
+                        files = [merge.single_variant_flat_file, merge.gene_flat_file],
+                        HailDocker = HailDocker
+                }
             }
         }
         
@@ -1051,15 +1061,18 @@ task merge {
     single_flat, gene_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
     with open('flat_path.txt', 'w') as f:
         f.write(single_flat)
+    with open('gene_flat_path.txt', 'w') as f:
+        f.write(gene_flat)
 
     if "~{analysis_type}" == "gene":
-        load_gene_data(output_ht_path=gene_ht,
-                       paths='~{sep="," gene_test_defined}'.split(','),
-                       extension='',
-                       trait_type=trait_type,
-                       pheno_dict=pheno_dct,
-                       null_log='~{null_log}',
-                       test_logs='~{sep="," test_logs}'.split(','))
+        ht_gene = load_gene_data(output_ht_path=gene_ht,
+                                 paths='~{sep="," gene_test_defined}'.split(','),
+                                 extension='',
+                                 trait_type=trait_type,
+                                 pheno_dict=pheno_dct,
+                                 null_log='~{null_log}',
+                                 test_logs='~{sep="," test_logs}'.split(','))
+        ht_gene.export('~{output_prefix + "_geneAssoc.tsv.bgz"}')
 
 
     CODE
@@ -1077,6 +1090,8 @@ task merge {
     output {
         File single_variant_flat_file = "/cromwell_root/" + output_prefix + ".tsv.bgz"
         String single_variant_flat_path = read_string('flat_path.txt')
+        File gene_flat_file = "/cromwell_root/" + output_prefix + "_geneAssoc.tsv.bgz"
+        String gene_flat_path = read_string('gene_flat_path.txt')
     }
 
 }
