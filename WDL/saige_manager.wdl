@@ -1058,7 +1058,7 @@ task merge {
                             low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20) | (ht.AN < (per_pop_N["~{pop}"] * 2 * ~{min_call_rate})))
         ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
     else:
-        ht_flat = ht_flat.key_by('gene_symbol', 'group', 'max_MAF').drop('trait_type', 'phenocode', 'pheno_sex', 'modifier')
+        ht_flat = ht.key_by('gene_symbol', 'group', 'max_MAF').drop('trait_type', 'phenocode', 'pheno_sex', 'modifier')
     
     ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
