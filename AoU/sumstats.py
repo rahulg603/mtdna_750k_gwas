@@ -334,6 +334,8 @@ def unify_saige_gene_ht_schema(ht, path, tmp, row_keys, col_keys):
     
     ht2 = ht.head(1)
     glob = ht2.aggregate(hl.agg.take(hl.struct(**{x: ht2[x] for x in col_keys}), 1)[0], _localize=False)
+    ht = ht.key_by()
+    ht = ht.annotate(max_MAF = hl.if_else(ht.group == 'Cauchy', 'NA', ht.max_MAF))
     ht = ht.key_by(*row_keys).drop(*col_keys).annotate_globals(**glob)
     
     ht = ht.checkpoint(os.path.join(tmp, 'gene_unified_schema_individual_tables', secrets.token_urlsafe(12), os.path.basename(os.path.dirname(path))))
