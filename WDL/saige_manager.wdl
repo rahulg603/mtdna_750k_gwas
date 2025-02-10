@@ -1071,7 +1071,6 @@ task merge {
     if "~{analysis_type}" == "gene":
         ht_gene = load_gene_data(output_ht_path=gene_ht,
                                  paths='~{sep="," gene_test_defined}'.split(','),
-                                 extension='',
                                  trait_type=trait_type,
                                  pheno_dict=pheno_dct,
                                  null_log='~{null_log}',
