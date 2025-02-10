@@ -779,7 +779,7 @@ def load_gene_data(output_ht_path, paths, trait_type, pheno_dict,
     print(f'Loading gene data ...')
     types = {x: hl.tfloat64 for x in ('Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT', 'BETA_Burden', 'SE_Burden')}
     types.update({x: hl.tint64 for x in ('Number_rare', 'Number_ultra_rare')})
-    ht = hl.import_table(paths, delimiter=' ', impute=True, types=types)
+    ht = hl.import_table(paths, delimiter='\t', impute=True, types=types)
     if n_cases == -1: n_cases = hl.null(hl.tint)
     if n_controls == -1: n_controls = hl.null(hl.tint)
     if heritability == -1.0: heritability = hl.null(hl.tfloat)
