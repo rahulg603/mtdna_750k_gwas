@@ -304,6 +304,44 @@ def unify_saige_ht_schema(ht, path, tmp, row_keys, col_keys):
     return ht
 
 
+def unify_saige_gene_ht_schema(ht, path, tmp, row_keys, col_keys):
+    """
+
+    :param Table ht:
+    :param str patch_case_control_count: Path to file (hack to get cases and controls back if loading later)
+    :return:
+    :rtype: Table
+    """
+    #assert ht.head(1).annotation.collect()[0] is None, f'failed at {patch_case_control_count}'
+
+    if 'AF_case' not in list(ht.row):
+        ht = ht.select('Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT', 'BETA_Burden', 'SE_Burden', 'MAC', 'Number_rare', 'Number_ultra_rare')
+    else:
+        raise NotImplementedError('ERROR: case/control RVAS importing is not yet implemented.')
+        ht = ht.rename({'Is.SPA': 'Is.SPA.converge', 'AF_case':'AF.Cases', 'AF_ctrl':'AF.Controls'})
+        ht = ht.annotate_globals(n_cases = ht.head(1).N_case.collect()[0], 
+                                 n_controls = ht.head(1).N_ctrl.collect()[0])
+        ht = ht.select('AC_Allele2', 'AF_Allele2', 'MissingRate', 
+                       **{'N': ht.N_case + ht.N_ctrl, 'BETA':ht.BETA, 'SE':ht.SE,
+                          'p.value.NA':ht['p.value.NA'], 'Is.SPA.converge':hl.null(hl.tint32),#'Is.SPA.converge':ht['Is.SPA.converge'], 
+                          'var':ht.var, 'AF.Cases':ht['AF.Cases'], 'AF.Controls':ht['AF.Controls'], 
+                          'Pvalue':ht.Pvalue, 'gene': hl.or_else(ht.gene, ''), 'annotation':hl.or_else(ht.annotation, '')})
+    
+    if 'heritability' not in list(ht.globals):
+        ht = ht.annotate_globals(heritability=hl.null(hl.tfloat64))
+    if 'saige_version' not in list(ht.globals):
+        ht = ht.annotate_globals(saige_version=hl.null(hl.tstr))
+    
+    ht2 = ht.head(1)
+    glob = ht2.aggregate(hl.agg.take(hl.struct(**{x: ht2[x] for x in col_keys}), 1)[0], _localize=False)
+    ht = ht.key_by(*row_keys).drop(*col_keys).annotate_globals(**glob)
+    
+    ht = ht.checkpoint(os.path.join(tmp, 'gene_unified_schema_individual_tables', secrets.token_urlsafe(12), os.path.basename(os.path.dirname(path))))
+    
+    return ht
+
+
+
 def saige_apply_qc(mt, filter_sumstats, this_pop_N: int, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
                    min_call_rate: float = CALLRATE_CUTOFF):
     
@@ -327,11 +365,18 @@ def saige_apply_qc(mt, filter_sumstats, this_pop_N: int, case_ac_threshold: int 
     )
 
 
-def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_mode, checkpoint, n_partitions):
-    row_keys = ['locus', 'alleles', 'gene', 'annotation']
+def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_mode, checkpoint, n_partitions, gene_analysis):
+    
     col_keys = PHENO_KEY_FIELDS
-
-    all_hts = [unify_saige_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
+    
+    if gene_analysis:        
+        row_keys = ['locus', 'alleles', 'gene', 'annotation']
+        all_hts = [unify_saige_gene_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
+    
+    else:
+        row_keys = ['locus', 'alleles', 'gene', 'annotation']
+        all_hts = [unify_saige_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
+    
     print('Schemas unified. Starting joining...')
 
     mt = mwzj_hts_by_tree(all_hts, temp_dir, col_keys, debug=True,
@@ -350,9 +395,14 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     if mt.inv_normalized.dtype == hl.tstr:
         mt = mt.annotate_cols(inv_normalized=hl.bool(mt.inv_normalized))
     key = mt.col_key.annotate(phenocode=format_pheno_dir(mt.phenocode))
-    mt = mt.filter_cols(mt.phenocode != "").drop('AC_Allele2', 'Is.SPA.converge')
 
-    mt = mt.key_rows_by('locus', 'alleles')
+    if gene_analysis:
+        mt = mt.filter_cols(mt.phenocode != "")
+        mt = mt.key_rows_by('gene_symbol', 'group', 'max_MAF')
+    else:
+        mt = mt.filter_cols(mt.phenocode != "").drop('AC_Allele2', 'Is.SPA.converge')
+        mt = mt.key_rows_by('locus', 'alleles')
+    
     print('Prior to output schema...')
     mt.describe()
     
@@ -378,7 +428,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
         print(f'For {suffix}, pop {pop}, {encoding}, found {str(hl.len(pheno_dict).collect()[0])} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
 
         if len(all_variant_outputs) > 0:
-            mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/variant', inner_mode=inner_mode, checkpoint=True, n_partitions=n_partitions)
+            mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/variant', inner_mode=inner_mode, checkpoint=True, n_partitions=n_partitions, gene_analysis=gene_analysis)
             mt.write(merged_mt_path, overwrite=overwrite)
 
     return None

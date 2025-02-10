@@ -843,14 +843,13 @@ def get_hail_pheno_dict(gs_phenotype_path, suffix):
 
 def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis=False, sex_stratified=''):
     items = [x['path'] for x in hl.hadoop_ls(get_result_path(gs_output_path, suffix, pop=pop, encoding=encoding)) if x['is_dir']]
-    
-    if gene_analysis:
-        raise NotImplementedError('ERROR: gene_analysis is not supported in ht merging yet.')
 
     paths_list = []
     for item in items:
         this_pheno_dict = pheno_str_to_dict(os.path.basename(item))
         this_ht, this_ht_gene = get_merged_ht_path(gs_output_path, suffix, pop, this_pheno_dict, encoding=encoding, gene_analysis=gene_analysis)
+        if gene_analysis:
+            this_ht = this_ht_gene
         if hl.hadoop_exists(os.path.join(this_ht, '_SUCCESS')):
             paths_list.append(this_ht)
 
