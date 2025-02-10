@@ -1037,25 +1037,29 @@ task merge {
                            null_log='~{null_log}',
                            test_logs='~{sep="," test_logs}'.split(','))
 
-    # now importing call stats
-    path_stats = get_call_stats_ht_path(gs_genotype_path, pop="~{pop}", 
-                                        analysis_type="~{analysis_type}", 
-                                        sample_qc=sample_qc_tf, 
-                                        use_drc_pop=drc_tf, 
-                                        use_array_for_variant=False)
-    ht_stats = hl.read_table(path_stats)
-    n_samp_vec_path = get_n_samples_per_pop_path(gs_genotype_path, 
-                                                 analysis_type="~{analysis_type}", 
-                                                 sample_qc=sample_qc_tf, 
-                                                 use_drc_pop=drc_tf,
-                                                 use_array_for_variant=False)
-    per_pop_N = {x['pop']: x.N for _, x in hl.import_table(n_samp_vec_path, impute=True).to_pandas().iterrows()}
-    ht = ht.annotate(AN = ht_stats[ht.locus, ht.alleles].call_stats.AN)
+    if "~{analysis_type}" == "variant":
+        # now importing call stats
+        path_stats = get_call_stats_ht_path(gs_genotype_path, pop="~{pop}", 
+                                            analysis_type="~{analysis_type}", 
+                                            sample_qc=sample_qc_tf, 
+                                            use_drc_pop=drc_tf, 
+                                            use_array_for_variant=False)
+        ht_stats = hl.read_table(path_stats)
+        n_samp_vec_path = get_n_samples_per_pop_path(gs_genotype_path, 
+                                                    analysis_type="~{analysis_type}", 
+                                                    sample_qc=sample_qc_tf, 
+                                                    use_drc_pop=drc_tf,
+                                                    use_array_for_variant=False)
+        per_pop_N = {x['pop']: x.N for _, x in hl.import_table(n_samp_vec_path, impute=True).to_pandas().iterrows()}
+        ht = ht.annotate(AN = ht_stats[ht.locus, ht.alleles].call_stats.AN)
 
-    ht_flat = ht.annotate(variant = ht.locus.contig + ':' + hl.str(ht.locus.position) + ':' + hl.str(':').join(ht.alleles),
-                          chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
-                          low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20) | (ht.AN < (per_pop_N["~{pop}"] * 2 * ~{min_call_rate})))
-    ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
+        ht_flat = ht.annotate(variant = ht.locus.contig + ':' + hl.str(ht.locus.position) + ':' + hl.str(':').join(ht.alleles),
+                            chr = ht.locus.contig, pos = ht.locus.position, ref = ht.alleles[0], alt = ht.alleles[1],
+                            low_confidence = (ht.AC_Allele2 < 20) | ((ht.N - ht.AC_Allele2) < 20) | (ht.AN < (per_pop_N["~{pop}"] * 2 * ~{min_call_rate})))
+        ht_flat = ht_flat.key_by('variant').drop('locus', 'alleles', 'trait_type', 'phenocode', 'pheno_sex', 'modifier')
+    else:
+        ht_flat = ht_flat.key_by('gene_symbol', 'group', 'max_MAF').drop('trait_type', 'phenocode', 'pheno_sex', 'modifier')
+    
     ht_flat.export('~{output_prefix + ".tsv.bgz"}')
 
     single_flat, gene_flat = get_merged_flat_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
