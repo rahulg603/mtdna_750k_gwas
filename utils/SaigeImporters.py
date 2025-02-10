@@ -875,7 +875,7 @@ def get_ukb_b37_b38_liftover():
 
 
 def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_mode = 'overwrite',
-                     repartition_final: int = None):
+                     repartition_final: int = None, gene_analysis=False):
 
 
     def get_n_even_intervals(n):
@@ -892,7 +892,7 @@ def mwzj_hts_by_tree(all_hts, temp_dir, globals_for_col_key, debug=False, inner_
     outer_hts = []
 
     checkpoint_kwargs = {inner_mode: True}
-    if repartition_final is not None:
+    if repartition_final is not None and not gene_analysis:
         intervals = get_n_even_intervals(repartition_final)
         checkpoint_kwargs['_intervals'] = intervals
 
