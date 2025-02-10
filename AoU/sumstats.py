@@ -428,7 +428,7 @@ def saige_merge_raw_sumstats(suffix, encoding, use_drc_pop, use_custom_pcs, pops
         print(f'For {suffix}, pop {pop}, {encoding}, found {str(hl.len(pheno_dict).collect()[0])} phenos with {str(len(all_variant_outputs))} valid per-pheno HTs.')
 
         if len(all_variant_outputs) > 0:
-            mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/{'variant' if not gene_analysis else 'gene'}', 
+            mt = saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir=f'{TEMP_PATH}/{suffix}/{encoding}/{pop}/{"variant" if not gene_analysis else "gene"}', 
                                             inner_mode=inner_mode, checkpoint=True, n_partitions=n_partitions, gene_analysis=gene_analysis)
             mt.write(merged_mt_path, overwrite=overwrite)
 
