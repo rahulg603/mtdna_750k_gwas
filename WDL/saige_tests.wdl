@@ -280,7 +280,7 @@ task run_test {
 
         if results_files[1] is not None:
             headers = ['Region', 'Group', 'max_MAF', 'Pvalue', 'Pvalue_Burden', 'Pvalue_SKAT',
-                       'BETA_Burden', 'SE_Burden', 'MAC', 'Number_rare', 'Number_ultra_rare', 'contig']
+                       'BETA_Burden', 'SE_Burden', 'MAC', 'Number_rare', 'Number_ultra_rare']
 
             df = pd.DataFrame({x: [] for x in headers})
             df.to_csv('~{output_prefix}' + '.geneAssoc.txt', sep='\t', index=None)
