@@ -304,18 +304,18 @@ task run_test {
     ls -lh
 
     if [[ "~{analysis_type}" == 'gene' ]]; then
-        input_length=$(wc -l ~{group_file} | awk '{{print $1}}')
-        output_length=$(wc -l ~{output_prefix + ".result.txt"} | awk '{{print $1}}')
-        echo 'Got input:' $input_length 'output:' $output_length | tee -a ~{output_prefix + '.log'}
-        if [[ $input_length > 0 ]]; then 
-            echo 'got input' | tee -a ~{output_prefix + '.log'}
-            if [[ $output_length == 1 ]]; then 
-                echo 'but not enough output' | tee -a ~{output_prefix + '.log'}
-                rm -f ~{output_prefix + '.gene'} 
-                exit 1
+        if [[ $(cat /app/var_ct.txt) != 0 ]]; then
+            input_length=$(wc -l ~{group_file} | awk '{{print $1}}')
+            output_length=$(wc -l ~{output_prefix + ".result.txt"} | awk '{{print $1}}')
+            echo 'Got input:' $input_length 'output:' $output_length | tee -a ~{output_prefix + '.log'}
+            if [[ $input_length > 0 ]]; then 
+                echo 'got input' | tee -a ~{output_prefix + '.log'}
+                if [[ $output_length == 1 ]]; then 
+                    echo 'but not enough output' | tee -a ~{output_prefix + '.log'}
+                    rm -f ~{output_prefix + '.gene'} 
+                    exit 1
+                fi
             fi
-        fi
-        if [ -f ~{output_prefix + ".result.txt.singleAssoc.txt"} ]; then
             mv ~{output_prefix + ".result.txt"} ~{output_prefix + ".geneAssoc.txt"}
             mv ~{output_prefix + ".result.txt.singleAssoc.txt"} ~{output_prefix + ".result.txt"}
         fi
