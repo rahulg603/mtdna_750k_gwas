@@ -749,9 +749,14 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
     else:
         # this is rare analysis
         marker_id_col = 'MarkerID'
-        ht = ht.key_by(gene_symbol=ht[marker_id_col].split(':')[0], 
-                       group=ht[marker_id_col].split(':')[1],
-                       max_MAF=ht[marker_id_col].split(':')[2],
+        cond = ht.CHR == 'UR'
+        ht = ht.key_by(gene_symbol=hl.or_missing(cond, ht[marker_id_col].split(':')[0]), 
+                       group=hl.or_missing(cond, ht[marker_id_col].split(':')[1]),
+                       max_MAF=hl.or_missing(cond, ht[marker_id_col].split(':')[2]),
+                       locus=hl.or_missing(~cond, hl.locus(contig=ht[marker_id_col].split(':')[0], 
+                                                           pos=hl.int32((ht[marker_id_col].split(':')[1]).split('_')[0]),
+                                                           reference_genome='GRCh38')), 
+                       alleles=hl.or_missing(~cond, (ht[marker_id_col].split('_')[1]).split('/')),
                        **pheno_dict).distinct().naive_coalesce(50)
         ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
 
