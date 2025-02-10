@@ -370,7 +370,7 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
     col_keys = PHENO_KEY_FIELDS
     
     if gene_analysis:        
-        row_keys = ['locus', 'alleles', 'gene', 'annotation']
+        row_keys = ['gene_symbol', 'group', 'max_MAF']
         all_hts = [unify_saige_gene_ht_schema(hl.read_table(x), x, temp_dir, row_keys, col_keys) for x in tqdm(all_variant_outputs)]
     
     else:
