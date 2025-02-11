@@ -8,7 +8,7 @@ from copy import deepcopy
 ######### CONSTANTS ##########
 PHENO_KEY_FIELDS = ('trait_type', 'phenocode', 'pheno_sex', 'modifier')
 GENE_COL_KEY_FIELDS = ('group', 'max_MAF')
-GENE_ROW_KEY_FIELDS = ['gene']
+GENE_ROW_KEY_FIELDS = ['gene_symbol']
 MIN_CASES = 50
 CHROMOSOMES = ['chr' + x for x in list(map(str, range(1, 23))) + ['X', 'Y']]
 AUTOSOMES = ['chr' + x for x in list(map(str, range(1, 23)))]
