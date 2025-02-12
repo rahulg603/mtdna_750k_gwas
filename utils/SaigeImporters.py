@@ -741,7 +741,7 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
 
     if extension == 'single.txt':
         # this is common variant analysis
-        marker_id_col = 'markerID'  
+        marker_id_col = 'MarkerID'  
         alleles = (ht[marker_id_col].split('_')[1]).split('/')
         ht = ht.key_by(locus=hl.locus(contig=ht[marker_id_col].split(':')[0], 
                                       pos=hl.int32((ht[marker_id_col].split(':')[1]).split('_')[0]),
