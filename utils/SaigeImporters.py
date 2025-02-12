@@ -760,7 +760,8 @@ def load_variant_data(output_ht_path, temp_path, paths, extension, trait_type, p
                                                            reference_genome='GRCh38')), 
                        alleles=hl.or_missing(~cond, (ht[marker_id_col].split('_')[1]).split('/')),
                        **pheno_dict).distinct().naive_coalesce(50)
-        ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
+    
+    ht = ht.drop('CHR', 'POS', 'MarkerID', 'Allele1', 'Allele2')
 
     if n_cases == -1: n_cases = hl.null(hl.tint)
     if n_controls == -1: n_controls = hl.null(hl.tint)
