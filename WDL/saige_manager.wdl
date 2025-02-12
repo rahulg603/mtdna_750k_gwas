@@ -1081,6 +1081,10 @@ task merge {
 
     CODE
 
+    if [[ "~{analysis_type}" != 'gene' ]]; then
+        touch '~{output_prefix + "_geneAssoc.tsv.bgz"}'
+    fi
+
     >>>
 
     runtime {
