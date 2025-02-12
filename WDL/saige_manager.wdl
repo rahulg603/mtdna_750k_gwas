@@ -1028,10 +1028,15 @@ task merge {
     variant_ht, gene_ht = get_merged_ht_path(gs_output_path, "~{suffix}", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
     variant_ht_tmp, gene_ht_temp = get_merged_ht_path(gs_temp_path, "~{suffix}_temp", "~{pop}", pheno_dct, '~{encoding}', gene_analysis=gene_analysis)
 
+    if "~{analysis_type}" == "variant":
+        extension = 'single.txt'
+    else:
+        extension = ''
+
     ht = load_variant_data(output_ht_path=variant_ht,
                            temp_path=variant_ht_tmp,
                            paths='~{sep="," single_test}'.split(','),
-                           extension='',
+                           extension=extension,
                            trait_type=trait_type,
                            pheno_dict=pheno_dct,
                            null_log='~{null_log}',
