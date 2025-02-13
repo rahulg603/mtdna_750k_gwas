@@ -171,7 +171,8 @@ task run_export {
     meta_fields += ['BETA','SE','Pvalue','Pvalue_het', 'N']
     fields += ['BETA','SE','Pvalue','low_confidence']
 
-    pop_list = sorted(mt.pheno_data.pop.collect()[0])
+    pop_tuples = mt.annotate_cols(pop_idx = hl.enumerate(mt.pheno_data.pop)).pop_idx.collect()[0]
+    pop_list = [x[1] for x in sorted(pop_tuples, key=lambda x: x[0])]
     annotate_dict = {}
     annotate_dict.update({'chr': mt.locus.contig,
                           'pos': mt.locus.position,
