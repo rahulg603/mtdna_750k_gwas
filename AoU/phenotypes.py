@@ -6,7 +6,10 @@ import subprocess
 import os, re
 
 from AoU.paths import *
-VARIANT_BLACKLIST = ['chrM:12705:C,T', 'chrM:12684:G,A']
+VARIANT_BLACKLIST = ['chrM:12705:C,T', 'chrM:12684:G,A', 
+                     'chrM:11467:A,G', 'chrM:13062:A,G', 'chrM:13095:T,C']
+
+# in any pop, increased by >10x and with a count >20
 
 def get_final_annotated_variant_path(version):
     if version == 'v6':
@@ -344,7 +347,8 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         ht_stats = hl.import_table(get_final_sample_stats_flat_path(version=version), impute=True).select('s','nuc_mean_coverage')
         ht_stats = ht_stats.annotate(s = hl.str(ht_stats.s))
         ht_stats = ht_stats.transmute(pois_cutoff = hl.qpois(0.95, ht_stats.nuc_mean_coverage),
-                                      pois_cutoff975 = hl.qpois(0.975, ht_stats.nuc_mean_coverage)).key_by('s')
+                                      pois_cutoff975 = hl.qpois(0.975, ht_stats.nuc_mean_coverage),
+                                      pois_cutoff99 = hl.qpois(0.99, ht_stats.nuc_mean_coverage)).key_by('s')
 
         bp_compl = hl.literal({'C': 'G', 'G': 'C', 'T': 'A', 'A': 'T'})
         mt_snv_class = mt_snv_class.annotate_rows(allele_compl = [bp_compl[mt_snv_class.alleles[0]], bp_compl[mt_snv_class.alleles[1]]])
@@ -356,7 +360,8 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         mt_snv_class_f = mt_snv_class.filter_rows((mt_snv_class.variant_class == 'T>C') | ((mt_snv_class.variant_class == 'C>T') & (mt_snv_class.strand == 'heavy')))
         mt_snv_class_f = mt_snv_class_f.drop('allele_compl')
         mt_snv_class_f = mt_snv_class_f.annotate_cols(pois_cutoff = ht_stats[mt_snv_class_f.col_key].pois_cutoff,
-                                                      pois_cutoff975 = ht_stats[mt_snv_class_f.col_key].pois_cutoff975)
+                                                      pois_cutoff975 = ht_stats[mt_snv_class_f.col_key].pois_cutoff975,
+                                                      pois_cutoff99 = ht_stats[mt_snv_class_f.col_key].pois_cutoff99)
 
         ht_snv_age_accum = mt_snv_class_f.entries()
         ht_snv_age_accum = ht_snv_age_accum.annotate(variant = ht_snv_age_accum.locus.contig + ':' + hl.str(ht_snv_age_accum.locus.position) + ':' + hl.str(',').join(ht_snv_age_accum.alleles))
@@ -389,7 +394,10 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
                                                             snv_ADpois95_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff)),
                                                             snv_ADpois95_invHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 / ht_snv_age_accum.HL)),
                                                             snv_ADpois95_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois975_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975), hl.agg.sum(1 - ht_snv_age_accum.HL))).select_globals()
+                                                            snv_ADpois975_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975), hl.agg.sum(1 - ht_snv_age_accum.HL)),
+                                                            snv_ADpois975_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99)),
+                                                            snv_ADpois99_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975), hl.agg.sum(1 - ht_snv_age_accum.HL)),
+                                                            snv_ADpois99_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99))).select_globals()
         ht_snv_age_accum_count = ht_snv_age_accum_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_snv_age_accum_count.snv_meanHL), 0, ht_snv_age_accum_count.snv_meanHL))
         ht_snv_age_accum_count = ht_snv_age_accum_count.checkpoint(get_final_munged_snvcount_age_accum_path(version, HL), overwrite=True)
         ht_snv_age_accum_count.export(get_final_munged_snvcount_age_accum_path(version, HL, 'tsv'))
