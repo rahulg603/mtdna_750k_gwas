@@ -425,21 +425,24 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         print('PLEASE NOTE: a ton of phenotypes will be generated. Please subset to the desired traits for analysis.')
         ht_snv_age_accum_count = _generate_all_traits(ht_snv_age_accum, HL=HL)
         ht_snv_age_accum_count = ht_snv_age_accum_count.rename({x: f'{x}_nosnvrm' for x in ht_snv_age_accum_count.row if x not in ht_snv_age_accum_count.key})
+        ht_snv_age_accum_count = ht_snv_age_accum_count.checkpoint(os.path.join(TEMP_PATH, 'ht_snv_age.ht'), overwrite=True)
 
         ht_snv_age_accum_f = ht_snv_age_accum.filter(~hl.literal(VARIANT_BLACKLIST).contains(ht_snv_age_accum.variant))
         ht_snv_age_accum_count_f = _generate_all_traits(ht_snv_age_accum_f, HL=HL)
+        ht_snv_age_accum_count_f = ht_snv_age_accum_count_f.checkpoint(os.path.join(TEMP_PATH, 'ht_snv_age_filt.ht'), overwrite=True)
 
         print('Generating phenotypes without CHIP individuals...')
         chip_data = load_chip_data()
         chip_data = chip_data.filter(chip_data.hasCH != 0)
         ht_snv_age_accum_nochip = mt_snv_class_f.anti_join_cols(chip_data).entries()
         ht_snv_age_accum_f_nochip = ht_snv_age_accum_nochip.filter(~hl.literal(VARIANT_BLACKLIST).contains(ht_snv_age_accum_nochip.variant))
-        ht_snv_age_accum_f_nochip = _generate_all_traits(ht_snv_age_accum_f_nochip, HL=HL)
-        ht_snv_age_accum_f_nochip = ht_snv_age_accum_f_nochip.rename({x: f'{x}_nochip' for x in ht_snv_age_accum_f_nochip.row if x not in ht_snv_age_accum_f_nochip.key})
+        ht_snv_age_accum_count_f_nochip = _generate_all_traits(ht_snv_age_accum_f_nochip, HL=HL)
+        ht_snv_age_accum_count_f_nochip = ht_snv_age_accum_count_f_nochip.rename({x: f'{x}_nochip' for x in ht_snv_age_accum_count_f_nochip.row if x not in ht_snv_age_accum_count_f_nochip.key})
+        ht_snv_age_accum_count_f_nochip = ht_snv_age_accum_count_f_nochip.checkpoint(os.path.join(TEMP_PATH, 'ht_snv_age_filt_nochip.ht'), overwrite=True)
 
         print('Combining all traits...')
         ht_snv_age_accum_count_final = ht_snv_age_accum_count_f.annotate(**ht_snv_age_accum_count[ht_snv_age_accum_count_f.key],
-                                                                         **ht_snv_age_accum_f_nochip[ht_snv_age_accum_count_f.key])
+                                                                         **ht_snv_age_accum_count_f_nochip[ht_snv_age_accum_count_f.key])
         ht_snv_age_accum_count_final = ht_snv_age_accum_count_final.checkpoint(get_final_munged_snvcount_age_accum_path(version, HL), overwrite=True)
         ht_snv_age_accum_count_final.export(get_final_munged_snvcount_age_accum_path(version, HL, 'tsv'))
     
