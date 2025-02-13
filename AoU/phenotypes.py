@@ -343,36 +343,39 @@ def get_snv_count_by_class(version, overwrite=False):
 
 def get_annotated_snvs(version, HL, overwrite=False):
     if hl.hadoop_exists(f'{get_final_munged_snv_variant_path(version, HL)}/_SUCCESS') and not overwrite:
-        mt_snv_class_f = hl.read_matrix_table(get_final_munged_snv_variant_path(version, HL))
+        mt_snv_class = hl.read_matrix_table(get_final_munged_snv_variant_path(version, HL))
     
     else:
         mt = hl.read_matrix_table(get_final_annotated_variant_mt_path('v6andv7'))
-        mt_snv_class = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
-
-        ht_stats = hl.import_table(get_final_sample_stats_flat_path(version=version), impute=True).select('s','nuc_mean_coverage')
-        ht_stats = ht_stats.annotate(s = hl.str(ht_stats.s))
-        ht_stats = ht_stats.transmute(pois_cutoff = hl.qpois(0.95, ht_stats.nuc_mean_coverage),
-                                      pois_cutoff975 = hl.qpois(0.975, ht_stats.nuc_mean_coverage),
-                                      pois_cutoff99 = hl.qpois(0.99, ht_stats.nuc_mean_coverage)).key_by('s')
-
         bp_compl = hl.literal({'C': 'G', 'G': 'C', 'T': 'A', 'A': 'T'})
+
+        # add variant class and location annotations
+        mt_snv_class = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1])).select_cols()
         mt_snv_class = mt_snv_class.annotate_rows(allele_compl = [bp_compl[mt_snv_class.alleles[0]], bp_compl[mt_snv_class.alleles[1]]])
         mt_snv_class = mt_snv_class.annotate_rows(location = hl.if_else((mt_snv_class.locus.position > 16172) | (mt_snv_class.locus.position < 210), 'Ori (16172-210)', 'Other region'))
         mt_snv_class = mt_snv_class.annotate_rows(variant_class = hl.if_else(hl.literal(['C','T']).contains(mt_snv_class.alleles[0]), 
                                                                             mt_snv_class.alleles[0] + '>' + mt_snv_class.alleles[1],
                                                                             mt_snv_class.allele_compl[0] + '>' + mt_snv_class.allele_compl[1]),
                                                   strand = hl.if_else(hl.literal(['C','T']).contains(mt_snv_class.alleles[0]), 'light', 'heavy'))
-        mt_snv_class_f = mt_snv_class.filter_rows((mt_snv_class.variant_class == 'T>C') | ((mt_snv_class.variant_class == 'C>T') & (mt_snv_class.strand == 'heavy')))
-        mt_snv_class_f = mt_snv_class_f.drop('allele_compl')
-        mt_snv_class_f = mt_snv_class_f.annotate_cols(pois_cutoff = ht_stats[mt_snv_class_f.col_key].pois_cutoff,
-                                                      pois_cutoff975 = ht_stats[mt_snv_class_f.col_key].pois_cutoff975,
-                                                      pois_cutoff99 = ht_stats[mt_snv_class_f.col_key].pois_cutoff99)
-        mt_snv_class_f = mt_snv_class_f.annotate_rows(variant = mt_snv_class_f.locus.contig + ':' + \
-                                                                hl.str(mt_snv_class_f.locus.position) + ':' + \
-                                                                hl.str(',').join(mt_snv_class_f.alleles))
-        mt_snv_class_f = mt_snv_class_f.checkpoint(get_final_munged_snv_variant_path(version, HL), overwrite=True)
+        mt_snv_class = mt_snv_class.drop('allele_compl')
+        mt_snv_class = mt_snv_class.annotate_rows(variant = mt_snv_class.locus.contig + ':' + \
+                                                                hl.str(mt_snv_class.locus.position) + ':' + \
+                                                                hl.str(',').join(mt_snv_class.alleles))
+
+        # add poisson-based cutoffs
+        ht_stats = hl.import_table(get_final_sample_stats_flat_path(version=version), impute=True).select('s','nuc_mean_coverage')
+        ht_stats = ht_stats.annotate(s = hl.str(ht_stats.s))
+        ht_stats = ht_stats.transmute(pois_cutoff = hl.qpois(0.95, ht_stats.nuc_mean_coverage),
+                                      pois_cutoff975 = hl.qpois(0.975, ht_stats.nuc_mean_coverage),
+                                      pois_cutoff99 = hl.qpois(0.99, ht_stats.nuc_mean_coverage)).key_by('s')
+        mt_snv_class = mt_snv_class.annotate_cols(pois_cutoff = ht_stats[mt_snv_class.col_key].pois_cutoff,
+                                                  pois_cutoff975 = ht_stats[mt_snv_class.col_key].pois_cutoff975,
+                                                  pois_cutoff99 = ht_stats[mt_snv_class.col_key].pois_cutoff99)
+        
+        # save
+        mt_snv_class = mt_snv_class.checkpoint(get_final_munged_snv_variant_path(version, HL), overwrite=True)
     
-    return mt_snv_class_f
+    return mt_snv_class
 
 
 def get_age_accumulating_snv_count(version, HL, overwrite=False):
@@ -380,7 +383,9 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         ht_snv_age_accum_count = hl.read_table(get_final_munged_snvcount_age_accum_path(version, HL))
     
     else:
-        mt_snv_class_f = get_annotated_snvs(version, HL, overwrite)
+        mt_snv_class = get_annotated_snvs(version, HL, overwrite)
+        mt_snv_class_f = mt_snv_class.filter_rows((mt_snv_class.variant_class == 'T>C') | ((mt_snv_class.variant_class == 'C>T') & (mt_snv_class.strand == 'heavy')))
+        mt_snv_class_f = mt_snv_class_f.filter_rows(mt_snv_class_f.location != 'Ori (16172-210)')
         ht_snv_age_accum = mt_snv_class_f.entries()
 
         # sanity checks
