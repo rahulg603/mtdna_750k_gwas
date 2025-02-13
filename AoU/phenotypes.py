@@ -6,10 +6,10 @@ import subprocess
 import os, re
 
 from AoU.paths import *
+
+# in any pop, increased by >10x and with a count >30
 VARIANT_BLACKLIST = ['chrM:12705:C,T', 'chrM:12684:G,A', 
                      'chrM:11467:A,G', 'chrM:13062:A,G', 'chrM:13095:T,C']
-
-# in any pop, increased by >10x and with a count >20
 
 def get_final_annotated_variant_path(version):
     if version == 'v6':
@@ -38,6 +38,11 @@ def get_final_munged_case_only_hl_path(num_to_keep, type, version):
         return base_path + f'case_only_calls_low_hl_fullqc_N_{str(num_to_keep)}.ht'
     elif type == 'tsv':
         return base_path + f'case_only_calls_low_hl_fullqc_long_format_N_{str(num_to_keep)}.tsv'
+
+
+def get_final_munged_snv_variant_path(version, HL):
+    base_path = os.path.join(BUCKET, f'munged_mtdna_callsets/{version}/munged/')
+    return base_path + f'heteroplasmic_snv_count_annotated_fullqc_{str(HL)}.mt'
 
 
 def get_final_munged_snvcount_path(version, extension='ht'):
@@ -336,9 +341,9 @@ def get_snv_count_by_class(version, overwrite=False):
     return ht_wide_snv_count
 
 
-def get_age_accumulating_snv_count(version, HL, overwrite=False):
-    if hl.hadoop_exists(f"{get_final_munged_snvcount_age_accum_path(version, HL)}/_SUCCESS") and not overwrite:
-        ht_snv_age_accum_count = hl.read_table(get_final_munged_snvcount_age_accum_path(version, HL))
+def get_annotated_snvs(version, HL, overwrite=False):
+    if hl.hadoop_exists(f'{get_final_munged_snv_variant_path(version, HL)}/_SUCCESS') and not overwrite:
+        mt_snv_class_f = hl.read_matrix_table(get_final_munged_snv_variant_path(version, HL))
     
     else:
         mt = hl.read_matrix_table(get_final_annotated_variant_mt_path('v6andv7'))
@@ -352,7 +357,7 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
 
         bp_compl = hl.literal({'C': 'G', 'G': 'C', 'T': 'A', 'A': 'T'})
         mt_snv_class = mt_snv_class.annotate_rows(allele_compl = [bp_compl[mt_snv_class.alleles[0]], bp_compl[mt_snv_class.alleles[1]]])
-        mt_snv_class = mt_snv_class.annotate_rows(location = hl.if_else((mt_snv_class.locus.position > 16172) | (mt_snv_class.locus.position < 210), 'Ori (16172-200)', 'Other region'))
+        mt_snv_class = mt_snv_class.annotate_rows(location = hl.if_else((mt_snv_class.locus.position > 16172) | (mt_snv_class.locus.position < 210), 'Ori (16172-210)', 'Other region'))
         mt_snv_class = mt_snv_class.annotate_rows(variant_class = hl.if_else(hl.literal(['C','T']).contains(mt_snv_class.alleles[0]), 
                                                                             mt_snv_class.alleles[0] + '>' + mt_snv_class.alleles[1],
                                                                             mt_snv_class.allele_compl[0] + '>' + mt_snv_class.allele_compl[1]),
@@ -362,9 +367,21 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         mt_snv_class_f = mt_snv_class_f.annotate_cols(pois_cutoff = ht_stats[mt_snv_class_f.col_key].pois_cutoff,
                                                       pois_cutoff975 = ht_stats[mt_snv_class_f.col_key].pois_cutoff975,
                                                       pois_cutoff99 = ht_stats[mt_snv_class_f.col_key].pois_cutoff99)
+        mt_snv_class_f = mt_snv_class_f.annotate_rows(variant = mt_snv_class_f.locus.contig + ':' + \
+                                                                hl.str(mt_snv_class_f.locus.position) + ':' + \
+                                                                hl.str(',').join(mt_snv_class_f.alleles))
+        mt_snv_class_f = mt_snv_class_f.checkpoint(get_final_munged_snv_variant_path(version, HL))
+    
+    return mt_snv_class_f
 
+
+def get_age_accumulating_snv_count(version, HL, overwrite=False):
+    if hl.hadoop_exists(f"{get_final_munged_snvcount_age_accum_path(version, HL)}/_SUCCESS") and not overwrite:
+        ht_snv_age_accum_count = hl.read_table(get_final_munged_snvcount_age_accum_path(version, HL))
+    
+    else:
+        mt_snv_class_f = get_annotated_snvs(version, HL, overwrite)
         ht_snv_age_accum = mt_snv_class_f.entries()
-        ht_snv_age_accum = ht_snv_age_accum.annotate(variant = ht_snv_age_accum.locus.contig + ':' + hl.str(ht_snv_age_accum.locus.position) + ':' + hl.str(',').join(ht_snv_age_accum.alleles))
 
         # sanity checks
         # ht_this = ht_snv_age_accum.filter(ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff)
