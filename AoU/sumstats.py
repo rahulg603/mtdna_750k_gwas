@@ -75,7 +75,7 @@ def _run_stouffers_meta(mt, p_col, beta_col, loo_operator):
     print(f'Meta analyzing {p_col} results...')
 
     def _edit_pvalue(p):
-        return hl.map(lambda x: hl.if_else(x> 0.99, 0.99, x), p)
+        return hl.map(lambda x: hl.if_else(hl.exp(x) > 0.99, hl.log(0.99), x), p)
 
     two_tail = p_col == 'Pvalue_Burden'
     test_lookup = {'Pvalue_Burden': 'Burden', 'Pvalue_SKAT': 'SKAT', 'Pvalue': 'SKATO'}
@@ -84,7 +84,7 @@ def _run_stouffers_meta(mt, p_col, beta_col, loo_operator):
     mt = mt.annotate_entries(**{p_col: _edit_pvalue(mt.summary_stats[p_col])})
 
     if two_tail:
-        mt = mt.annotate_entries(**{p_col: mt.summary_stats[p_col] / 2},
+        mt = mt.annotate_entries(**{p_col: hl.map(lambda x: x + hl.log(hl.literal(1/2)), mt.summary_stats[p_col])},
                                  **{beta_col: mt.summary_stats[beta_col]})
     else:
         mt = mt.annotate_entries(**{p_col: mt.summary_stats[p_col],
@@ -106,7 +106,6 @@ def _run_stouffers_meta(mt, p_col, beta_col, loo_operator):
     mt = mt.drop(f'weighted_Z_numerator_{test}', f'sum_weighted_Z_numerator_{test}', p_col, beta_col, f'META_N_{test}')
     
     return mt
-
 
 
 def run_meta_analysis(mt, saige=True, remove_low_confidence=True, cross_biobank_meta=False):
@@ -344,7 +343,7 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
     mt = mt.transmute_entries(
         meta_analysis=hl.map(
             lambda i: hl.struct(**{field: is_finite_or_missing(mt[f"META_{field}"][i]) for field in meta_fields}),
-            hl.range(hl.len(mt.META_BETA_IV_Burden)),
+            hl.range(hl.len(mt.META_Pvalue_SKATO)),
         )
     )
 
