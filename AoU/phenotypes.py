@@ -380,7 +380,7 @@ def get_annotated_snvs(version, HL, overwrite=False):
 
 def get_age_accumulating_snv_count(version, HL, overwrite=False):
     if hl.hadoop_exists(f"{get_final_munged_snvcount_age_accum_path(version, HL)}/_SUCCESS") and not overwrite:
-        ht_snv_age_accum_count = hl.read_table(get_final_munged_snvcount_age_accum_path(version, HL))
+        ht_snv_age_accum_count_final = hl.read_table(get_final_munged_snvcount_age_accum_path(version, HL))
     
     else:
         mt_snv_class = get_annotated_snvs(version, HL, overwrite)
