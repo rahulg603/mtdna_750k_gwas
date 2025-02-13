@@ -58,14 +58,14 @@ def _run_inverse_variance_meta(mt, beta_col, se_col, loo_operator, suffix):
         f'META_Q{suffix}': hl.map(lambda x: hl.sum((mt.summary_stats[beta_col] - x) ** 2 * mt.inv_se2), mt[f'META_BETA{suffix}']),
         'variant_exists': hl.map(lambda x: ~hl.is_missing(x), mt.summary_stats[beta_col]),
     })
-    mt = mt.annotate_entries(**{f'META_N_pops{suffix}': all_and_leave_one_out(mt.variant_exists, mt.pheno_data[loo_operator])})
+    mt = mt.annotate_entries(**{f'META_N_pops': all_and_leave_one_out(mt.variant_exists, mt.pheno_data[loo_operator])})
     # filter Q-values when N_pops == 1
     mt = mt.annotate_entries(**{
-        f'META_Q{suffix}': hl.map(lambda i: hl.or_missing(mt[f'META_N_pops{suffix}'][i] > 1, mt[f'META_Q{suffix}'][i]), hl.range(hl.len(mt[f'META_Q{suffix}'])))
+        f'META_Q{suffix}': hl.map(lambda i: hl.or_missing(mt[f'META_N_pops'][i] > 1, mt[f'META_Q{suffix}'][i]), hl.range(hl.len(mt[f'META_Q{suffix}'])))
     })
     mt = mt.annotate_entries(**{
         f'META_Pvalue_het{suffix}': hl.map(
-            lambda i: hl.pchisqtail(mt[f'META_Q{suffix}'][i], mt[[f'META_N_pops{suffix}']][i] - 1, log_p=True), hl.range(hl.len(mt[f'META_Q{suffix}']))
+            lambda i: hl.pchisqtail(mt[f'META_Q{suffix}'][i], mt[f'META_N_pops'][i] - 1, log_p=True), hl.range(hl.len(mt[f'META_Q{suffix}']))
         )
     })
     return mt
@@ -75,32 +75,35 @@ def _run_stouffers_meta(mt, p_col, beta_col, loo_operator):
     print(f'Meta analyzing {p_col} results...')
 
     def _edit_pvalue(p):
-        return hl.if_else(p> 0.99, 0.99, p)
+        return hl.map(lambda x: hl.if_else(x> 0.99, 0.99, x), p)
 
     two_tail = p_col == 'Pvalue_Burden'
     test_lookup = {'Pvalue_Burden': 'Burden', 'Pvalue_SKAT': 'SKAT', 'Pvalue': 'SKATO'}
     test = test_lookup[p_col]
 
-    mt = mt.annotate_entries(**{p_col: _edit_pvalue(mt[p_col])})
+    mt = mt.annotate_entries(**{p_col: _edit_pvalue(mt.summary_stats[p_col])})
 
     if two_tail:
-        mt = mt.annotate_entries(**{p_col: mt[p_col] / 2},
+        mt = mt.annotate_entries(**{p_col: mt.summary_stats[p_col] / 2},
                                  **{beta_col: mt.summary_stats[beta_col]})
     else:
-        mt = mt.annotate_entries(**{beta_col: hl.map(lambda x: hl.int(hl.is_defined(x)), mt[p_col])})
+        mt = mt.annotate_entries(**{p_col: mt.summary_stats[p_col],
+                                    beta_col: hl.map(lambda x: hl.int(hl.is_defined(x)), mt.summary_stats[p_col])})
 
     mt = mt.annotate_entries(**{f'weighted_Z_numerator_{test}': 
                                     hl.map(lambda x, y, z: hl.sqrt(x) * (-1 * hl.qnorm(y, log_p=True)) *  hl.sign(z),
                                            mt.summary_stats.N, mt[p_col], mt[beta_col])})
     mt = mt.annotate_entries(**{f'sum_weighted_Z_numerator_{test}': all_and_leave_one_out(mt[f'weighted_Z_numerator_{test}'], mt.pheno_data[loo_operator]),
-                                f'sum_N_{test}': all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data[loo_operator])})
+                                f'META_N_{test}': all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data[loo_operator])})
 
-    mt = mt.annotate_entries(**{f'META_Stats_{test}': mt[f'sum_weighted_Z_numerator_{test}'] / (hl.map(lambda x: hl.sqrt(x), mt[f'sum_N_{test}']))})
+    mt = mt.annotate_entries(**{f'META_Stats_{test}': mt[f'sum_weighted_Z_numerator_{test}'] / (hl.map(lambda x: hl.sqrt(x), mt[f'META_N_{test}']))})
 
     if two_tail:
         mt = mt.annotate_entries(**{f'META_Pvalue_{test}': hl.map(lambda x: hl.log(hl.literal(2)) + hl.pnorm(hl.abs(x), lower_tail=False, log_p=True), mt[f'META_Stats_{test}'])})
     else:
         mt = mt.annotate_entries(**{f'META_Pvalue_{test}': hl.map(lambda x: hl.pnorm(x, lower_tail=False, log_p=True), mt[f'META_Stats_{test}'])})
+    
+    mt = mt.drop(f'weighted_Z_numerator_{test}', f'sum_weighted_Z_numerator_{test}', p_col, beta_col, f'META_N_{test}')
     
     return mt
 
@@ -308,9 +311,9 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
     mt = _run_inverse_variance_meta(mt, 'BETA_Burden', 'SE_Burden', loo_operator=loo_operator, suffix='_IV_Burden')
 
     # Run p-value meta-analysis
-    mt = _run_stouffers_meta(mt, 'BETA_Burden', 'SE_Burden', loo_operator=loo_operator)
-    mt = _run_stouffers_meta(mt, 'Pvalue', loo_operator=loo_operator)
-    mt = _run_stouffers_meta(mt, 'Pvalue_SKAT', loo_operator=loo_operator)
+    mt = _run_stouffers_meta(mt, 'Pvalue_Burden', 'BETA_Burden', loo_operator=loo_operator)
+    mt = _run_stouffers_meta(mt, 'Pvalue', 'BETA_SKATO', loo_operator=loo_operator)
+    mt = _run_stouffers_meta(mt, 'Pvalue_SKAT', 'BETA_SKAT', loo_operator=loo_operator)
 
     # Add other annotations
     if cross_biobank_meta:
@@ -323,11 +326,15 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
             META_MAC=all_and_leave_one_out(mt.summary_stats.MAC, mt.pheno_data[loo_operator]),
             META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data[loo_operator]),
         )
+        
     mt = mt.drop(
-        "unnorm_beta", "inv_se2", "variant_exists", "ac_cases", "ac_controls", "summary_stats", "META_AC_Allele2"
+        "unnorm_beta", "inv_se2", "variant_exists", "summary_stats"
     )
 
-    meta_fields = ["BETA", "SE", "Pvalue", "Q", "Pvalue_het", "N", "N_pops", "AF_Allele2", "AF_Cases", "AF_Controls"]
+    meta_fields = ["BETA_IV_Burden", "SE_IV_Burden", "Pvalue_IV_Burden", "Q_IV_Burden", "Pvalue_het_IV_Burden", 
+                   "Pvalue_Burden", "Pvalue_SKAT", "Pvalue_SKATO", 
+                   "Stats_Burden", "Stats_SKAT", "Stats_SKATO", 
+                   "N", "N_pops", "MAC"]
     
 
     # Format everything into array<struct>
@@ -337,7 +344,7 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
     mt = mt.transmute_entries(
         meta_analysis=hl.map(
             lambda i: hl.struct(**{field: is_finite_or_missing(mt[f"META_{field}"][i]) for field in meta_fields}),
-            hl.range(hl.len(mt.META_BETA)),
+            hl.range(hl.len(mt.META_BETA_IV_Burden)),
         )
     )
 
@@ -672,8 +679,8 @@ def saige_append_merged_sumstats():
     return None
 
 
-def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs, sample_qc=True, pops=POPS, overwrite=False, 
-                                      skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF, filter_sumstats=True, _debug_read=False):
+def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs, pops=POPS, overwrite=False, 
+                                  skip_producing_lambdas=False, filter_sumstats=True, _debug_read=False):
     temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
     staging_full = f'{temp_dir}/staging_full.mt'
     suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
@@ -697,13 +704,13 @@ def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs,
             mt = hl.read_matrix_table(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis=True, pop=pop)).annotate_cols(pop=pop)
             mt = mt.key_rows_by(*GENE_ROW_KEY_FIELDS)
             mt = mt.annotate_cols(_logged=hl.agg.any(mt.Pvalue < 0))
-            mt = mt.annotate_entries(Pvalue=hl.if_else(mt._logged, mt.Pvalue, hl.log(mt.Pvalue))).drop('_logged')
+            mt = mt.annotate_entries(Pvalue=hl.if_else(mt._logged, mt.Pvalue, hl.log(mt.Pvalue)),
+                                     Pvalue_Burden=hl.if_else(mt._logged, mt.Pvalue_Burden, hl.log(mt.Pvalue_Burden)),
+                                     Pvalue_SKAT=hl.if_else(mt._logged, mt.Pvalue_SKAT, hl.log(mt.Pvalue_SKAT))).drop('_logged')
 
             mt = saige_apply_gene_qc(mt, filter_sumstats)
             mt = custom_patch_mt_keys(mt, gene_analysis=True)
             mt = reannotate_cols(mt, suffix)
-            mt.describe()
-            mt.cols().show()
             mt = re_colkey_mt(mt)
             mt = mt.select_cols(pheno_data=mt.col_value)
             mt = mt.select_entries(summary_stats=mt.entry)
