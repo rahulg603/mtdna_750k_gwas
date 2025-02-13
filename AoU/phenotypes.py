@@ -402,19 +402,20 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         # | "chrM:16362:T,C" |   510 |
 
         ht_snv_age_accum = ht_snv_age_accum.filter(~hl.literal(VARIANT_BLACKLIST).contains(ht_snv_age_accum.variant))
+        tf_expression = hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95)
         ht_snv_age_accum_count = ht_snv_age_accum.group_by(ht_snv_age_accum.s
-                                                ).aggregate(snv_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= HL)),
-                                                            snv_invHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= HL), hl.agg.sum(1 / ht_snv_age_accum.HL)),
-                                                            snv_sumHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= HL), hl.agg.sum(ht_snv_age_accum.HL)),
-                                                            snv_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= HL), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_meanHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= HL), hl.agg.mean(ht_snv_age_accum.HL)),
-                                                            snv_ADpois95_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff)),
-                                                            snv_ADpois95_invHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 / ht_snv_age_accum.HL)),
-                                                            snv_ADpois95_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois975_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois975_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975)),
-                                                            snv_ADpois99_1minHL = hl.agg.filter(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois99_count = hl.agg.count_where(hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95) & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99))).select_globals()
+                                                ).aggregate(snv_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= HL)),
+                                                            snv_invHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.sum(1 / ht_snv_age_accum.HL)),
+                                                            snv_sumHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.sum(ht_snv_age_accum.HL)),
+                                                            snv_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.sum(1 - ht_snv_age_accum.HL)),
+                                                            snv_meanHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.mean(ht_snv_age_accum.HL)),
+                                                            snv_ADpois95_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff)),
+                                                            snv_ADpois95_invHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 / ht_snv_age_accum.HL)),
+                                                            snv_ADpois95_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 - ht_snv_age_accum.HL)),
+                                                            snv_ADpois975_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975), hl.agg.sum(1 - ht_snv_age_accum.HL)),
+                                                            snv_ADpois975_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975)),
+                                                            snv_ADpois99_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99), hl.agg.sum(1 - ht_snv_age_accum.HL)),
+                                                            snv_ADpois99_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99))).select_globals()
         ht_snv_age_accum_count = ht_snv_age_accum_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_snv_age_accum_count.snv_meanHL), 0, ht_snv_age_accum_count.snv_meanHL))
         ht_snv_age_accum_count = ht_snv_age_accum_count.checkpoint(get_final_munged_snvcount_age_accum_path(version, HL), overwrite=True)
         ht_snv_age_accum_count.export(get_final_munged_snvcount_age_accum_path(version, HL, 'tsv'))
