@@ -7,7 +7,7 @@ from utils.SaigeImporters import *
 from cromwell.classes import CromwellManager
 
 
-def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysis, cross_biobank_meta=False, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', n_cpu=32):
+def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysis, cross_biobank_meta=False, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', n_cpu=32, overwrite=False):
     """
     This function exports sumstats with meta-analyses as flat files in the pan ancestry format.
     In its current form, summary statistics without meta-analyses will NOT be exported via this method.
@@ -27,7 +27,7 @@ def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysi
     else:
         path_to_meta_sumstats = get_saige_sumstats_tsv_folder(GWAS_PATH, suffix_updated, encoding, gene_analysis)
     
-    if hl.hadoop_exists(path_to_meta_sumstats):
+    if hl.hadoop_exists(path_to_meta_sumstats) and not overwrite:
         existing_files = [os.path.basename(x['path']) for x in hl.hadoop_ls(path_to_meta_sumstats) if not x['is_dir']]
         phenos_to_run = []
         pheno_output_locations = []
