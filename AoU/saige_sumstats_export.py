@@ -7,7 +7,9 @@ from utils.SaigeImporters import *
 from cromwell.classes import CromwellManager
 
 
-def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysis, cross_biobank_meta=False, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', n_cpu=32, overwrite=False):
+def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysis, 
+                       cross_biobank_meta=False, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', n_cpu=32, 
+                       overwrite=False, skip_waiting=True):
     """
     This function exports sumstats with meta-analyses as flat files in the pan ancestry format.
     In its current form, summary statistics without meta-analyses will NOT be exported via this method.
@@ -71,7 +73,7 @@ def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysi
                               add_requester_pays_parameter=False,
                               restart=True, batches_precomputed=False, 
                               submission_sleep=0, check_freq=120, quiet=False)
-    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=True)
+    manager.run_pipeline(submission_retries=0, cromwell_timeout=60, skip_waiting=skip_waiting)
     
     return manager
 

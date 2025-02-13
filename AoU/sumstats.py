@@ -680,7 +680,7 @@ def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs,
 
     def reannotate_cols(mt, suffix):
         pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
-        key = get_modified_key(mt)
+        key = get_modified_key(mt, enforce_pheno_cols=True)
         mt = check_and_annotate_with_dict(mt, pheno_dict, key)
         return mt
 
@@ -702,6 +702,8 @@ def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs,
             mt = saige_apply_gene_qc(mt, filter_sumstats)
             mt = custom_patch_mt_keys(mt, gene_analysis=True)
             mt = reannotate_cols(mt, suffix)
+            mt.describe()
+            mt.cols().show()
             mt = re_colkey_mt(mt)
             mt = mt.select_cols(pheno_data=mt.col_value)
             mt = mt.select_entries(summary_stats=mt.entry)

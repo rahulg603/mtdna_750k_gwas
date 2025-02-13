@@ -859,11 +859,14 @@ def get_all_merged_ht_paths(gs_output_path, suffix, pop, encoding, gene_analysis
     return paths_list
 
 
-def get_modified_key(mt):
+def get_modified_key(mt, enforce_pheno_cols=False):
     key = mt.col_key.annotate(phenocode=format_pheno_dir(mt.phenocode),
                               modifier=hl.case(missing_false=True)
                               #.when(mt.trait_type == "biomarkers", "")
                               .default(mt.modifier))
+    if enforce_pheno_cols:
+        key = key.select(*PHENO_KEY_FIELDS)
+    
     return key
 
 
