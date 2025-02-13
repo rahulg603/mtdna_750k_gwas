@@ -370,7 +370,7 @@ def get_annotated_snvs(version, HL, overwrite=False):
         mt_snv_class_f = mt_snv_class_f.annotate_rows(variant = mt_snv_class_f.locus.contig + ':' + \
                                                                 hl.str(mt_snv_class_f.locus.position) + ':' + \
                                                                 hl.str(',').join(mt_snv_class_f.alleles))
-        mt_snv_class_f = mt_snv_class_f.checkpoint(get_final_munged_snv_variant_path(version, HL))
+        mt_snv_class_f = mt_snv_class_f.checkpoint(get_final_munged_snv_variant_path(version, HL), overwrite=True)
     
     return mt_snv_class_f
 
@@ -401,26 +401,48 @@ def get_age_accumulating_snv_count(version, HL, overwrite=False):
         # | "chrM:16189:T,C" |   512 |
         # | "chrM:16362:T,C" |   510 |
 
-        ht_snv_age_accum = ht_snv_age_accum.filter(~hl.literal(VARIANT_BLACKLIST).contains(ht_snv_age_accum.variant))
-        tf_expression = hl.is_defined(ht_snv_age_accum.HL) & (ht_snv_age_accum.HL < 0.95)
-        ht_snv_age_accum_count = ht_snv_age_accum.group_by(ht_snv_age_accum.s
-                                                ).aggregate(snv_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= HL)),
-                                                            snv_invHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.sum(1 / ht_snv_age_accum.HL)),
-                                                            snv_sumHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.sum(ht_snv_age_accum.HL)),
-                                                            snv_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_meanHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= HL), hl.agg.mean(ht_snv_age_accum.HL)),
-                                                            snv_ADpois95_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff)),
-                                                            snv_ADpois95_invHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 / ht_snv_age_accum.HL)),
-                                                            snv_ADpois95_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois975_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois975_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff975)),
-                                                            snv_ADpois99_1minHL = hl.agg.filter(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99), hl.agg.sum(1 - ht_snv_age_accum.HL)),
-                                                            snv_ADpois99_count = hl.agg.count_where(tf_expression & (ht_snv_age_accum.HL >= 0.01) & (ht_snv_age_accum.AD[1] > ht_snv_age_accum.pois_cutoff99))).select_globals()
-        ht_snv_age_accum_count = ht_snv_age_accum_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_snv_age_accum_count.snv_meanHL), 0, ht_snv_age_accum_count.snv_meanHL))
-        ht_snv_age_accum_count = ht_snv_age_accum_count.checkpoint(get_final_munged_snvcount_age_accum_path(version, HL), overwrite=True)
-        ht_snv_age_accum_count.export(get_final_munged_snvcount_age_accum_path(version, HL, 'tsv'))
+
+        def _generate_all_traits(ht, HL):
+            tf_expression = hl.is_defined(ht.HL) & (ht.HL < 0.95)
+            ht_count = ht.group_by(ht.s
+                        ).aggregate(snv_count = hl.agg.count_where(tf_expression & (ht.HL >= HL)),
+                                    snv_invHL = hl.agg.filter(tf_expression & (ht.HL >= HL), hl.agg.sum(1 / ht.HL)),
+                                    snv_sumHL = hl.agg.filter(tf_expression & (ht.HL >= HL), hl.agg.sum(ht.HL)),
+                                    snv_1minHL = hl.agg.filter(tf_expression & (ht.HL >= HL), hl.agg.sum(1 - ht.HL)),
+                                    snv_meanHL = hl.agg.filter(tf_expression & (ht.HL >= HL), hl.agg.mean(ht.HL)),
+                                    snv_ADpois95_count = hl.agg.count_where(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff)),
+                                    snv_ADpois95_invHL = hl.agg.filter(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff), hl.agg.sum(1 / ht.HL)),
+                                    snv_ADpois95_1minHL = hl.agg.filter(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff), hl.agg.sum(1 - ht.HL)),
+                                    snv_ADpois975_1minHL = hl.agg.filter(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff975), hl.agg.sum(1 - ht.HL)),
+                                    snv_ADpois975_count = hl.agg.count_where(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff975)),
+                                    snv_ADpois99_1minHL = hl.agg.filter(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff99), hl.agg.sum(1 - ht.HL)),
+                                    snv_ADpois99_count = hl.agg.count_where(tf_expression & (ht.HL >= 0.01) & (ht.AD[1] > ht.pois_cutoff99))).select_globals()
+            ht_count = ht_count.annotate(snv_meanHL = hl.if_else(hl.is_nan(ht_count.snv_meanHL), 0, ht_count.snv_meanHL))
+            return ht_count
+
+
+        print('Generating phenotypes with and without blacklisted sites...')
+        print('PLEASE NOTE: a ton of phenotypes will be generate. Please subset to the desired traits for analysis.')
+        ht_snv_age_accum_count = _generate_all_traits(ht_snv_age_accum, HL=HL)
+        ht_snv_age_accum_count = ht_snv_age_accum_count.rename({x: f'{x}_nosnvrm' for x in ht_snv_age_accum_count.row if x not in ht_snv_age_accum_count.key})
+
+        ht_snv_age_accum_f = ht_snv_age_accum.filter(~hl.literal(VARIANT_BLACKLIST).contains(ht_snv_age_accum.variant))
+        ht_snv_age_accum_count_f = _generate_all_traits(ht_snv_age_accum_f, HL=HL)
+
+        print('Generating phenotypes without CHIP individuals...')
+        chip_data = load_chip_data()
+        chip_data = chip_data.filter(chip_data.hasCH != 0)
+        ht_snv_age_accum_f_nochip = ht_snv_age_accum_f.filter(~hl.is_defined(chip_data[ht_snv_age_accum_f.s]))
+        ht_snv_age_accum_f_nochip = _generate_all_traits(ht_snv_age_accum_f_nochip, HL=HL)
+        ht_snv_age_accum_f_nochip = ht_snv_age_accum_f_nochip.rename({x: f'{x}_nochip' for x in ht_snv_age_accum_f_nochip.row if x not in ht_snv_age_accum_f_nochip.key})
+
+        print('Combining all traits...')
+        ht_snv_age_accum_count_final = ht_snv_age_accum_count_f.annotate(**ht_snv_age_accum_count[ht_snv_age_accum_count_f.key],
+                                                                         **ht_snv_age_accum_f_nochip[ht_snv_age_accum_count_f.key])
+        ht_snv_age_accum_count_final = ht_snv_age_accum_count_final.checkpoint(get_final_munged_snvcount_age_accum_path(version, HL), overwrite=True)
+        ht_snv_age_accum_count_final.export(get_final_munged_snvcount_age_accum_path(version, HL, 'tsv'))
     
-    return ht_snv_age_accum_count
+    return ht_snv_age_accum_count_final
 
 
 def extract_single_mtdna_variant(position, ref, alt, version):
@@ -446,4 +468,38 @@ def extract_single_mtdna_variant(position, ref, alt, version):
     ht = ht.annotate(FT = hl.literal(',').join(ht.FT.difference({'PASS'})), 
                     FT_LIFT = hl.literal(',').join(ht.FT_LIFT.difference({'PASS'}))).drop('GT')
 
+    return ht
+
+
+def load_chip_data():
+    CHIP_path = os.path.join(BUCKET, 'CHIP_240902/traits/')
+    CHIP_ht = os.path.join(CHIP_path, 'munged/aou_v7_chip_calls.ht')
+
+    if hl.hadoop_exists(os.path.join(CHIP_ht, '_SUCCESS')):
+        ht = hl.read_table(CHIP_ht)
+    else:
+        aou_chip_all_var = hl.import_table(os.path.join(CHIP_path, 'aou_98k_150k.chip_var.dp20ad3ad5.allVar.26Aug2023.csv.gz'), 
+                                           types={'SampleID': hl.tstr}, delimiter=',', impute=True, force=True, quote='"')
+        aou_chip_pheno = hl.import_table(os.path.join(CHIP_path, 'phenoCH_AoU250k.fid0_iid.qcd_myeloidCA_rel_NA.26Aug2023.tsv.gz'), 
+                                         types={'IID': hl.tstr}, impute=True, force=True)
+        print('AoU CHIP data imported.')
+        
+        aou_top_chip_table = aou_chip_all_var.group_by(aou_chip_all_var.SampleID).aggregate(VAF = hl.agg.max(aou_chip_all_var.VAF), batch = hl.agg.take(aou_chip_all_var.Batch_CH, 1))
+        aou_jt_chip_table = aou_top_chip_table.key_by('SampleID', 'VAF').join(aou_chip_all_var.select('SampleID','varID','Gene','Nonsyn','DP','AD','VAF').key_by('SampleID','VAF'), how='left')
+        aou_CHIP_calls = aou_chip_pheno.select(s = aou_chip_pheno.IID, age = aou_chip_pheno.Age_biosample_collection, hasCH = aou_chip_pheno.hasCH, hasCHvaf10 = aou_chip_pheno.hasCHvaf10)
+        aou_final_chip_calls = aou_CHIP_calls.key_by('s').join(aou_jt_chip_table.key_by('SampleID'), how='left')
+        aou_final_chip_calls = aou_final_chip_calls.drop('age')
+        aou_final_chip_calls = aou_final_chip_calls.annotate(dataset = 'AoU')
+
+        aou_dupes = aou_final_chip_calls.group_by(aou_final_chip_calls.s).aggregate(N = hl.agg.count())
+        aou_dupes = aou_dupes.filter(aou_dupes.N > 1)
+        aou_final_chip_calls_singular = aou_final_chip_calls.anti_join(aou_dupes)
+        aou_final_chip_calls_duplicates = aou_final_chip_calls.semi_join(aou_dupes).add_index()
+        aou_final_chip_calls_idx = aou_final_chip_calls_duplicates.group_by(aou_final_chip_calls_duplicates.s, aou_final_chip_calls_duplicates.VAF).aggregate(idx = hl.agg.collect_as_set(aou_final_chip_calls_duplicates.idx))
+        aou_final_chip_calls_idx = aou_final_chip_calls_idx.annotate(idx = hl.sorted(aou_final_chip_calls_idx.idx))
+        aou_final_chip_calls_idx = aou_final_chip_calls_idx.annotate(idx_flat = hl.find(lambda x: True, aou_final_chip_calls_idx.idx)).key_by('idx_flat')
+        aou_final_chip_calls_dedupe = aou_final_chip_calls_duplicates.key_by('idx').semi_join(aou_final_chip_calls_idx).key_by('s').drop('idx')
+        aou_final_chip_calls_proc = hl.Table.union(aou_final_chip_calls_singular, aou_final_chip_calls_dedupe)
+        ht = aou_final_chip_calls_proc.checkpoint(CHIP_ht)
+    
     return ht
