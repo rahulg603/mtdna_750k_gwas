@@ -180,7 +180,7 @@ task run_test {
     String loco = if disable_loco then "noloco" else "loco"
     String seg = select_first([segment, chr])
     String output_prefix = phenotype_id + "." + analysis_type + "." + seg + "." + pop + "." + suffix
-    Int disk = ceil(size(bgen, 'G') * 3)
+    Int disk = ceil(size(bgen, 'G') * 4) + ceil(size(group_file, 'G') * 2) + ceil(size(null_rda, 'G') * 2)
 
     command <<<
         set -e
