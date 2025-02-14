@@ -629,7 +629,7 @@ def saige_generate_sumstats_mt(all_variant_outputs, pheno_dict, temp_dir, inner_
         mt = mt.checkpoint(f'{temp_dir}/staging.mt', **{inner_mode: True})
     
     mt = custom_patch_mt_keys(mt, gene_analysis=gene_analysis)
-    key = mt.col_key.annotate(phenocode=format_pheno_dir(mt.phenocode))
+    key = mt.col_key.annotate(phenocode=format_pheno_dir(mt.phenocode)).select(*PHENO_KEY_FIELDS)
     mt = check_and_annotate_with_dict(mt, pheno_dict, key)
     if mt.inv_normalized.dtype == hl.tstr:
         mt = mt.annotate_cols(inv_normalized=hl.bool(mt.inv_normalized))
