@@ -85,6 +85,7 @@ workflow saige_manager {
         Boolean overwrite_null = false
         Boolean overwrite_tests = false
         Boolean overwrite_hail_results = false
+        Boolean test_extra_disk = false
 
         Int n_cpu_null
         Int n_cpu_test
@@ -266,6 +267,7 @@ workflow saige_manager {
                 rvas_mode = rvas_mode,
                 always_use_sparse_grm = always_use_sparse_grm,
                 disable_loco = disable_loco,
+                extra_disk = test_extra_disk,
 
                 n_cpu_test = n_cpu_test,
                 SaigeImporters = SaigeImporters,

@@ -459,8 +459,11 @@ def get_saige_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis):
     return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'meta_analysis.mt')
 
 
-def get_saige_cross_biobank_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis):
-    return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'cross_biobank_meta_analysis.mt')
+def get_saige_cross_biobank_meta_mt_path(gs_gwas_path, suffix, encoding, gene_analysis, pop=None):
+    if pop is not None:
+        return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), f'cross_biobank_meta_analysis_{pop}_only.mt')
+    else:
+        return os.path.join(get_saige_sumstats_mt_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'cross_biobank_meta_analysis.mt')
 
 
 def get_saige_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis):

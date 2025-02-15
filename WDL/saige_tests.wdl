@@ -34,6 +34,7 @@ workflow saige_tests {
         Boolean rvas_mode
         Boolean always_use_sparse_grm
         Boolean disable_loco
+        Boolean extra_disk = false
 
         # runtime
         Int n_cpu_test
@@ -94,7 +95,8 @@ workflow saige_tests {
                     SaigeImporters = SaigeImporters,
                     SaigeDocker = SaigeDocker,
 
-                    n_cpu_test = n_cpu_test
+                    n_cpu_test = n_cpu_test,
+                    extra_disk = extra_disk
             }
 
             if (analysis_type == 'variant') {
@@ -173,6 +175,7 @@ task run_test {
 
         File SaigeImporters
         String SaigeDocker
+        Boolean extra_disk = false
     }
 
     String tf_defined_spGRM = if defined(sparse_grm) then "defined" else "not"
@@ -180,7 +183,8 @@ task run_test {
     String loco = if disable_loco then "noloco" else "loco"
     String seg = select_first([segment, chr])
     String output_prefix = phenotype_id + "." + analysis_type + "." + seg + "." + pop + "." + suffix
-    Int disk = ceil(size(bgen, 'G') * 4) + ceil(size(group_file, 'G') * 2) + ceil(size(null_rda, 'G') * 2)
+    Int multiplier = if extra_disk then 20 else 1
+    Int disk = (ceil(size(bgen, 'G') * 4) + ceil(size(group_file, 'G') * 2) + ceil(size(null_rda, 'G') * 2)) * multiplier
 
     command <<<
         set -e

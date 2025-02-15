@@ -108,7 +108,7 @@ def _run_stouffers_meta(mt, p_col, beta_col, loo_operator):
     return mt
 
 
-def run_meta_analysis(mt, saige=True, remove_low_confidence=True, cross_biobank_meta=False):
+def run_meta_analysis(mt, saige=True, remove_low_confidence=True, cross_biobank_meta=False, single_pop=False):
     """
     Run inverse-variance fixed-effect meta-analysis for a given MatrixTable. 
     Modified now to remove entries that are low confidence prior to meta-analysis.
@@ -173,7 +173,7 @@ def run_meta_analysis(mt, saige=True, remove_low_confidence=True, cross_biobank_
 
     # Add other annotations
     if saige:
-        if cross_biobank_meta:
+        if cross_biobank_meta and not single_pop:
             mt = mt.annotate_entries(
                 ac_cases=hl.map(lambda x: x["AF_Cases"] * x.N, mt.summary_stats),
                 ac_controls=hl.map(lambda x: x["AF_Controls"] * x.N, mt.summary_stats),
@@ -387,14 +387,14 @@ def get_saige_lambdas_path(suffix, pop, encoding, extn):
     return os.path.join(GWAS_PATH, f'lambdas/{suffix}/{encoding}/lambda_export_{pop}.{extn}')
 
 
-def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=False, saige=True, exp_p=False, gene_analysis=False):
+def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=False, single_pop=False, saige=True, exp_p=False, gene_analysis=False):
     if exp_p:
         transf = lambda x: hl.exp(x)
     else:
         transf = lambda x: x
     
     keyword = 'genes' if gene_analysis else 'variants'
-    if cross_biobank:
+    if cross_biobank and not single_pop:
         mt = mt.annotate_cols(
             pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
                 lambda ss: hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue)),
@@ -540,7 +540,7 @@ def unify_saige_gene_ht_schema(ht, path, tmp, row_keys, col_keys):
     return ht
 
 
-def saige_apply_qc(mt, filter_sumstats, this_pop_N: int, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
+def saige_apply_qc(mt, filter_sumstats, this_pop_N, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50,
                    min_call_rate: float = CALLRATE_CUTOFF):
     
     if filter_sumstats:
@@ -553,14 +553,23 @@ def saige_apply_qc(mt, filter_sumstats, this_pop_N: int, case_ac_threshold: int 
     an_total = (mt.n_cases + hl.or_else(mt.n_controls, 0)) * 2
     mac_total = maf_total * an_total
 
-    return mt.annotate_entries(
-        low_confidence=hl.case(missing_false=True)
-            .when(ac_cases <= case_ac_threshold, True)
-            .when(an_controls <= case_ac_threshold, True)
-            .when(mac_total <= overall_mac_threshold, True)
-            .when(mt.overall_AN < 2 * this_pop_N * min_call_rate, True)
-            .default(False)
-    )
+    if min_call_rate is not None:
+        return mt.annotate_entries(
+            low_confidence=hl.case(missing_false=True)
+                .when(ac_cases <= case_ac_threshold, True)
+                .when(an_controls <= case_ac_threshold, True)
+                .when(mac_total <= overall_mac_threshold, True)
+                .when(mt.overall_AN < 2 * this_pop_N * min_call_rate, True)
+                .default(False)
+        ) 
+    else:
+        return mt.annotate_entries(
+            low_confidence=hl.case(missing_false=True)
+                .when(ac_cases <= case_ac_threshold, True)
+                .when(an_controls <= case_ac_threshold, True)
+                .when(mac_total <= overall_mac_threshold, True)
+                .default(False)
+        ) 
 
 
 def saige_apply_gene_qc(mt, filter_sumstats, case_ac_threshold: int = 3, overall_mac_threshold: int = 20, min_case_count: int = 50):
@@ -753,7 +762,7 @@ def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs,
 
 
 def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_pcs, sample_qc=True, pops=POPS, overwrite=False,
-                                  skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF, filter_sumstats=True, _debug_read=False):
+                                      skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF, filter_sumstats=True, _debug_read=False):
     temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
     staging_full = f'{temp_dir}/staging_full.mt'
     suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
@@ -832,7 +841,8 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
     return None
 
 
-def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, filter_sumstats, overwrite=True, use_drc_pop=True, use_custom_pcs='custom', append_ukb_modifier='_irnt'):
+def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_path, filter_sumstats, 
+                                      overwrite=True, use_drc_pop=True, use_custom_pcs='custom', append_ukb_modifier='_irnt'):
 
 
     def munge_mt_for_merge(mt, cohort):
@@ -886,13 +896,11 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
         full_mt = mt_ukb_munged.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(4000).checkpoint(os.path.join(TEMP_PATH, 'staging_cross_biobank_joint.mt'), overwrite=True)
         full_mt = full_mt.collect_cols_by_key()
         staging_lambda = os.path.join(temp_dir, 'staging_cross_biobank_before_lambda_meta.mt')
-        
-        full_mt = full_mt.checkpoint(staging_lambda, overwrite=True)
 
         if hl.hadoop_exists(staging_lambda + '/_SUCCESS'):
             full_mt = hl.read_matrix_table(staging_lambda)
         else:
-            full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
+            full_mt = full_mt.checkpoint(staging_lambda, overwrite=True)
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, cross_biobank=True, overwrite=True, exp_p=True)
         if filter_sumstats:
             full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
@@ -906,6 +914,110 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
 
 
     print('Meta analysis complete.')
+    return None
+
+
+def saige_combine_aou_ukb_single_pop_sumstats_mt(pop, suffix, encoding, ukb_mt_path, filter_sumstats, overwrite=True, sample_qc=True, 
+                                                 skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF,
+                                                 use_drc_pop=True, use_custom_pcs='custom', append_ukb_modifier='_irnt'):
+
+    temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/ukbaou/{pop}/'
+    staging_full = f'{temp_dir}/staging_full.mt'
+    suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
+    meta_path = get_saige_cross_biobank_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis=False, pop=pop)
+
+    def reannotate_cols(mt, suffix):
+        pheno_dict = get_hail_pheno_dict(PHENO_PATH, suffix)
+        key = get_modified_key(mt)
+        mt = check_and_annotate_with_dict(mt, pheno_dict, key)
+        return mt
+
+    def re_colkey_mt(mt):
+        mt = mt.key_cols_by().select_cols(*PHENO_KEY_FIELDS, *(set(PHENO_COLUMN_FIELDS) - set(PHENO_DESCRIPTION_FIELDS)), *PHENO_GWAS_FIELDS, 'pop', 'cohort')
+        return mt.key_cols_by(*PHENO_KEY_FIELDS)
+
+    if not overwrite and hl.hadoop_exists(staging_full + '/_SUCCESS'):
+        full_mt = hl.read_matrix_table(staging_full)
+    else:
+        mts = []
+
+        # start with AoU
+        per_pop_N = get_n_samples_per_pop_vec(sample_qc=sample_qc, use_drc_pop=use_drc_pop,
+                                              analysis_type='variant', 
+                                              use_array_for_variant=False)
+        mt = hl.read_matrix_table(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis=False, pop=pop)).annotate_cols(pop=pop, cohort='aou')
+        mt = mt.key_rows_by('locus', 'alleles')
+        mt = mt.annotate_cols(_logged=hl.agg.any(mt.Pvalue < 0))
+        mt = mt.annotate_entries(Pvalue=hl.if_else(mt._logged, mt.Pvalue, hl.log(mt.Pvalue))).drop('_logged')
+
+        call_stats = get_call_stats_ht(pop=pop, sample_qc=sample_qc, use_drc_pop=use_drc_pop,
+                                        analysis_type='variant', use_array_for_variant=False,
+                                        overwrite=False)
+        mt = mt.annotate_rows(overall_AN = call_stats[mt.locus, mt.alleles].call_stats.AN)
+
+        mt = saige_apply_qc(mt, filter_sumstats, min_call_rate=min_call_rate, this_pop_N=per_pop_N[pop])
+        mt = custom_patch_mt_keys(mt, gene_analysis=False)
+        mt = reannotate_cols(mt, suffix)
+        mt = re_colkey_mt(mt)
+        mt = mt.select_cols(pheno_data=mt.col_value)
+        mt = mt.select_entries(summary_stats=mt.entry)
+        mts.append(mt)
+
+        # now UKB
+        mt = hl.read_matrix_table(ukb_mt_path).annotate_cols(pop=pop, cohort='ukb')
+        mt = mt.key_rows_by('locus', 'alleles')
+        mt = mt.annotate_cols(_logged=hl.agg.any(mt.Pvalue < 0))
+        mt = mt.annotate_entries(Pvalue=hl.if_else(mt._logged, mt.Pvalue, hl.log(mt.Pvalue))).drop('_logged')
+
+        ht_liftover = get_ukb_b37_b38_liftover().checkpoint(os.path.join(BUCKET, 'ukb_500k', 'ukb_lift_b37_b38.ht'), _read_if_exists=True)
+        mt_ukb = mt_ukb.key_cols_by()
+        mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + append_ukb_modifier)
+        mt_ukb = mt_ukb.key_cols_by(*PHENO_KEY_FIELDS)
+        mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
+        mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
+        mt_ukb = mt_ukb.transmute_rows(locus = mt_ukb.locus_b38, alleles = mt_ukb.alleles_b38).key_rows_by('locus','alleles')
+        mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, f'ukb_gwas_{pop}_modified.mt'), overwrite=True)
+
+        mt_ukb = saige_apply_qc(mt_ukb, filter_sumstats, min_call_rate=None, this_pop_N=None)
+        mt_ukb = custom_patch_mt_keys(mt_ukb, gene_analysis=False)
+        mt_ukb = re_colkey_mt(mt_ukb)
+        mt_ukb = mt_ukb.select_cols(pheno_data=mt_ukb.col_value)
+        mt_ukb = mt_ukb.select_entries(summary_stats=mt_ukb.entry)
+        mts.append(mt_ukb)
+
+        full_mt = mts[0]
+        for mt in mts[1:]:
+            full_mt = full_mt.union_cols(mt, row_join_type='outer')
+        
+        full_mt = full_mt.checkpoint(f'{temp_dir}/staging_full.mt', overwrite=True)
+
+    full_mt = full_mt.collect_cols_by_key()
+    full_mt = full_mt.annotate_cols(
+        pheno_data=full_mt.pheno_data.map(lambda x: x.drop(*(set(PHENO_COLUMN_FIELDS) - set(PHENO_DESCRIPTION_FIELDS)))),
+        **{f'n_cases_full_cohort_{sex}': full_mt.pheno_data[f'n_cases_{sex}'][0]
+           for sex in ('both_sexes', 'females', 'males')}
+    )
+
+    staging_lambda = f'{temp_dir}/staging_{pop}_cross_biobank_before_lambdas.mt'
+    if not skip_producing_lambdas:
+        if hl.hadoop_exists(staging_lambda + '/_SUCCESS') and not overwrite:
+            full_mt = hl.read_matrix_table(staging_lambda)
+        else:
+            full_mt = full_mt.checkpoint(staging_lambda, overwrite=True)
+        # single pop indicates a single population cross-biobank meta
+        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, cross_biobank=True, single_pop=True, overwrite=True, exp_p=True, gene_analysis=False)
+        if filter_sumstats:
+            full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
+                                                                     ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
+                                                                     ).map(lambda x: x[0]))
+            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc > MIN_LAMBDA)))
+            
+    full_mt_meta = run_meta_analysis(full_mt, saige=True, remove_low_confidence=True, cross_biobank_meta=True, single_pop=True)
+    full_mt_meta = full_mt_meta.checkpoint(meta_path, overwrite)
+    
+    print('Cohorts per pheno:')
+    pprint(dict(Counter(full_mt_meta.aggregate_cols(hl.agg.counter(hl.len(full_mt_meta.pheno_data))))))
+
     return None
 
 
