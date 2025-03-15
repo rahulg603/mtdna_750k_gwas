@@ -399,7 +399,7 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
     if cross_biobank and specific_pop is None:
         mt = mt.annotate_cols(
             pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
-                lambda ss: hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue), approximate=False),
+                lambda ss: hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue), approximate=True),
                                         f'n_{keyword}': hl.agg.count_where(hl.is_defined(ss.Pvalue)),
                                         f'n_sig_{keyword}': hl.agg.count_where(transf(ss.Pvalue) < 5e-8)}),
                 mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
@@ -408,7 +408,7 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
         mt = mt.annotate_cols(
             pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
                 lambda ss: hl.agg.filter(~ss.low_confidence,
-                    hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue), approximate=False),
+                    hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue), approximate=True),
                                  f'n_{keyword}': hl.agg.count_where(hl.is_defined(ss.Pvalue)),
                                  f'n_sig_{keyword}': hl.agg.count_where(transf(ss.Pvalue) < 5e-8)})),
                 mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
@@ -423,6 +423,11 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
     pop = specific_pop if specific_pop is not None else 'full'
     term = f'{pop}_cross_biobank' if cross_biobank else pop
     term = f'gene_{term}' if gene_analysis else term
+    
+    # trial to show variability
+    ht.explode('pheno_data').pheno_data.lambda_gc.show(50)
+    ht.explode('pheno_data').pheno_data.lambda_gc.show(50)
+    
     ht = ht.checkpoint(get_lambdas_path(suffix, term, encoding, 'ht'), overwrite=overwrite, _read_if_exists=not overwrite)
     ht.explode('pheno_data').flatten().export(get_lambdas_path(suffix, term, encoding, 'txt.bgz'))
     
@@ -828,29 +833,13 @@ def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_
             full_mt = full_mt.checkpoint(f'{temp_dir}/staging_lambdas.mt', overwrite=True)
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=True, exp_p=True, gene_analysis=False)
 
-        full_ht_temp = full_mt.cols().explode('pheno_data').flatten().key_by('trait_type', 'phenocode', 'pheno_sex', 'modifier', 'pheno_data.pop')
-        full_ht_temp.select(inv = full_ht_temp['pheno_data.inv_normalized'],
-                            n_var = full_ht_temp['pheno_data.n_variants'],
-                            lambda_gc = full_ht_temp['pheno_data.lambda_gc']).show(50)
-
         if filter_sumstats:
-            print('Filtering sumstats...')
             full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
                                                                      ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
                                                                      ).map(lambda x: x[0]))
             full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc > MIN_LAMBDA)))
 
-    full_ht_temp = full_mt.cols().explode('pheno_data').flatten().key_by('trait_type', 'phenocode', 'pheno_sex', 'modifier', 'pheno_data.pop')
-    full_ht_temp.select(inv = full_ht_temp['pheno_data.inv_normalized'],
-                        n_var = full_ht_temp['pheno_data.n_variants'],
-                        lambda_gc = full_ht_temp['pheno_data.lambda_gc']).show(50)
-
     full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis=False, pop='full'), overwrite)
-
-    full_ht_temp = full_mt.cols().explode('pheno_data').flatten().key_by('trait_type', 'phenocode', 'pheno_sex', 'modifier', 'pheno_data.pop')
-    full_ht_temp.select(inv = full_ht_temp['pheno_data.inv_normalized'],
-                        n_var = full_ht_temp['pheno_data.n_variants'],
-                        lambda_gc = full_ht_temp['pheno_data.lambda_gc']).show(50)
 
     full_mt_meta = run_meta_analysis(full_mt, saige=True)
     full_mt_meta = full_mt_meta.checkpoint(get_saige_meta_mt_path(GWAS_PATH, suffix, encoding, gene_analysis=False), overwrite)
