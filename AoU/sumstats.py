@@ -14,7 +14,7 @@ from cromwell.classes import CromwellManager
 
 hl.init(default_reference='GRCh38', log='combine_results.log', branching_factor=8)
 hl._set_flags(no_whole_stage_codegen="1")
-MAX_LAMBDA = 2
+MAX_LAMBDA = 1.5
 MIN_LAMBDA = 0
 
 ### ADAPTED FROM UPDATED PAN UKBB REPO
@@ -387,14 +387,16 @@ def get_saige_lambdas_path(suffix, pop, encoding, extn):
     return os.path.join(GWAS_PATH, f'lambdas/{suffix}/{encoding}/lambda_export_{pop}.{extn}')
 
 
-def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=False, single_pop=False, saige=True, exp_p=False, gene_analysis=False):
+def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=False, saige=True, exp_p=False, gene_analysis=False, specific_pop=None):
+    # enable specific_pop to generate lambdas for a specific population. Only impacts the naming scheme for the output table.
+    #   NOTE: does not impact the usage of low_confidence of array operations!
     if exp_p:
         transf = lambda x: hl.exp(x)
     else:
         transf = lambda x: x
     
     keyword = 'genes' if gene_analysis else 'variants'
-    if cross_biobank and not single_pop:
+    if cross_biobank and specific_pop is None:
         mt = mt.annotate_cols(
             pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
                 lambda ss: hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue)),
@@ -418,7 +420,8 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
     else:
         get_lambdas_path = get_hail_lambdas_path
     
-    term = 'full_cross_biobank' if cross_biobank else 'full'
+    pop = specific_pop if specific_pop is not None else 'full'
+    term = f'{pop}_cross_biobank' if cross_biobank else pop
     term = f'gene_{term}' if gene_analysis else term
     ht = ht.checkpoint(get_lambdas_path(suffix, term, encoding, 'ht'), overwrite=overwrite, _read_if_exists=not overwrite)
     ht.explode('pheno_data').flatten().export(get_lambdas_path(suffix, term, encoding, 'txt.bgz'))
@@ -897,7 +900,7 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
         full_mt = full_mt.collect_cols_by_key()
         staging_lambda = os.path.join(temp_dir, 'staging_cross_biobank_before_lambda_meta.mt')
 
-        if hl.hadoop_exists(staging_lambda + '/_SUCCESS'):
+        if hl.hadoop_exists(staging_lambda + '/_SUCCESS') and not overwrite:
             full_mt = hl.read_matrix_table(staging_lambda)
         else:
             full_mt = full_mt.checkpoint(staging_lambda, overwrite=True)
@@ -1005,7 +1008,7 @@ def saige_combine_aou_ukb_single_pop_sumstats_mt(pop, suffix, encoding, ukb_mt_p
         else:
             full_mt = full_mt.checkpoint(staging_lambda, overwrite=True)
         # single pop indicates a single population cross-biobank meta
-        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, cross_biobank=True, single_pop=True, overwrite=True, exp_p=True, gene_analysis=False)
+        full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, cross_biobank=True, specific_pop=pop, overwrite=True, exp_p=True, gene_analysis=False)
         if filter_sumstats:
             full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
                                                                      ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
