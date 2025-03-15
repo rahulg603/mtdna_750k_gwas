@@ -883,7 +883,7 @@ def saige_combine_aou_ukb_sumstats_mt(suffix, encoding, gene_analysis, ukb_meta_
         mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
         mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
         mt_ukb = mt_ukb.transmute_rows(locus = mt_ukb.locus_b38, alleles = mt_ukb.alleles_b38).key_rows_by('locus','alleles')
-        mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, 'ukb_heteroplasmy_meta_modified.mt'), _read_if_exists=True)
+        mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, 'ukb_heteroplasmy_meta_modified.mt'), _read_if_exists=not overwrite, overwrite=overwrite)
 
         # confirm that the number of shared variants and traits make sense
         #mt_aou.semi_join_cols(mt_ukb.cols()).count_cols() # 65
@@ -979,7 +979,7 @@ def saige_combine_aou_ukb_single_pop_sumstats_mt(pop, suffix, encoding, ukb_mt_p
         mt_ukb = mt_ukb.annotate_rows(**ht_liftover[mt_ukb.row_key]).key_rows_by()
         mt_ukb = mt_ukb.transmute_rows(locus_grch37 = mt_ukb.locus, alleles_grch37 = mt_ukb.alleles)
         mt_ukb = mt_ukb.transmute_rows(locus = mt_ukb.locus_b38, alleles = mt_ukb.alleles_b38).key_rows_by('locus','alleles')
-        mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, f'ukb_gwas_{pop}_modified.mt'), overwrite=True)
+        mt_ukb = mt_ukb.checkpoint(os.path.join(temp_dir, f'ukb_gwas_{pop}_modified.mt'), _read_if_exists=not overwrite, overwrite=overwrite)
 
         mt_ukb = saige_apply_qc(mt_ukb, filter_sumstats, min_call_rate=None, this_pop_N=None)
         mt_ukb = custom_patch_mt_keys(mt_ukb, gene_analysis=False)
