@@ -423,10 +423,10 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
     pop = specific_pop if specific_pop is not None else 'full'
     term = f'{pop}_cross_biobank' if cross_biobank else pop
     term = f'gene_{term}' if gene_analysis else term
-    
+
     # trial to show variability
-    ht.explode('pheno_data').pheno_data.lambda_gc.show(50)
-    ht.explode('pheno_data').pheno_data.lambda_gc.show(50)
+    #ht.explode('pheno_data').pheno_data.lambda_gc.show(50)
+    #ht.explode('pheno_data').pheno_data.lambda_gc.show(50)
     
     ht = ht.checkpoint(get_lambdas_path(suffix, term, encoding, 'ht'), overwrite=overwrite, _read_if_exists=not overwrite)
     ht.explode('pheno_data').flatten().export(get_lambdas_path(suffix, term, encoding, 'txt.bgz'))
