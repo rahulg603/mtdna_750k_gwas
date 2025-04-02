@@ -285,7 +285,7 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
         mt = mt.annotate_entries(summary_stats=mt.summary_stats.map(
             lambda x: hl.or_missing(~x.low_confidence, x)
         ))
-    mt = mt.filter_entries(~mt.summary_stats.all(lambda x: hl.is_missing(x.Pvalue)))
+    mt = mt.filter_entries(~mt.summary_stats.all(lambda x: hl.is_missing(x.Pvalue_SKATO)))
 
     if not cross_biobank_meta:
         loo_operator = 'pop'
@@ -306,7 +306,7 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
         )
     )
 
-    if cross_biobank_meta:
+    if not cross_biobank_meta:
         # Run fixed-effect meta-analysis (all + leave-one-out)
         mt = _run_inverse_variance_meta(mt, 'BETA_Burden', 'SE_Burden', loo_operator=loo_operator, suffix='_IV_Burden')
 
@@ -314,20 +314,29 @@ def run_gene_meta_analysis(mt, remove_low_confidence=True, cross_biobank_meta=Fa
         mt = _run_stouffers_meta(mt, 'Pvalue_Burden', 'BETA_Burden', loo_operator=loo_operator)
         mt = _run_stouffers_meta(mt, 'Pvalue', 'BETA_SKATO', loo_operator=loo_operator)
         mt = _run_stouffers_meta(mt, 'Pvalue_SKAT', 'BETA_SKAT', loo_operator=loo_operator)
-    
+
+        mt = mt.annotate_entries(**{
+            'variant_exists': hl.map(lambda x: ~hl.is_missing(x), mt.summary_stats.Pvalue),
+        })
+
     else:
-        # Run fixed-effect meta-analysis (all + leave-one-out)
+        # Run fixed-effect meta-analysis (all + leave-one-out) -- now with cross-biobank!
         mt = _run_inverse_variance_meta(mt, 'BETA_IV_Burden', 'SE_IV_Burden', loo_operator=loo_operator, suffix='_IV_Burden')
 
         # Run p-value meta-analysis
-        mt = _run_stouffers_meta(mt, 'Pvalue_Burden', 'BETA_Burden', loo_operator=loo_operator)
+        mt = _run_stouffers_meta(mt, 'Pvalue_Burden', 'BETA_IV_Burden', loo_operator=loo_operator)
         mt = _run_stouffers_meta(mt, 'Pvalue_SKATO', 'BETA_SKATO', loo_operator=loo_operator)
         mt = _run_stouffers_meta(mt, 'Pvalue_SKAT', 'BETA_SKAT', loo_operator=loo_operator)
+
+        mt = mt.annotate_entries(**{
+            'variant_exists': hl.map(lambda x: ~hl.is_missing(x), mt.summary_stats.Pvalue_SKATO),
+        })
 
     # Add other annotations
     mt = mt.annotate_entries(
         META_MAC=all_and_leave_one_out(mt.summary_stats.MAC, mt.pheno_data[loo_operator]),
         META_N=all_and_leave_one_out(mt.summary_stats.N, mt.pheno_data[loo_operator]),
+        META_N_pops=all_and_leave_one_out(mt.variant_exists, mt.pheno_data[loo_operator])
     )
         
     mt = mt.drop(
@@ -398,23 +407,24 @@ def aou_generate_final_lambdas(mt, suffix, encoding, overwrite, cross_biobank=Fa
         transf = lambda x: hl.exp(x)
     else:
         transf = lambda x: x
-    
+    pval = 'Pvalue_SKATO' if gene_analysis and cross_biobank else 'Pvalue'
     keyword = 'genes' if gene_analysis else 'variants'
+    
     if cross_biobank and specific_pop is None:
         mt = mt.annotate_cols(
             pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
-                lambda ss: hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue), approximate=True),
-                                        f'n_{keyword}': hl.agg.count_where(hl.is_defined(ss.Pvalue)),
-                                        f'n_sig_{keyword}': hl.agg.count_where(transf(ss.Pvalue) < 5e-8)}),
+                lambda ss: hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss[pval]), approximate=True),
+                                        f'n_{keyword}': hl.agg.count_where(hl.is_defined(ss[pval])),
+                                        f'n_sig_{keyword}': hl.agg.count_where(transf(ss[pval]) < 5e-8)}),
                 mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
         )
     else:
         mt = mt.annotate_cols(
             pheno_data=hl.zip(mt.pheno_data, hl.agg.array_agg(
                 lambda ss: hl.agg.filter(~ss.low_confidence,
-                    hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss.Pvalue), approximate=True),
-                                 f'n_{keyword}': hl.agg.count_where(hl.is_defined(ss.Pvalue)),
-                                 f'n_sig_{keyword}': hl.agg.count_where(transf(ss.Pvalue) < 5e-8)})),
+                    hl.struct(**{'lambda_gc': hl.methods.statgen._lambda_gc_agg(transf(ss[pval]), approximate=True),
+                                 f'n_{keyword}': hl.agg.count_where(hl.is_defined(ss[pval])),
+                                 f'n_sig_{keyword}': hl.agg.count_where(transf(ss[pval]) < 5e-8)})),
                 mt.summary_stats)).map(lambda x: x[0].annotate(**x[1]))
         )
     ht = mt.cols()
@@ -761,9 +771,9 @@ def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs,
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, overwrite=True, exp_p=True, gene_analysis=True)
         if filter_sumstats:
             full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
-                                                                     ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
+                                                                     ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] >= MIN_LAMBDA)
                                                                      ).map(lambda x: x[0]))
-            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc > MIN_LAMBDA)))
+            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc >= MIN_LAMBDA)))
             
     full_mt = full_mt.checkpoint(get_saige_sumstats_mt_path(GWAS_PATH, suffix, encoding, gene_analysis=True, pop='full'), overwrite)
 
@@ -777,8 +787,7 @@ def saige_combine_per_pop_gene_mt(suffix, encoding, use_drc_pop, use_custom_pcs,
 
 
 def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats, 
-                                  overwrite=True, use_drc_pop=True, use_custom_pcs='custom', append_ukb_modifier='_irnt',
-                                  _debug_read=False):
+                                  overwrite=True, use_drc_pop=True, use_custom_pcs='custom', append_ukb_modifier='_irnt'):
     # NOTE: this method assumes that the UKB analysis is EUR only. This is due to extremely limited sample size in this cohort.
 
     def munge_mt_for_merge(mt, cohort):
@@ -789,15 +798,15 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
                             inv_normalized = hl.array(hl.set(mt.pheno_data.inv_normalized))[0],
                             pop = mt.meta_analysis_data[0].pop,
                             n_genes = hl.agg.count_where(hl.is_defined(mt.meta_analysis[0])),
-                            n_sig_genes = hl.agg.count_where(mt.meta_analysis[0].Pvalue <  math.log(5e-8)))
-        mt = mt.select_entries(**mt.meta_analysis[0])
+                            n_sig_genes = hl.agg.count_where(mt.meta_analysis[0].Pvalue_SKATO <  math.log(5e-8)))
+        mt = mt.select_entries(**mt.meta_analysis[0], low_confidence = False)
 
         mt = mt.select_cols(pheno_data=mt.col_value)
         mt = mt.select_entries(summary_stats=mt.entry)
         return mt
 
     def re_colkey_mt(mt):
-        mt = mt.key_cols_by().select_cols(*PHENO_KEY_FIELDS, *GENE_COL_KEY_FIELDS, *(set(PHENO_COLUMN_FIELDS) - set(PHENO_DESCRIPTION_FIELDS)), *PHENO_GWAS_FIELDS, 'pop')
+        mt = mt.key_cols_by().select_cols(*PHENO_KEY_FIELDS, *GENE_COL_KEY_FIELDS, *PHENO_GWAS_FIELDS, 'pop')
         return mt.key_cols_by(*PHENO_KEY_FIELDS, *GENE_COL_KEY_FIELDS)
 
     suffix = update_suffix(suffix, use_drc_pop, use_custom_pcs)
@@ -812,7 +821,8 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
         
         # modify ukb to be compatible with aou
         mt_ukb = mt_ukb.key_cols_by()
-        mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + append_ukb_modifier)
+        mt_ukb = mt_ukb.annotate_cols(modifier = mt_ukb.modifier + append_ukb_modifier,
+                                      pop=['EUR'])
         mt_ukb = mt_ukb.key_cols_by(*PHENO_KEY_FIELDS, *GENE_COL_KEY_FIELDS)
 
         mt_ukb = mt_ukb.annotate_cols(_logged=hl.agg.any(mt_ukb.Pvalue < 0))
@@ -820,7 +830,7 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
                                          Pvalue_Burden=hl.if_else(mt_ukb._logged, mt_ukb.Pvalue_Burden, hl.log(mt_ukb.Pvalue_Burden)),
                                          Pvalue_SKAT=hl.if_else(mt_ukb._logged, mt_ukb.Pvalue_SKAT, hl.log(mt_ukb.Pvalue_SKAT))).drop('_logged')
 
-        mt_ukb = saige_apply_gene_qc(mt_ukb, filter_sumstats, bypass_missing=True)
+        mt_ukb = saige_apply_gene_qc(mt_ukb, filter_sumstats, bypass_missing=False)
         mt_ukb = custom_patch_mt_keys(mt_ukb, gene_analysis=True)
         mt_ukb = re_colkey_mt(mt_ukb)
         mt_ukb = mt_ukb.select_cols(cohort = 'ukb', 
@@ -828,13 +838,13 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
                                     n_controls = mt_ukb.n_controls,
                                     saige_version = mt_ukb.saige_version,
                                     inv_normalized = mt_ukb.inv_normalized,
-                                    pop=['EUR'],
+                                    pop=mt_ukb.pop,
                                     n_genes=hl.agg.count_where(hl.is_defined(mt_ukb.Pvalue)),
-                                    n_sig_genes=hl.agg.count_where(hl.agg.count_where(hl.exp(mt_ukb.Pvalue) < 5e-8)))
+                                    n_sig_genes=hl.agg.count_where(hl.exp(mt_ukb.Pvalue) < 5e-8))
 
         # we now create new fields to use to perform meta-analysis. The burden P can be used with both Stouffer's and the IV test.
-        mt_ukb = mt_ukb.select_entries(BETA_IV_Burden = mt_ukb.BETA_burden,
-                                       SE_IV_Burden = mt_ukb.SE_burden,
+        mt_ukb = mt_ukb.select_entries(BETA_IV_Burden = mt_ukb.BETA_Burden,
+                                       SE_IV_Burden = mt_ukb.SE_Burden,
                                        Pvalue_IV_Burden = mt_ukb.Pvalue_Burden,
                                        Q_IV_Burden = hl.missing(hl.tfloat64),
                                        Pvalue_het_IV_Burden = hl.missing(hl.tfloat64),
@@ -846,17 +856,14 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
                                        Stats_SKATO = hl.missing(hl.tfloat64),
                                        N = mt_ukb.n_cases + hl.or_else(mt_ukb.n_controls, 0),
                                        N_pops = 1,
-                                       MAC = mt_ukb.MAC)
+                                       MAC = mt_ukb.MAC,
+                                       low_confidence = mt_ukb.low_confidence)
         mt_ukb = mt_ukb.select_cols(pheno_data=mt_ukb.col_value)
         mt_ukb = mt_ukb.select_entries(summary_stats=mt_ukb.entry)
 
-        # confirm that the number of shared variants and traits make sense
-        #mt_aou.semi_join_cols(mt_ukb.cols()).count_cols() # 65
-        #mt_aou.semi_join_rows(mt_ukb.rows()).count() # 24657342 (of 28152304)
-
         # combine the mts so that each row has 2 items
         mt_aou_munged = munge_mt_for_merge(mt_aou, cohort='aou')
-        full_mt = mt_ukb.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(4000).checkpoint(os.path.join(TEMP_PATH, 'staging_gene_cross_biobank_joint.mt'), overwrite=True)
+        full_mt = mt_ukb.union_cols(mt_aou_munged, row_join_type='outer').naive_coalesce(2000).checkpoint(os.path.join(TEMP_PATH, 'staging_gene_cross_biobank_joint.mt'), overwrite=True)
         full_mt = full_mt.collect_cols_by_key()
         staging_lambda = os.path.join(temp_dir, 'staging_cross_biobank_before_lambda_meta.mt')
 
@@ -867,9 +874,9 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
         full_mt = aou_generate_final_lambdas(full_mt, suffix, encoding=encoding, cross_biobank=True, overwrite=True, exp_p=True, gene_analysis=True)
         if filter_sumstats:
             full_mt = full_mt.annotate_entries(summary_stats = hl.zip(full_mt.summary_stats, full_mt.pheno_data.lambda_gc
-                                                                    ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] > MIN_LAMBDA)
+                                                                    ).filter(lambda x: (x[1] < MAX_LAMBDA) & (x[1] >= MIN_LAMBDA)
                                                                     ).map(lambda x: x[0]))
-            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc > MIN_LAMBDA)))
+            full_mt = full_mt.annotate_cols(pheno_data = full_mt.pheno_data.filter(lambda x: (x.lambda_gc < MAX_LAMBDA) & (x.lambda_gc >= MIN_LAMBDA)))
 
         # feed into meta analysis generator
         full_mt_meta = run_gene_meta_analysis(full_mt, remove_low_confidence=True, cross_biobank_meta=True)
