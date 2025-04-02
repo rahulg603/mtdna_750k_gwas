@@ -105,3 +105,24 @@ def list_all_saige_sumstats(suffix, encoding, gene_analysis, cross_biobank_meta=
                 files_to_plot.append(os.path.join(path_to_meta_sumstats, file))
 
     return phenos_to_plot, files_to_plot
+
+
+def export_rvas_meta(export_dir, suffix, use_drc_pop, use_custom_pcs, encoding='additive'):
+    mt = hl.read_matrix_table(get_saige_cross_biobank_meta_mt_path(GWAS_PATH, update_suffix(suffix, use_drc_pop, use_custom_pcs), encoding=encoding, gene_analysis=True))
+    mt = mt.annotate_cols(pheno_id = hl.str('-').join([mt[x] for x in PHENO_KEY_FIELDS]))
+    all_phenos = list(mt.aggregate_cols(hl.agg.collect_as_set(mt.pheno_id)))
+    for pheno in all_phenos:
+        this_file_id = format_pheno_dir(pheno) + '_merged.tsv.bgz'
+        mt_this = mt.select_entries(**mt.meta_analysis[0])
+        mt_this = mt_this.annotate_cols(meta_analysis_data = mt_this.meta_analysis_data[0])
+        mt_this = mt_this.filter_cols(mt_this.pheno_id == pheno)
+        ht_this = mt_this.entries()
+        ht_this = ht_this.rename({'gene_symbol': 'Region',
+                                  'group': 'Group',
+                                  'Pvalue_SKATO': 'Pvalue',
+                                  'Pvalue_Burden': 'Pvalue_Burden_Stouffer'})
+        ht_this = ht_this.rename({'BETA_IV_Burden': 'Beta_Burden',
+                                  'Pvalue_IV_Burden': 'Pvalue_Burden',
+                                  'SE_IV_Burden': 'SE_Burden'})
+        ht_this = ht_this.key_by('Region','Group','max_MAF').drop('pheno_data', 'meta_analysis_data', *PHENO_KEY_FIELDS, 'pheno_id')
+        ht_this.export(os.path.join(export_dir, this_file_id))

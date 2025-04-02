@@ -887,7 +887,6 @@ def saige_combine_aou_ukb_gene_mt(suffix, encoding, ukb_path, filter_sumstats,
     return None
 
 
-
 def saige_combine_per_pop_sumstats_mt(suffix, encoding, use_drc_pop, use_custom_pcs, sample_qc=True, pops=POPS, overwrite=False,
                                       skip_producing_lambdas=False, min_call_rate=CALLRATE_CUTOFF, filter_sumstats=True, _debug_read=False):
     temp_dir = f'{TEMP_PATH}/{suffix}/{encoding}/'
