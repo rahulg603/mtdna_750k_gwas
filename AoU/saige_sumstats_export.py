@@ -63,6 +63,9 @@ def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysi
                 'export_single_saige_sumstats.SaigeImporters': saige_importers,
                 'export_single_saige_sumstats.n_cpu': n_cpu,
                 'export_single_saige_sumstats.mem': 40}
+    
+    if specific_pop is not None:
+        baseline.update({'export_single_saige_sumstats.specific_pop': specific_pop})
 
     with open(os.path.abspath('./saige_template.json'), 'w') as j:
         json.dump(baseline, j)

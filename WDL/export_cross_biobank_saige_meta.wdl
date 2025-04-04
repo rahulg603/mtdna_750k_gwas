@@ -10,6 +10,8 @@ workflow export_single_saige_sumstats {
         String encoding = 'additive'
         String suffix
 
+        String? specific_pop
+
         Boolean gene_analysis
         Boolean use_drc_pop
         String use_custom_pcs
@@ -36,6 +38,8 @@ workflow export_single_saige_sumstats {
             suffix = suffix,
             phenotype_id = phenotype_id,
             output_path = output_path,
+
+            specific_pop = specific_pop,
 
             gene_analysis = gene_analysis,
             use_drc_pop = use_drc_pop,
@@ -68,6 +72,8 @@ task run_export {
         String phenotype_id
         String output_path
 
+        String? specific_pop
+
         Boolean gene_analysis
         Boolean use_drc_pop
         String use_custom_pcs
@@ -90,6 +96,7 @@ task run_export {
     String gene = if gene_analysis then 'gene' else 'variant'
     String exp = if legacy_exponentiate_p then 'exp' else 'neglog10'
     String rm_low = if remove_low_quality_sites then 'low' else 'not_low'
+    String specific_pop_internal = select_first([specific_pop, 'None'])
 
     command <<<
 
@@ -123,10 +130,12 @@ task run_export {
     gene_analysis = '~{gene}' == 'gene'
     legacy_exponentiate_p = '~{exp}' == 'exp'
     remove_low_quality_sites = '~{rm_low}' == 'low'
+    
+    pop = None if "~{specific_pop_internal}" == 'None' else "~{specific_pop_internal}"
 
     print('Exporting ~{phenotype_id}.')
 
-    mt = hl.read_matrix_table(get_saige_cross_biobank_meta_mt_path(gs_gwas_path, suffix_updated, '~{encoding}', gene_analysis))
+    mt = hl.read_matrix_table(get_saige_cross_biobank_meta_mt_path(gs_gwas_path, suffix_updated, '~{encoding}', gene_analysis, pop=pop))
     mt = mt.select_entries(meta_analysis=mt.meta_analysis[0]).select_rows()
     if not legacy_exponentiate_p:
         mt = mt.annotate_entries(meta_analysis = mt.meta_analysis.annotate(Pvalue=-1*mt.meta_analysis.Pvalue/hl.log(10),
