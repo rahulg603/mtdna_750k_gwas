@@ -470,8 +470,11 @@ def get_saige_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis)
     return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'flat_files')
 
 
-def get_saige_cross_biobank_meta_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis):
-    return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'cross_biobank_meta_flat_files')
+def get_saige_cross_biobank_meta_sumstats_tsv_folder(gs_gwas_path, suffix, encoding, gene_analysis, pop=None):
+    if pop is None:
+        return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), 'cross_biobank_meta_flat_files')
+    else:
+        return os.path.join(get_saige_sumstats_root_folder(gs_gwas_path, suffix, encoding, gene_analysis), f'cross_biobank_meta_{pop}_only_flat_files')
 
 
 ######### IMPORT UTILS ##########

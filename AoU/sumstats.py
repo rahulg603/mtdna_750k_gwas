@@ -1086,15 +1086,17 @@ def saige_combine_aou_ukb_single_pop_sumstats_mt(pop, suffix, encoding, ukb_mt_p
         mt = custom_patch_mt_keys(mt, gene_analysis=False)
         mt = reannotate_cols(mt, suffix)
         mt = re_colkey_mt(mt)
+        mt = mt.annotate_entries(MissingRate = hl.float64(mt.MissingRate))
         mt = mt.select_cols(pheno_data=mt.col_value)
         mt = mt.select_entries(summary_stats=mt.entry)
+        mt = mt.select_rows('gene', 'annotation')
         mts.append(mt)
 
         # now UKB
-        mt = hl.read_matrix_table(ukb_mt_path).annotate_cols(pop=pop, cohort='ukb')
-        mt = mt.key_rows_by('locus', 'alleles')
-        mt = mt.annotate_cols(_logged=hl.agg.any(mt.Pvalue < 0))
-        mt = mt.annotate_entries(Pvalue=hl.if_else(mt._logged, mt.Pvalue, hl.log(mt.Pvalue))).drop('_logged')
+        mt_ukb = hl.read_matrix_table(ukb_mt_path).annotate_cols(pop=pop, cohort='ukb')
+        mt_ukb = mt_ukb.key_rows_by('locus', 'alleles')
+        mt_ukb = mt_ukb.annotate_cols(_logged=hl.agg.any(mt_ukb.Pvalue < 0))
+        mt_ukb = mt_ukb.annotate_entries(Pvalue=hl.if_else(mt_ukb._logged, mt_ukb.Pvalue, hl.log(mt_ukb.Pvalue))).drop('_logged')
 
         ht_liftover = get_ukb_b37_b38_liftover().checkpoint(os.path.join(BUCKET, 'ukb_500k', 'ukb_lift_b37_b38.ht'), _read_if_exists=True)
         mt_ukb = mt_ukb.key_cols_by()
@@ -1108,8 +1110,10 @@ def saige_combine_aou_ukb_single_pop_sumstats_mt(pop, suffix, encoding, ukb_mt_p
         mt_ukb = saige_apply_qc(mt_ukb, filter_sumstats, min_call_rate=None, this_pop_N=None)
         mt_ukb = custom_patch_mt_keys(mt_ukb, gene_analysis=False)
         mt_ukb = re_colkey_mt(mt_ukb)
+        mt_ukb = mt_ukb.annotate_entries(MissingRate = hl.float64(mt_ukb.MissingRate))
         mt_ukb = mt_ukb.select_cols(pheno_data=mt_ukb.col_value)
         mt_ukb = mt_ukb.select_entries(summary_stats=mt_ukb.entry)
+        mt_ukb = mt_ukb.select_rows('gene', 'annotation')
         mts.append(mt_ukb)
 
         full_mt = mts[0]

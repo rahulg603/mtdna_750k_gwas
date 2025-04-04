@@ -7,8 +7,9 @@ from utils.SaigeImporters import *
 from cromwell.classes import CromwellManager
 
 
-def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysis, 
-                       cross_biobank_meta=False, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', n_cpu=32, 
+def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysis,
+                       cross_biobank_meta=False, legacy_exponentiate_p=True, use_drc_pop=True, use_custom_pcs='custom', 
+                       specific_pop=None, n_cpu=32, 
                        overwrite=False, skip_waiting=True, disable_cache=True):
     """
     This function exports sumstats with meta-analyses as flat files in the pan ancestry format.
@@ -16,16 +17,20 @@ def distributed_export(wdl_path, saige_importers, suffix, encoding, gene_analysi
     TODO update to export any summary statistic.
     """
     suffix_updated = update_suffix(suffix, use_drc_pop, use_custom_pcs)
+    
     if cross_biobank_meta:
-        meta_mt = hl.read_matrix_table(get_saige_cross_biobank_meta_mt_path(GWAS_PATH, suffix_updated, encoding, gene_analysis=gene_analysis))
+        meta_mt = hl.read_matrix_table(get_saige_cross_biobank_meta_mt_path(GWAS_PATH, suffix_updated, encoding, gene_analysis=gene_analysis, pop=specific_pop))
     else:
+        if specific_pop is not None:
+            raise NotImplementedError('ERROR: specific_pop can only be used if cross_biobank_meta is enabled.')
         meta_mt = hl.read_matrix_table(get_saige_meta_mt_path(GWAS_PATH, suffix_updated, encoding, gene_analysis=gene_analysis))
+    
     ht = meta_mt.cols()
     phenotype_list = ht.annotate(phenotype_id = hl.str('-').join([ht[x] for x in PHENO_KEY_FIELDS])).phenotype_id.collect()
     sumstat_files = [format_pheno_dir(x) + '.tsv.bgz' for x in phenotype_list]
 
     if cross_biobank_meta:
-        path_to_meta_sumstats = get_saige_cross_biobank_meta_sumstats_tsv_folder(GWAS_PATH, suffix_updated, encoding, gene_analysis)
+        path_to_meta_sumstats = get_saige_cross_biobank_meta_sumstats_tsv_folder(GWAS_PATH, suffix_updated, encoding, gene_analysis, pop=specific_pop)
     else:
         path_to_meta_sumstats = get_saige_sumstats_tsv_folder(GWAS_PATH, suffix_updated, encoding, gene_analysis)
     
