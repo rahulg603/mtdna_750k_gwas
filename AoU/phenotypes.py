@@ -4,8 +4,10 @@ import pandas as pd
 import numpy as np
 import subprocess
 import os, re
+import importlib.util
 
 from AoU.paths import *
+from pathlib import Path
 
 # in any pop, increased by >10x and with a count >30
 VARIANT_BLACKLIST = ['chrM:12705:C,T', 'chrM:12684:G,A', 
@@ -18,6 +20,18 @@ def get_final_annotated_variant_path(version):
         return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/vcf/annotated/annotated_combined_processed_flat.tsv.bgz')
     if version == 'v6andv7':
         raise NotImplementedError('It is VERY MUCH not recommended to use the combined callset for v6 + v7.')
+
+
+def get_final_annotated_snv_flat_path(version, legacy=False):
+    if version == 'v6':
+        return os.path.join('gs://fc-secure-65229b17-5f6d-4315-9519-f53618eeee91/final_callset_220920/snv/221012_filt_annotated_all_heteroplasmic_snvs_case_only_v6_processed_flat.tsv.bgz')
+    if version == 'v7':
+        return os.path.join(BUCKET, 'final_v7_merged_callset/all_v7_callset_20241030/snv/annotated_all_heteroplasmic_snvs_case_only_v7_processed_flat.tsv.bgz')
+    if version == 'v6andv7':
+        if legacy:
+            return os.path.join(BUCKET, 'full_250k_callset/snv/241128_filt_annotated_all_heteroplasmic_snvs_case_only_250k_processed_flat.tsv.bgz')
+        else:
+            return os.path.join(BUCKET, 'full_250k_callset/snv/250211_filt_annotated_1pct_all_heteroplasmic_snvs_case_only_250k_processed_flat.tsv.bgz')
 
 
 def get_final_annotated_variant_mt_path(version, legacy=False):
@@ -510,5 +524,29 @@ def load_chip_data():
         aou_final_chip_calls_dedupe = aou_final_chip_calls_duplicates.key_by('idx').semi_join(aou_final_chip_calls_idx).key_by('s').drop('idx')
         aou_final_chip_calls_proc = hl.Table.union(aou_final_chip_calls_singular, aou_final_chip_calls_dedupe)
         ht = aou_final_chip_calls_proc.checkpoint(CHIP_ht)
+        ht.export(os.path.splitext(CHIP_ht)[0] + '.tsv.bgz')
     
     return ht
+
+
+def export_all_snvs_to_flat_file(module_path, version, legacy=False):
+
+    # Load in the processor function. Expected to be obtained from mtSwirl add_annotations.py.
+    file_path = Path(module_path)
+    module_name = file_path.stem
+    spec = importlib.util.spec_from_file_location(module_name, file_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    process_mt_for_flat_file_analysis = getattr(module, 'process_mt_for_flat_file_analysis')
+    
+    # load the callset
+    mt = hl.read_matrix_table(get_final_annotated_variant_mt_path(version, legacy=legacy))
+    mt_snv = mt.filter_rows(hl.is_snp(mt.alleles[0], mt.alleles[1]))
+    mt_snv = mt_snv.annotate_rows(n_heteroplasmic = hl.agg.count_where(hl.is_defined(mt_snv.HL) & (mt_snv.HL < 0.95) & (mt_snv.HL >= 0.05)))
+    mt_snv = mt_snv.filter_rows(mt_snv.n_heteroplasmic > 0)
+    mt_snv.count() # (12973, 237500)
+
+    mt_snv_export = mt_snv.drop('n_heteroplasmic')
+    ht_export, _, _ = process_mt_for_flat_file_analysis(mt_snv_export, skip_vep=True, allow_gt_fail=False)
+    ht_export = ht_export.filter(hl.is_defined(ht_export.HL) & (ht_export.HL < 0.95) & (ht_export.HL >= 0.01)) # 625708
+    ht_export.export(get_final_annotated_snv_flat_path(version, legacy))

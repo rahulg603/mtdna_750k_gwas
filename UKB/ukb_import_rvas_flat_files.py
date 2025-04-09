@@ -3,7 +3,7 @@ import os, re
 import secrets
 from tqdm import tqdm
 
-from utils.SaigeImporters import mwzj_hts_by_tree, get_cases_controls_from_logs, GENE_COL_KEY_FIELDS, GENE_ROW_KEY_FIELDS
+from utils.SaigeImporters import mwzj_hts_by_tree, GENE_COL_KEY_FIELDS, GENE_ROW_KEY_FIELDS
 from AoU.sumstats import unify_saige_gene_ht_schema, split_initial_saige_gene_ht
 
 
@@ -11,11 +11,46 @@ PHENO_KEY_FIELDS = ['trait_type','phenocode','pheno_sex','coding','modifier']
 TEMP_DIR = 'gs://temp-7day/'
 
 
+def dx_get_cases_controls_from_logs(log_list):
+    """
+    Different from the utils function because we have to strip the first part of the string.
+    """
+    cases = controls = -1
+    for log in log_list:
+        try:
+            with open(log, 'r') as f:
+                for line in f:
+                    line = re.sub(r'^\[.*?\]\s', '', line)
+                    line = line.strip()
+                    if line.startswith('Analyzing'):
+                        fields = line.split()
+                        if len(fields) == 6:
+                            try:
+                                cases = int(fields[1])
+                                controls = int(fields[4])
+                                break
+                            except ValueError:
+                                print(f'Could not load number of cases or controls from {line}.')
+                    elif line.endswith('samples were used in fitting the NULL glmm model and are found in sample file') or \
+                            line.endswith('samples have been used to fit the glmm null model') or \
+                            line.endswith('samples will be used for analysis'):
+                        # This is ahead of the case/control count line ("Analyzing ...") above so this should be ok
+                        fields = line.split()
+                        try:
+                            cases = int(fields[0])
+                        except ValueError:
+                            print(f'Could not load number of cases or controls from {line}.')
+            return cases, controls
+        except:
+            pass
+    return cases, controls
+
+
 def get_this_n(this_flat):
     noext_path = os.path.splitext(os.path.splitext(this_flat)[0])[0]
     null_log = noext_path + '.variant.log'
     if hl.hadoop_exists(null_log):
-        cases, _ = get_cases_controls_from_logs([null_log])
+        cases, _ = dx_get_cases_controls_from_logs([null_log])
     else:
         print('WARNING: did not find log for ' + os.path.basename(noext_path) + '.')
         this_base = os.path.join(os.path.dirname(noext_path), 'phenotypes_munged', os.path.basename(noext_path).replace('_merged','') + '.tsv')
