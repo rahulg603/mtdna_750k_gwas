@@ -2,6 +2,8 @@ import hail as hl
 import os, re
 import secrets
 from tqdm import tqdm
+from google.cloud import storage
+from urllib.parse import urlparse
 
 from utils.SaigeImporters import mwzj_hts_by_tree, GENE_COL_KEY_FIELDS, GENE_ROW_KEY_FIELDS
 from AoU.sumstats import unify_saige_gene_ht_schema, split_initial_saige_gene_ht
@@ -11,6 +13,26 @@ PHENO_KEY_FIELDS = ['trait_type','phenocode','pheno_sex','coding','modifier']
 TEMP_DIR = 'gs://temp-7day/'
 
 
+def read_log_file(path):
+    """Reads log file content from local or GCS."""
+    if path.startswith("gs://"):
+        # Parse GCS path
+        parsed = urlparse(path)
+        bucket_name = parsed.netloc
+        blob_path = parsed.path.lstrip("/")
+
+        # Download content from GCS
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        blob = bucket.blob(blob_path)
+        content = blob.download_as_text().splitlines()
+    else:
+        # Local file
+        with open(path, "r") as f:
+            content = f.readlines()
+    return content
+
+
 def dx_get_cases_controls_from_logs(log_list):
     """
     Different from the utils function because we have to strip the first part of the string.
@@ -18,28 +40,28 @@ def dx_get_cases_controls_from_logs(log_list):
     cases = controls = -1
     for log in log_list:
         try:
-            with open(log, 'r') as f:
-                for line in f:
-                    line = re.sub(r'^\[.*?\]\s', '', line)
-                    line = line.strip()
-                    if line.startswith('Analyzing'):
-                        fields = line.split()
-                        if len(fields) == 6:
-                            try:
-                                cases = int(fields[1])
-                                controls = int(fields[4])
-                                break
-                            except ValueError:
-                                print(f'Could not load number of cases or controls from {line}.')
-                    elif line.endswith('samples were used in fitting the NULL glmm model and are found in sample file') or \
-                            line.endswith('samples have been used to fit the glmm null model') or \
-                            line.endswith('samples will be used for analysis'):
-                        # This is ahead of the case/control count line ("Analyzing ...") above so this should be ok
-                        fields = line.split()
+            lines = read_log_file(log)
+            for line in lines:
+                line = re.sub(r'^\[.*?\]\s', '', line)
+                line = line.strip()
+                if line.startswith('Analyzing'):
+                    fields = line.split()
+                    if len(fields) == 6:
                         try:
-                            cases = int(fields[0])
+                            cases = int(fields[1])
+                            controls = int(fields[4])
+                            break
                         except ValueError:
                             print(f'Could not load number of cases or controls from {line}.')
+                elif line.endswith('samples were used in fitting the NULL glmm model and are found in sample file') or \
+                        line.endswith('samples have been used to fit the glmm null model') or \
+                        line.endswith('samples will be used for analysis'):
+                    # This is ahead of the case/control count line ("Analyzing ...") above so this should be ok
+                    fields = line.split()
+                    try:
+                        cases = int(fields[0])
+                    except ValueError:
+                        print(f'Could not load number of cases or controls from {line}.')
             return cases, controls
         except:
             pass
