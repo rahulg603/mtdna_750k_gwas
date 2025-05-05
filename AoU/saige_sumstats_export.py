@@ -134,3 +134,16 @@ def export_rvas_meta(export_dir, suffix, use_drc_pop, use_custom_pcs, encoding='
                                   'SE_IV_Burden': 'SE_Burden'})
         ht_this = ht_this.key_by('Region','Group','max_MAF').drop('pheno_data', 'meta_analysis_data', *PHENO_KEY_FIELDS, 'pheno_id')
         ht_this.export(os.path.join(export_dir, this_file_id))
+
+
+def export_cross_biobank_sample_size(suffix, use_drc_pop, use_custom_pcs, encoding='additive', gene_analysis=False):
+    mt = hl.read_matrix_table(get_saige_cross_biobank_meta_mt_path(GWAS_PATH, update_suffix(suffix, use_drc_pop, use_custom_pcs), encoding=encoding, gene_analysis=gene_analysis))
+    ht = mt.cols()
+    ht = ht.select(ht.pheno_data, **ht.meta_analysis_data[0])
+    ht = ht.annotate(zipped = hl.zip(ht.cohort, ht.pop))
+    ht = ht.annotate(pops = hl.str('|').join(ht.zipped.map(lambda x: x[0] + ':' + hl.str(',').join(x[1]))),
+                     ukb_n_cases = ht.pheno_data.filter(lambda x: x.cohort == 'ukb').n_cases.first(),
+                     aou_n_cases = ht.pheno_data.filter(lambda x: x.cohort == 'aou').n_cases.first())
+    ht = ht.drop('zipped', 'cohort', 'pop', 'n_controls', 'pheno_data')
+
+    return ht
