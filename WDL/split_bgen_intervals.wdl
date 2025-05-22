@@ -29,7 +29,7 @@ workflow split_bgen_intervals {
         String requester_pays_project
 
         Int n_cpu
-        String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        String HailDocker = 'rahulg603/rgupta-hail-utils:0.2.119'
 
     }
 

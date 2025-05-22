@@ -55,8 +55,8 @@ workflow saige_manager {
         File SaigeImporters
 
         # docker images
-        String SaigeDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/saige:1.4.3.3'
-        String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        String SaigeDocker = 'rahulg603/saige:1.4.3.3'
+        String HailDocker = 'rahulg603/rgupta-hail-utils:0.2.119'
 
         # options
         Boolean use_plink

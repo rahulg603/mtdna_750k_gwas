@@ -12,3 +12,10 @@ Here, we include functions used to:
 - format and summarize mtDNA phenotypes from MatrixTables produced in mtSwirl used for downstream visualization
 
 We also include a full Cromwell scheduling and submission library used throughout the above functions for parallization on AoU researcher workbench.
+
+The WDLs in this repository point to docker.io paths:
+- HailDocker: `rahulg603/rgupta-hail-utils:0.2.119`
+- PlinkDocker: `rahulg603/plink:1.9`
+- SaigeDocker: `rahulg603/saige:1.4.3.3`
+
+We highly recommend that these paths be updated to the GCP artifacts repository or some other solution as docker.io has pull limits that could cause issues with highly parallelized workflows.

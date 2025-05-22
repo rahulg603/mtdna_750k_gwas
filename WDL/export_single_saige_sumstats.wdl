@@ -23,7 +23,7 @@ workflow export_single_saige_sumstats {
         File SaigeImporters
 
         # docker images
-        String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        String HailDocker = 'rahulg603/rgupta-hail-utils:0.2.119'
 
         Int n_cpu = 32
         Int mem = 30

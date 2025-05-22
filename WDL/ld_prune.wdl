@@ -19,8 +19,8 @@ workflow ld_prune {
         File SaigeImporters
 
         # docker images
-        String PlinkDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/plink:1.9'
-        String HailDocker = 'us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119'
+        String PlinkDocker = 'rahulg603/plink:1.9'
+        String HailDocker = 'rahulg603/rgupta-hail-utils:0.2.119'
 
         Int n_cpu = 16
 

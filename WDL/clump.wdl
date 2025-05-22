@@ -22,6 +22,8 @@ workflow clump_sumstats {
       File gene_file = 'gs://mito-wgs-public-free/NCBI38_ensembl.gene.loc'
       String ref_genome = 'GRCh38'
 
+      String docker = 'rahulg603/rgupta-hail-utils:0.2.119'
+
       #Optional runtime arguments
       Int? preemptible_tries
       Int? cpu
@@ -48,6 +50,7 @@ workflow clump_sumstats {
         script = script,
         ref_genome = ref_genome,
 
+        docker = docker,
         preemptible_tries = preemptible_tries,
         cpu = cpu
   }
@@ -77,6 +80,7 @@ task clump {
       Boolean exp_p
       File script
       String ref_genome
+      String docker
 
       #Optional runtime arguments
       Int? preemptible_tries
@@ -120,7 +124,7 @@ task clump {
   runtime {
     cpu: machine_cpu
     disks: "local-disk " + disk_size + " SSD"
-    docker: "us-docker.pkg.dev/mito-wgs/mito-wgs-docker-repo/rgupta-hail-utils:0.2.119"
+    docker: docker
     preemptible: select_first([preemptible_tries, 5])
   }
   output {
